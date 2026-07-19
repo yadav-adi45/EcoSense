@@ -1,0 +1,509 @@
+import { useEffect, useRef, useState } from "react";
+import axios from "axios";
+import Navbar from "@/components/Navbar";
+import RouteMap from "@/components/RouteMap";
+import AQIBadge from "../components/AQIBadge";
+import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  MapPin,
+  Navigation,
+  Search,
+  Clock,
+  Route as RouteIcon,
+  AlertTriangle,
+  Loader2,
+  Sparkles,
+  Zap,
+  Leaf
+} from "lucide-react";
+import { serverUrl } from "@/main";
+import { getCachedRoute, setCachedRoute } from "@/utils/routeCache";
+import { toast } from "react-toastify";
+import Footer from "@/pages/Footer";
+
+/* AQI color helper */
+const getAQIColor = (aqi) => {
+  if (aqi === null) return "#9CA3AF";
+  if (aqi <= 50) return "#10B981"; // Emerald
+  if (aqi <= 100) return "#FACC15"; // Yellow
+  if (aqi <= 150) return "#FB923C"; // Orange
+  if (aqi <= 200) return "#EF4444"; // Red
+  return "#7F1D1D"; // Dark Red
+};
+
+const unlockSpeech = () => {
+  if (!("speechSynthesis" in window)) return;
+  const msg = new SpeechSynthesisUtterance("");
+  msg.volume = 0;
+  window.speechSynthesis.speak(msg);
+};
+
+const speak = (text) => {
+  if (!("speechSynthesis" in window)) return;
+  const msg = new SpeechSynthesisUtterance(text);
+  msg.lang = "en-IN";
+  msg.rate = 1;
+  msg.volume = 1;
+  window.speechSynthesis.speak(msg);
+};
+
+const Routes = () => {
+  const [origin, setOrigin] = useState("Delhi");
+  const [destination, setDestination] = useState("");
+  const [routes, setRoutes] = useState([]);
+  const [selectedRoute, setSelectedRoute] = useState(0);
+  const [originCoords, setOriginCoords] = useState(null);
+  const [destinationCoords, setDestinationCoords] = useState(null);
+  const [loading, setLoading] = useState(false);
+
+  const [isPregnancyMode, setIsPregnancyMode] = useState(false);
+  const [preferWellLit, setPreferWellLit] = useState(false);
+  const [season, setSeason] = useState("none");
+
+  const [triggerSearchOnce, setTriggerSearchOnce] = useState(null);
+
+  const lastAlertRef = useRef(null);
+  const voiceEnabledRef = useRef(true);
+
+  useEffect(() => {
+    if (triggerSearchOnce && destination === triggerSearchOnce) {
+      handleSearch();
+      setTriggerSearchOnce(null);
+    }
+  }, [destination, triggerSearchOnce]);
+
+  useEffect(() => {
+    if (!routes.length) return;
+    const segments = routes[selectedRoute]?.pollutionSegments;
+    if (!segments?.length) return;
+    const high = segments.find((s) => s.aqi >= 150);
+    if (!high) return;
+    const level = high.aqi >= 200 ? "SEVERE" : "HIGH";
+    if (lastAlertRef.current === level) return;
+    lastAlertRef.current = level;
+    const message = level === "SEVERE" ? "Severe pollution ahead. Close windows." : "High pollution detected ahead. Wear a mask.";
+    toast.warn(message, { position: "top-center", autoClose: 5000 });
+    if (voiceEnabledRef.current) speak(message);
+  }, [routes, selectedRoute]);
+
+  const handleSearch = async () => {
+    unlockSpeech();
+    if (!origin || !destination) {
+      toast.error("Please enter both an origin and destination.");
+      return;
+    }
+    setRoutes([]);
+    setSelectedRoute(0);
+    setLoading(true);
+    try {
+      const prefs = { isPregnancyMode, preferWellLit, season };
+      const cached = getCachedRoute(origin, destination, prefs);
+      if (cached) {
+        setRoutes(cached.routes || []);
+        setSelectedRoute(0);
+        setOriginCoords(cached.origin);
+        setDestinationCoords(cached.destination);
+        setLoading(false);
+        return;
+      }
+      const fastRes = await axios.post(`${serverUrl}/api/v2/routes?fast=true`, {
+        originCity: origin,
+        destinationCity: destination,
+        preferences: prefs
+      });
+      if (fastRes.data.success) {
+        setRoutes(fastRes.data.routes);
+        setOriginCoords(fastRes.data.origin);
+        setDestinationCoords(fastRes.data.destination);
+        setLoading(false);
+      }
+      const eliteRes = await axios.post(`${serverUrl}/api/v2/routes`, {
+        originCity: origin,
+        destinationCity: destination,
+        preferences: prefs
+      });
+      if (eliteRes.data.success) {
+        setCachedRoute(origin, destination, eliteRes.data, prefs);
+        setRoutes(eliteRes.data.routes || []);
+        setOriginCoords(eliteRes.data.origin);
+        setDestinationCoords(eliteRes.data.destination);
+      }
+    } catch (err) {
+      const errorMessage = err.response?.data?.message || "Had trouble finding that path.";
+      toast.error(errorMessage);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-[#f0faf5] pb-24">
+      <Navbar />
+
+      <main className="container mx-auto px-6 pt-32 pb-12">
+        {/* HERO SECTION */}
+        <div className="text-center mb-16 relative overflow-hidden">
+          <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[300px] bg-emerald-100/30 blur-[120px] rounded-full -z-10"></div>
+          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-emerald-500/10 border border-emerald-500/20 mb-6">
+            <Sparkles className="w-4 h-4 text-emerald-600" />
+            <span className="text-sm font-semibold text-emerald-600 tracking-wide uppercase">AI Optimized Nav</span>
+          </div>
+          <h1 className="text-4xl md:text-5xl font-extrabold text-gray-900 tracking-tight leading-none mb-6">
+            Smart Path, <span className="text-emerald-500">Pure Air.</span>
+          </h1>
+          <p className="text-gray-500 text-base font-medium max-w-xl mx-auto leading-relaxed">
+            Personalized routes that prioritize your respiratory health by avoiding high-AQI zones in real-time.
+          </p>
+        </div>
+
+        <div className="grid lg:grid-cols-12 gap-8 items-start">
+          {/* SEARCH & MAP COLUMN */}
+          <div className="lg:col-span-8 space-y-8">
+            {/* Search Input Card */}
+            <Card className="border-none bg-white rounded-[2rem] shadow-lg shadow-emerald-900/5 p-6 md:p-8">
+              <div className="flex flex-col md:flex-row gap-4">
+                <div className="flex-1 relative">
+                  <div className="absolute left-6 top-1/2 -translate-y-1/2 w-8 h-8 rounded-xl bg-emerald-50 flex items-center justify-center border border-emerald-100">
+                     <MapPin className="text-emerald-500 w-4 h-4" />
+                  </div>
+                  <Input
+                    list="indian-cities"
+                    value={origin}
+                    onChange={(e) => setOrigin(e.target.value)}
+                    placeholder="Find routes..."
+                    className="pl-16 h-14 bg-gray-50 border-gray-100 text-base font-semibold rounded-2xl focus:bg-white focus:border-emerald-400 transition-all shadow-inner"
+                  />
+                </div>
+                <div className="flex-1 relative">
+                   <div className="absolute left-6 top-1/2 -translate-y-1/2 w-8 h-8 rounded-xl bg-red-50 flex items-center justify-center border border-red-100">
+                     <Navigation className="text-red-500 w-4 h-4" />
+                  </div>
+                  <Input
+                    list="indian-cities"
+                    value={destination}
+                    onChange={(e) => setDestination(e.target.value)}
+                    placeholder="Find routes..."
+                    className="pl-16 h-14 bg-gray-50 border-gray-100 text-base font-semibold rounded-2xl focus:bg-white focus:border-emerald-400 transition-all shadow-inner"
+                  />
+                  <datalist id="indian-cities">
+                    <option value="Delhi" />
+                    <option value="Dehradun" />
+                    <option value="Mumbai" />
+                    <option value="Bangalore" />
+                    <option value="Pune" />
+                    <option value="Chennai" />
+                    <option value="Kolkata" />
+                    <option value="Hyderabad" />
+                    <option value="Ahmedabad" />
+                    <option value="Surat" />
+                    <option value="Jaipur" />
+                    <option value="Lucknow" />
+                    <option value="Kanpur" />
+                    <option value="Nagpur" />
+                    <option value="Indore" />
+                    <option value="Thane" />
+                    <option value="Bhopal" />
+                    <option value="Visakhapatnam" />
+                    <option value="Patna" />
+                    <option value="Vadodara" />
+                    <option value="Ghaziabad" />
+                    <option value="Ludhiana" />
+                    <option value="Agra" />
+                    <option value="Nashik" />
+                    <option value="Faridabad" />
+                    <option value="Meerut" />
+                    <option value="Rajkot" />
+                    <option value="Kalyan-Dombivli" />
+                    <option value="Vasai-Virar" />
+                    <option value="Varanasi" />
+                    <option value="Srinagar" />
+                    <option value="Aurangabad" />
+                    <option value="Dhanbad" />
+                    <option value="Amritsar" />
+                    <option value="Navi Mumbai" />
+                    <option value="Allahabad" />
+                    <option value="Ranchi" />
+                    <option value="Howrah" />
+                    <option value="Coimbatore" />
+                    <option value="Jabalpur" />
+                    <option value="Gwalior" />
+                    <option value="Vijayawada" />
+                    <option value="Jodhpur" />
+                    <option value="Madurai" />
+                    <option value="Raipur" />
+                    <option value="Kota" />
+                    <option value="Guwahati" />
+                    <option value="Chandigarh" />
+                    <option value="Solapur" />
+                    <option value="Hubli-Dharwad" />
+                  </datalist>
+                </div>
+                <Button
+                  onClick={handleSearch}
+                  disabled={loading}
+                  className="h-14 px-8 bg-emerald-500 hover:bg-emerald-600 text-white font-bold rounded-2xl shadow-lg shadow-emerald-200 text-base active:scale-95 transition-all flex items-center gap-2"
+                >
+                  {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : (
+                    <>
+                      <Search className="w-5 h-5" /> Find Routes
+                    </>
+                  )}
+                </Button>
+              </div>
+
+              {/* Preferences Selection */}
+              <div className="mt-6 pt-6 border-t border-gray-100 grid grid-cols-1 sm:grid-cols-3 gap-4">
+                {/* Pregnancy / Elderly Switch */}
+                <label className="flex items-center gap-3 cursor-pointer p-3 bg-gray-50 hover:bg-emerald-50/50 rounded-2xl border border-gray-100 transition-colors">
+                  <input
+                    type="checkbox"
+                    checked={isPregnancyMode}
+                    onChange={(e) => setIsPregnancyMode(e.target.checked)}
+                    className="w-5 h-5 rounded-lg text-emerald-500 border-gray-300 focus:ring-emerald-400 accent-emerald-500"
+                  />
+                  <div>
+                    <span className="block text-xs font-black text-gray-800">Pregnancy & Elder Mode</span>
+                    <span className="block text-[10px] text-gray-400 font-bold">Pothole-free & smooth ride</span>
+                  </div>
+                </label>
+
+                {/* Well-Lit Switch */}
+                <label className="flex items-center gap-3 cursor-pointer p-3 bg-gray-50 hover:bg-emerald-50/50 rounded-2xl border border-gray-100 transition-colors">
+                  <input
+                    type="checkbox"
+                    checked={preferWellLit}
+                    onChange={(e) => setPreferWellLit(e.target.checked)}
+                    className="w-5 h-5 rounded-lg text-emerald-500 border-gray-300 focus:ring-emerald-400 accent-emerald-500"
+                  />
+                  <div>
+                    <span className="block text-xs font-black text-gray-800">Well-Lit Roads</span>
+                    <span className="block text-[10px] text-gray-400 font-bold">Prioritize street lights</span>
+                  </div>
+                </label>
+
+                {/* Seasonal Dropdown */}
+                <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-2xl border border-gray-100">
+                  <div className="flex-1">
+                    <span className="block text-xs font-black text-gray-800">Seasonal Conditions</span>
+                    <select
+                      value={season}
+                      onChange={(e) => setSeason(e.target.value)}
+                      className="mt-1 w-full bg-transparent text-[10px] font-bold text-gray-500 border-none p-0 focus:ring-0 cursor-pointer outline-none"
+                    >
+                      <option value="none">Standard Routing</option>
+                      <option value="winter">Winter (Smog-Avoidance)</option>
+                      <option value="summer">Summer (Shaded Canopy)</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+            </Card>
+
+            {/* Map Viewer Card */}
+            <Card className="border-none bg-white rounded-[2rem] shadow-xl shadow-emerald-900/10 overflow-hidden relative">
+              <CardContent className="p-0 h-[60vh] md:h-[600px] relative overflow-hidden">
+                <RouteMap
+                  routes={routes}
+                  selectedRouteId={selectedRoute}
+                  origin={originCoords}
+                  destination={destinationCoords}
+                  onSelectRoute={setSelectedRoute}
+                  onSelectDestination={(destName) => {
+                    setDestination(destName);
+                    setTriggerSearchOnce(destName);
+                  }}
+                />
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* SUGGESTED ROUTES COLUMN */}
+          <div className="lg:col-span-4 space-y-6">
+            <div className="flex items-center justify-between mb-2">
+                <h2 className="text-2xl font-black text-gray-900 tracking-tight flex items-center gap-2">
+                    <Zap className="w-6 h-6 text-emerald-500" />
+                    Routes
+                </h2>
+                {routes.length > 0 && <span className="px-3 py-1 bg-white border border-emerald-100 rounded-full text-[10px] font-black text-emerald-600 uppercase italic">Smart Choice Ready</span>}
+            </div>
+
+            {loading && routes.length === 0 ? (
+                [1,2,3].map(i => (
+                    <Card key={i} className="bg-white/50 border-none rounded-3xl h-24 animate-pulse mb-4"></Card>
+                ))
+            ) : routes.length > 0 ? (
+                <div className="space-y-4">
+                    {routes.map((route) => (
+                      <Card
+                        key={route.id}
+                        onClick={() => setSelectedRoute(route.id)}
+                        className={`cursor-pointer transition-all duration-500 border-2 rounded-[1.5rem] p-6 relative overflow-hidden ${
+                          selectedRoute === route.id
+                            ? "border-emerald-500 bg-white shadow-2xl shadow-emerald-900/10 -translate-y-1"
+                            : "border-transparent bg-white/60 hover:border-emerald-100 hover:bg-white"
+                        }`}
+                      >
+                         {selectedRoute === route.id && <div className="absolute top-0 right-0 p-4"><div className="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></div></div>}
+                        <CardContent className="p-0">
+                          <div className="flex justify-between items-start mb-4">
+                            <div>
+                                <h3 className={`text-lg font-extrabold tracking-tighter leading-none ${selectedRoute === route.id ? 'text-emerald-600' : 'text-gray-800'}`}>
+                                    {route.name}
+                                </h3>
+                                <div className="flex gap-2 mt-2">
+                                    {route.avgAQI < 60 && <span className="bg-emerald-50 text-emerald-600 text-[9px] px-2 py-0.5 rounded-lg border border-emerald-100 uppercase font-black tracking-widest">Elite Air</span>}
+                                    {route.name.includes("Swift") && <span className="bg-orange-50 text-orange-600 text-[9px] px-2 py-0.5 rounded-lg border border-orange-100 uppercase font-black tracking-widest">Nitro</span>}
+                                    {route.evStations?.length > 0 && <span className="bg-blue-50 text-blue-600 text-[9px] px-2 py-0.5 rounded-lg border border-blue-100 uppercase font-black tracking-widest">🔋 {route.evStations.length} EV Stations</span>}
+                                </div>
+                            </div>
+                            <AQIBadge value={route.avgAQI} size="lg" />
+                          </div>
+
+                          <div className="flex gap-4 text-gray-500 text-sm font-bold bg-gray-50/50 p-4 rounded-2xl border border-gray-100/50 mb-6">
+                            <span className="flex items-center gap-2">
+                              <Clock className="w-5 h-5 text-orange-400" />
+                              {route.duration}
+                            </span>
+                            <div className="w-px h-5 bg-gray-200"></div>
+                            <span className="flex items-center gap-2">
+                              <RouteIcon className="w-5 h-5 text-emerald-400" />
+                              {route.distance}
+                            </span>
+                          </div>
+
+                          {/* Human Health Insight */}
+                          {selectedRoute === route.id && (
+                             <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-500">
+                                <div className="h-1.5 w-full bg-gray-100 rounded-full overflow-hidden flex gap-0.5">
+                                    {route.pollutionSegments?.slice(0, 10).map((s, i) => (
+                                        <div key={i} className="h-full flex-1" style={{ backgroundColor: getAQIColor(s.aqi), opacity: s.aqi ? 1 : 0.1 }}></div>
+                                    ))}
+                                </div>
+                                <div className="p-5 bg-emerald-50 border border-emerald-100 rounded-[1.2rem]">
+                                    <p className="text-gray-900 font-black text-sm mb-1 uppercase tracking-tight flex items-center gap-2">
+                                        <Leaf className="w-4 h-4 text-emerald-500" /> Wellness Intel
+                                    </p>
+                                    <p className="text-gray-600 font-medium text-xs leading-relaxed italic mb-2">"{route.healthAdvice}"</p>
+                                    {route.travelTip && (
+                                      <p className="text-emerald-800 font-bold text-[10px] uppercase tracking-wider mt-2">
+                                        💡 {route.travelTip}
+                                      </p>
+                                    )}
+                                </div>
+                             </div>
+                          )}
+                        </CardContent>
+                      </Card>
+                    ))}
+                </div>
+            ) : (
+                <div className="p-12 text-center bg-white/40 border border-emerald-100 rounded-[2.5rem] border-dashed">
+                    <RouteIcon className="w-12 h-12 text-emerald-200 mx-auto mb-4" />
+                    <p className="text-emerald-900 font-black text-lg">Path Not Found</p>
+                    <p className="text-emerald-600/60 text-xs font-medium mt-1">Start your journey by entering a destination city above.</p>
+                </div>
+            )}
+          </div>
+        </div>
+
+        {/* EV STATIONS SECTION */}
+        {routes[selectedRoute]?.evStations && routes[selectedRoute]?.evStations.length > 0 && (
+            <div className="mt-16 animate-in fade-in duration-1000">
+                <div className="flex items-center gap-4 mb-10">
+                    <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center border border-blue-100 shadow-sm">
+                        <Zap className="w-6 h-6 text-blue-500" />
+                    </div>
+                    <div>
+                        <h3 className="text-2xl font-extrabold text-gray-900 tracking-tight">Charging Infrastructure</h3>
+                        <p className="text-gray-500 font-medium">Available EV charging stations along your route.</p>
+                    </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {routes[selectedRoute].evStations.map((ev, i) => (
+                        <div key={ev.id} className="p-6 bg-white rounded-[1.5rem] border border-blue-50 shadow-sm hover:shadow-xl transition-all duration-500 relative group overflow-hidden">
+                             <div className="absolute top-0 right-0 w-32 h-32 bg-gray-50/50 rounded-full blur-3xl -z-10 group-hover:bg-blue-50 transition-colors"></div>
+                            <div className="flex items-start justify-between mb-6">
+                                <div className="w-10 h-10 rounded-full bg-blue-50 flex items-center justify-center border border-blue-100">
+                                    <Zap className="w-5 h-5 text-blue-500" />
+                                </div>
+                                <div className="text-right">
+                                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-[.2em] mb-1">Type</p>
+                                    <p className="font-black uppercase text-sm text-blue-500">Fast Charge</p>
+                                </div>
+                            </div>
+                            <h4 className="text-lg font-extrabold text-gray-800 tracking-tight mb-2 truncate">{ev.name}</h4>
+                            <p className="text-xs font-bold text-gray-400 mb-6">{ev.lat?.toFixed(3)}°N, {ev.lon?.toFixed(3)}°E</p>
+                            
+                            <div className="flex items-center gap-4 p-4 bg-gray-50 rounded-2xl">
+                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest leading-tight">Operator<br/>Network</p>
+                                <div className="w-px h-6 bg-gray-200 mx-2"></div>
+                                <p className="text-sm font-extrabold tracking-tighter text-gray-700 uppercase">{ev.operator}</p>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            </div>
+        )}
+
+        {/* BOTTOM SECTION - AIR QUALITY LOG */}
+        {routes[selectedRoute]?.pollutionSegments && routes[selectedRoute]?.pollutionSegments.length > 0 && (
+            <div className="mt-16 animate-in fade-in duration-1000">
+                <div className="flex items-center gap-4 mb-10">
+                    <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center border border-emerald-100 shadow-sm">
+                        <Zap className="w-6 h-6 text-emerald-500" />
+                    </div>
+                    <div>
+                        <h3 className="text-2xl font-extrabold text-gray-900 tracking-tight">Segment Analysis</h3>
+                        <p className="text-gray-500 font-medium">Deep-dive into air quality data across your selected journey.</p>
+                    </div>
+                </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {routes[selectedRoute]?.pollutionSegments.slice(0, 6).map((s, i) => (
+                        <div key={i} className="p-6 bg-white rounded-[1.5rem] border border-emerald-50 shadow-sm hover:shadow-xl transition-all duration-500 relative group overflow-hidden">
+                             <div className="absolute top-0 right-0 w-32 h-32 bg-gray-50/50 rounded-full blur-3xl -z-10 group-hover:bg-emerald-50 transition-colors"></div>
+                            <div className="flex items-start justify-between mb-6">
+                                <div className="w-8 h-8 rounded-lg bg-gray-50 flex items-center justify-center font-black text-gray-300 border border-gray-100">
+                                    {i + 1}
+                                </div>
+                                <div className="text-right">
+                                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-[.2em] mb-1">Status</p>
+                                    <p className={`font-black uppercase text-sm ${s.zone === "High" ? 'text-red-500' : s.zone === "Medium" ? 'text-orange-500' : 'text-emerald-500'}`}>{s.zone || "SAFE"}</p>
+                                </div>
+                            </div>
+                            <h4 className="text-lg font-extrabold text-gray-800 tracking-tight mb-2 truncate uppercase">{s.area || "Checkpoint"}</h4>
+                            <p className="text-xs font-bold text-gray-400 mb-6">{s.lat?.toFixed(3)}°N, {s.lon?.toFixed(3)}°E</p>
+                            
+                            <div className="flex items-center gap-4 p-4 bg-gray-50 rounded-2xl">
+                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest leading-tight">Air Quality<br/>Index</p>
+                                <div className="w-px h-6 bg-gray-200 mx-2"></div>
+                                <p className="text-2xl font-extrabold tracking-tighter" style={{ color: getAQIColor(s.aqi) }}>{s.aqi ?? "N/A"}</p>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            </div>
+        )}
+      </main>
+
+      {routes.length > 0 && (
+        <div className="fixed bottom-10 right-10 z-[100] animate-bounce-slow">
+            <Button
+              onClick={() => window.open(`https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${destination}`, "_blank")}
+              className="bg-emerald-500 hover:bg-emerald-600 h-14 px-8 shadow-xl shadow-emerald-400/30 text-white font-bold text-base flex items-center gap-3 rounded-full group"
+            >
+              <Navigation className="w-5 h-5 group-hover:rotate-12 transition-transform" />
+              NAVIGATE
+            </Button>
+        </div>
+      )}
+      
+      <Footer />
+    </div>
+  );
+};
+
+export default Routes;

@@ -1,0 +1,43 @@
+version: '3.8'
+
+services:
+  # 1. Backend Service (Node.js)
+  backend:
+    build: ./backend
+    container_name: ecosense-backend
+    ports:
+      - "3000:3000"
+    environment:
+      - PORT=3000
+      # Add your MONGO_URI here or utilize a .env file
+      # - MONGO_URI=mongodb://mongo:27017/ecosense
+    restart: always
+
+  # 2. Frontend Service (React + Nginx)
+  frontend:
+    build: ./frontend
+    container_name: ecosense-frontend
+    ports:
+      - "5173:80"  # Example: Access on port 5173
+    depends_on:
+      - backend
+    restart: always
+
+  # 3. Pathway Service (Python Mock Engine)
+  pathway:
+    build: ./pathway-service
+    container_name: ecosense-pathway
+    ports:
+      - "8081:8081"
+    environment:
+      # Point to the backend service name within the docker network
+      - BACKEND_URL=http://backend:3000/api/v9/alert
+    depends_on:
+      - backend
+    restart: always
+
+# Optional: Add MongoDB if you want a local DB
+#  mongo:
+#    image: mongo
+#    ports:
+#      - "27017:27017"
