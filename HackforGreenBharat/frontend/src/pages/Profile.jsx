@@ -5,6 +5,7 @@ import {
   Award, Target, Calendar, MapPin, Edit,
   Settings, TrendingUp, CheckCircle, Clock, ArrowRight
 } from "lucide-react";
+import { getAuthHeaders } from "@/utils/auth";
 import { serverUrl } from "@/main";
 import Footer from "./Footer";
 
@@ -55,7 +56,10 @@ const Profile = () => {
   useEffect(() => {
     (async () => {
       try {
-        const res  = await fetch(`${serverUrl}/api/v4/eco/latest`, { credentials: "include" });
+        const res  = await fetch(`${serverUrl}/api/v4/eco/latest`, {
+          credentials: "include",
+          headers: { ...getAuthHeaders() },
+        });
         const data = await res.json();
         setAssessment(data.assessment);
       } catch (err) {

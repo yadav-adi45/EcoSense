@@ -24,11 +24,8 @@ const sanitizeText = (text) =>
     .filter((l) => l.length > 3)
     .join("\n");
 
-const groq = new Groq({
-  apiKey: process.env.GROQ_API_KEY,
-});
-
 export const analyzeBill = async (req, res) => {
+  const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
   try {
     let billText = "";
 

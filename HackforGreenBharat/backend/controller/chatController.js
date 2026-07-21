@@ -1,10 +1,7 @@
 import Groq from "groq-sdk";
 
-const groq = new Groq({
-  apiKey: process.env.GROQ_API_KEY,
-});
-
 export const ecoBotController = async (req, res) => {
+  const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
   try {
     const { message } = req.body;
 

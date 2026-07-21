@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import ScoreBreakdown from "./ScoreBreakdown";
+import { getAuthHeaders } from "@/utils/auth";
 import { serverUrl } from "@/main";
 import Footer from "@/pages/Footer";
 
@@ -51,6 +52,7 @@ const Dashboard = () => {
       try {
         const res = await fetch(`${serverUrl}/api/v4/eco/latest`, {
           credentials: "include",
+          headers: { ...getAuthHeaders() },
         });
         const data = await res.json();
         setAssessment(data.assessment);

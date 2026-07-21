@@ -1,4 +1,5 @@
-import { useEffect, useState, useMemo, Fragment } from "react";
+import { useEffect, useState, useMemo, Fragment, useRef, useCallback } from "react";
+import { createPortal } from "react-dom";
 import {
   MapContainer,
   TileLayer,
@@ -159,8 +160,10 @@ const RouteMap = ({ routes, selectedRouteId, origin, destination, onSelectRoute 
   const [selectedState, setSelectedState] = useState(null);
   const [pathData, setPathData] = useState(null);
   const [hoveredState, setHoveredState] = useState(null);
-  const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
+  const [tooltipPos, setTooltipPos] = useState({ x: 0, y: 0 });
   const [showHoverBox, setShowHoverBox] = useState(false);
+  const tooltipRef = useRef(null);
+  const mapContainerRef = useRef(null);
 
   // Transition States for Smooth space-to-ground Zoom Animation
   const [heatmapScale, setHeatmapScale] = useState(1);
@@ -198,22 +201,44 @@ const RouteMap = ({ routes, selectedRouteId, origin, destination, onSelectRoute 
     }
   }, [showLeafletMap]);
 
-  const handleStateHover = (stateName, evt) => {
+  const handleStateHover = useCallback((stateName, evt) => {
     const code = STATE_NAME_TO_CODE[stateName];
-    if (code) {
-      const rect = evt.currentTarget.closest('.map-container-relative').getBoundingClientRect();
-      setHoveredState({
-        name: stateName,
-        code: code,
-        data: STATE_ENV_DATA[code]
-      });
-      setMousePos({
-        x: evt.clientX - rect.left,
-        y: evt.clientY - rect.top,
-      });
-      setShowHoverBox(true);
+    if (!code) return;
+
+    // Use raw viewport coordinates — the tooltip will be fixed-positioned
+    const cursorX = evt.clientX;
+    const cursorY = evt.clientY;
+
+    // Tooltip dimensions from last known render, or safe defaults
+    const tipW = tooltipRef.current?.offsetWidth  || 240;
+    const tipH = tooltipRef.current?.offsetHeight || 300;
+
+    const OFFSET = 14; // gap from cursor
+    const PAD    = 8;  // minimum gap from viewport edge
+
+    const vW = window.innerWidth;
+    const vH = window.innerHeight;
+
+    // Prefer right; flip left if it overflows right edge
+    let x = cursorX + OFFSET;
+    if (x + tipW > vW - PAD) {
+      x = cursorX - tipW - OFFSET;
     }
-  };
+    // Hard-clamp to never exit left edge
+    x = Math.max(PAD, x);
+
+    // Prefer below; flip above if it overflows bottom edge
+    let y = cursorY + OFFSET;
+    if (y + tipH > vH - PAD) {
+      y = cursorY - tipH - OFFSET;
+    }
+    // Hard-clamp to never exit top edge
+    y = Math.max(PAD, y);
+
+    setHoveredState({ name: stateName, code, data: STATE_ENV_DATA[code] });
+    setTooltipPos({ x, y });
+    setShowHoverBox(true);
+  }, []);
 
   const handleStateClick = (stateName) => {
     const code = STATE_NAME_TO_CODE[stateName];
@@ -244,7 +269,7 @@ const RouteMap = ({ routes, selectedRouteId, origin, destination, onSelectRoute 
   }
 
   return (
-    <div className="relative w-full h-full rounded-[3rem] overflow-hidden bg-white">
+    <div className="relative w-full h-full rounded-[3rem] bg-white" style={{ overflow: "visible" }}>
       
       {/* 🗺️ LEAFLET MAP VIEW WRAPPER (Always mounted to prevent React unmount/removeChild DOM crashes) */}
       <div 
@@ -358,10 +383,11 @@ const RouteMap = ({ routes, selectedRouteId, origin, destination, onSelectRoute 
           opacity: heatmapOpacity,
           transform: `scale(${heatmapScale})`,
           zIndex: !showLeafletMap ? 10 : 1,
-          pointerEvents: !showLeafletMap ? "auto" : "none"
+          pointerEvents: !showLeafletMap ? "auto" : "none",
+          overflow: "visible",
         }}
       >
-        <div className="map-container-relative w-full h-full flex flex-col items-center justify-center p-4 relative overflow-hidden bg-gradient-to-b from-[#f0faf5] to-white rounded-[3rem]">
+        <div className="map-container-relative w-full h-full flex flex-col items-center justify-center p-4 relative bg-gradient-to-b from-[#f0faf5] to-white rounded-[3rem]" style={{ overflow: "visible" }}>
           {selectedState ? (
             /* District-level State Map View */
             <StateMap 
@@ -394,7 +420,7 @@ const RouteMap = ({ routes, selectedRouteId, origin, destination, onSelectRoute 
 
               {/* SVG Map of India */}
               {pathData ? (
-                <div className="relative w-full max-h-[460px] overflow-hidden flex items-center justify-center">
+                <div ref={mapContainerRef} className="relative w-full max-h-[460px] flex items-center justify-center" style={{ overflow: "visible" }}>
                   <svg 
                     viewBox="0 0 600 700" 
                     preserveAspectRatio="xMidYMid meet"
@@ -425,14 +451,18 @@ const RouteMap = ({ routes, selectedRouteId, origin, destination, onSelectRoute 
                     })}
                   </svg>
 
-                  {/* 📊 Dynamic Coordinates-Following State Tooltip */}
-                  {showHoverBox && hoveredState && hoveredState.data && (
+                  {/* 📊 Smart-positioned State Tooltip — rendered via Portal into document.body
+                       so it can never be clipped by any overflow:hidden ancestor */}
+                  {showHoverBox && hoveredState && hoveredState.data && createPortal(
                     <div 
-                      className="absolute z-[1000] w-60 bg-white/95 backdrop-blur-md shadow-2xl shadow-emerald-950/15 border border-emerald-100/60 rounded-[2rem] p-5 pointer-events-none transition-all duration-75"
+                      ref={tooltipRef}
+                      className="w-60 bg-white/95 backdrop-blur-md shadow-2xl shadow-emerald-950/15 border border-emerald-100/60 rounded-[2rem] p-5 pointer-events-none"
                       style={{
-                        left: `${mousePos.x}px`,
-                        top: `${mousePos.y}px`,
-                        transform: `translate(${mousePos.x > 320 ? "-110%" : "10%"}, ${mousePos.y > 350 ? "-110%" : "10%"})`,
+                        position: "fixed",
+                        left: tooltipPos.x,
+                        top:  tooltipPos.y,
+                        zIndex: 99999,
+                        transition: "left 60ms ease-out, top 60ms ease-out",
                       }}
                     >
                       <div className="flex items-center gap-2 mb-3">
@@ -499,7 +529,8 @@ const RouteMap = ({ routes, selectedRouteId, origin, destination, onSelectRoute 
                           <p className="text-[9px] text-gray-500 font-bold leading-tight">{hoveredState.data.advice}</p>
                         </div>
                       </div>
-                    </div>
+                    </div>,
+                    document.body
                   )}
                 </div>
               ) : (

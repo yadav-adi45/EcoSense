@@ -30,8 +30,8 @@ def test_pipeline():
         res = requests.get(BACKEND_URL, timeout=2)
         if res.status_code == 200:
             data = res.json()
-            if data.get("success") and data.get("alert"):
-                alert = data["alert"]
+            if data.get("success") and data.get("data"):
+                alert = data["data"]
                 print(f"✅ Alert Received from Backend: {alert}")
                 print("🎉 INTEGRATION SUCCESSFUL!")
             else:

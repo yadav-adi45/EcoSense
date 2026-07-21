@@ -27,6 +27,7 @@ import {
   ArrowRight,
   Loader2
 } from "lucide-react";
+import { getAuthHeaders } from "@/utils/auth";
 import { serverUrl } from "@/main";
 import Footer from "./Footer";
 
@@ -154,7 +155,7 @@ const Questionnaire = () => {
       const res = await fetch(`${serverUrl}/api/v4/eco`, {
         method: "POST",
         credentials: "include",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...getAuthHeaders() },
         body: JSON.stringify({ answers }),
       });
 

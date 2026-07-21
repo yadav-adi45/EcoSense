@@ -5,6 +5,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Scan, Upload, Search, Loader2, Sparkles, AlertCircle } from "lucide-react";
+import { getAuthHeaders } from "@/utils/auth";
 import { serverUrl } from "@/main";
 
 const BillScanner = () => {
@@ -35,6 +36,7 @@ const BillScanner = () => {
         method: "POST",
         body: formData,
         credentials: "include",
+        headers: { ...getAuthHeaders() },
       });
 
       const data = await res.json();
@@ -53,7 +55,7 @@ const BillScanner = () => {
     try {
       const res = await fetch(`${serverUrl}/api/v8/analyze`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...getAuthHeaders() },
         body: JSON.stringify({ billText: manualInput }),
         credentials: "include",
       });

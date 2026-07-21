@@ -3,11 +3,6 @@ import dotenv from "dotenv";
 
 dotenv.config();
 
-const groq = new Groq({
-  apiKey: process.env.GROQ_API_KEY,
-  timeout: 15000, // ⏱ prevent hanging
-});
-
 // remove ```json markdown safely
 const cleanJSON = (text) =>
   text.replace(/```json|```/g, "").trim();
@@ -24,6 +19,7 @@ const withRetry = async (fn, retries = 2) => {
 };
 
 export const analyzeProductsAI = async (products) => {
+  const groq = new Groq({ apiKey: process.env.GROQ_API_KEY, timeout: 15000 });
   const prompt = `
 Analyze environmental impact of products.
 

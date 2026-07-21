@@ -6,7 +6,10 @@
   "scripts": {
     "build": "echo 'no build needed'",
     "dev": "nodemon index.js",
-    "start": "node index.js"
+    "start": "node index.js",
+    "build:frontend": "cd ../frontend && npm run build",
+    "start:full": "npm run build:frontend && npm run start",
+    "dev:all": "concurrently --names \"BACKEND,FRONTEND\" --prefix-colors \"green,cyan\" \"nodemon index.js\" \"cd ../frontend && npm run dev\""
   },
   "keywords": [],
   "author": "",
@@ -33,5 +36,8 @@
     "nodemon": "^3.1.11",
     "openai": "^6.17.0",
     "tesseract.js": "^7.0.0"
+  },
+  "devDependencies": {
+    "concurrently": "^10.0.3"
   }
 }

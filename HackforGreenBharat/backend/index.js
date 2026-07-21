@@ -4,6 +4,8 @@ import database from "./utils/database.js";
 import userRouter from "./route/UserRoute.js";
 import cookieParser from "cookie-parser";
 import cors from "cors";
+import path from "path";
+import { fileURLToPath } from "url";
 import geoRouter from "./route/routeRouter.js";
 import chat from "./route/chatRoute.js";
 import eco from "./route/ecoRoute.js";
@@ -15,6 +17,9 @@ import pathwayRouter from "./route/pathwayRoute.js";
 import storeRouter from "./route/storeRoute.js";
 import communityRouter from "./route/communityRoutes.js";
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
 dotenv.config();
 
 const app = express();
@@ -23,7 +28,9 @@ const app = express();
 app.use(
   cors({
     origin: [
+      "http://localhost:3000",
       "http://localhost:5173",
+      "http://localhost:5174",
       "https://ecosense-8.onrender.com",
       "https://timely-pastelito-b3d105.netlify.app",
     ],
@@ -53,6 +60,17 @@ app.use("/api/v11", communityRouter);
 
 const PORT = process.env.PORT || 3000;
 
+/* ✅ Serve built frontend in production */
+const frontendDist = path.join(__dirname, "../frontend/dist");
+app.use(express.static(frontendDist));
+
+// All non-API routes serve the React app
+app.get(/^(?!\/api).*/, (req, res) => {
+  res.sendFile(path.join(frontendDist, "index.html"));
+});
+
 app.listen(PORT, () => {
   console.log(`✅ Server running on port ${PORT}`);
+  console.log(`   Frontend: http://localhost:${PORT}`);
+  console.log(`   API:      http://localhost:${PORT}/api`);
 });

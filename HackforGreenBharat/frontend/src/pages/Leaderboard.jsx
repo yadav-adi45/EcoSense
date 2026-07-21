@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import Navbar from "@/components/Navbar";
 import { Trophy, TrendingUp, TrendingDown, Users, Flame, Building, X } from "lucide-react";
+import { getAuthHeaders } from "@/utils/auth";
 import { serverUrl } from "@/main";
 import Footer from "@/pages/Footer";
 
@@ -22,7 +23,10 @@ const Leaderboard = () => {
     const fetchLeaderboard = async () => {
       setLoading(true);
       try {
-        const res = await fetch(`${serverUrl}/api/v4/leader`, { credentials: "include" });
+        const res = await fetch(`${serverUrl}/api/v4/leader`, {
+          credentials: "include",
+          headers: { ...getAuthHeaders() },
+        });
         const data = await res.json();
         setLeaders(data.leaderboard || []);
       } catch (err) {

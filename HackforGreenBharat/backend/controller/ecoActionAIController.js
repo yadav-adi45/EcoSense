@@ -3,16 +3,12 @@ import Assessment from "../model/Assessment.js";
 import Challenge from "../model/Challenge.js";
 import EcoActionLog from "../model/EcoActionLog.js";
 
-const groq = new Groq({
-  apiKey: process.env.GROQ_API_KEY,
-  timeout: 15000,
-});
-
 // helper to clean ```json blocks
 const cleanJSON = (text) =>
   text.replace(/```json|```/g, "").trim();
 
 export const applyEcoActionAI = async (req, res) => {
+  const groq = new Groq({ apiKey: process.env.GROQ_API_KEY, timeout: 15000 });
   try {
     const userId = req.userId;
     const { action, challengeId } = req.body;

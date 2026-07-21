@@ -1,16 +1,12 @@
 import Groq from "groq-sdk";
 import Assessment from "../model/Assessment.js";
 
-const groq = new Groq({
-  apiKey: process.env.GROQ_API_KEY,
-  timeout: 15000,
-});
-
 // helper to clean ```json blocks
 const cleanJSON = (text) =>
   text.replace(/```json|```/g, "").trim();
 
 export const ecoScoreController = async (req, res) => {
+  const groq = new Groq({ apiKey: process.env.GROQ_API_KEY, timeout: 15000 });
   try {
     const userId = req.userId;
     const { answers } = req.body;
@@ -106,6 +102,7 @@ export const getLatestAssessment = async (req, res) => {
 };
 
 export const updateEcoAssessment = async (req, res) => {
+  const groq = new Groq({ apiKey: process.env.GROQ_API_KEY, timeout: 15000 });
   try {
     const userId = req.userId;
     const { assessmentId } = req.params;
