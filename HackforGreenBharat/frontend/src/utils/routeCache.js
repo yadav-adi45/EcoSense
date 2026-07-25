@@ -1,8 +1,8 @@
 const TTL = 10 * 60 * 1000; // 10 minutes
 
 export const getCachedRoute = (origin, destination, preferences = {}) => {
-  const { isPregnancyMode = false, preferWellLit = false, season = "none" } = preferences;
-  const key = `route_v17:${origin?.toLowerCase()}:${destination?.toLowerCase()}:${isPregnancyMode}:${preferWellLit}:${season}`;
+  const { isPregnancyMode = false, preferWellLit = false, season = "none", travelMode = "driving" } = preferences;
+  const key = `route_v18:${origin?.toLowerCase()}:${destination?.toLowerCase()}:${isPregnancyMode}:${preferWellLit}:${season}:${travelMode}`;
   const raw = localStorage.getItem(key);
 
   if (!raw) return null;
@@ -23,8 +23,8 @@ export const getCachedRoute = (origin, destination, preferences = {}) => {
 };
 
 export const setCachedRoute = (origin, destination, data, preferences = {}) => {
-  const { isPregnancyMode = false, preferWellLit = false, season = "none" } = preferences;
-  const key = `route_v17:${origin?.toLowerCase()}:${destination?.toLowerCase()}:${isPregnancyMode}:${preferWellLit}:${season}`;
+  const { isPregnancyMode = false, preferWellLit = false, season = "none", travelMode = "driving" } = preferences;
+  const key = `route_v18:${origin?.toLowerCase()}:${destination?.toLowerCase()}:${isPregnancyMode}:${preferWellLit}:${season}:${travelMode}`;
   try {
     localStorage.setItem(
       key,

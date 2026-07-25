@@ -201,7 +201,8 @@ const RouteMap = ({ routes, selectedRouteId, origin, destination, onSelectRoute 
   const handleStateHover = (stateName, evt) => {
     const code = STATE_NAME_TO_CODE[stateName];
     if (code) {
-      const rect = evt.currentTarget.closest('.map-container-relative').getBoundingClientRect();
+      const container = evt.currentTarget.closest('.relative');
+      const rect = container ? container.getBoundingClientRect() : evt.currentTarget.closest('.map-container-relative').getBoundingClientRect();
       setHoveredState({
         name: stateName,
         code: code,
@@ -210,6 +211,8 @@ const RouteMap = ({ routes, selectedRouteId, origin, destination, onSelectRoute 
       setMousePos({
         x: evt.clientX - rect.left,
         y: evt.clientY - rect.top,
+        containerWidth: rect.width,
+        containerHeight: rect.height,
       });
       setShowHoverBox(true);
     }
@@ -429,11 +432,29 @@ const RouteMap = ({ routes, selectedRouteId, origin, destination, onSelectRoute 
                   {showHoverBox && hoveredState && hoveredState.data && (
                     <div 
                       className="absolute z-[1000] w-60 bg-white/95 backdrop-blur-md shadow-2xl shadow-emerald-950/15 border border-emerald-100/60 rounded-[2rem] p-5 pointer-events-none transition-all duration-75"
-                      style={{
-                        left: `${mousePos.x}px`,
-                        top: `${mousePos.y}px`,
-                        transform: `translate(${mousePos.x > 320 ? "-110%" : "10%"}, ${mousePos.y > 350 ? "-110%" : "10%"})`,
-                      }}
+                      style={(() => {
+                        const popupWidth = 240;  // w-60 = 240px
+                        const popupHeight = 290; // approximate popup height
+                        const gap = 12;          // gap from cursor
+
+                        const cw = mousePos.containerWidth || 600;
+                        const ch = mousePos.containerHeight || 460;
+                        const mx = mousePos.x;
+                        const my = mousePos.y;
+
+                        // Prefer right side, flip left if not enough space
+                        const fitsRight = mx + gap + popupWidth <= cw;
+                        const fitsBottom = my + popupHeight <= ch;
+
+                        const left = fitsRight ? mx + gap : mx - gap - popupWidth;
+                        const top = fitsBottom ? my : my - popupHeight;
+
+                        // Clamp to container edges to prevent any overflow
+                        const clampedLeft = Math.max(0, Math.min(left, cw - popupWidth));
+                        const clampedTop = Math.max(0, Math.min(top, ch - popupHeight));
+
+                        return { left: `${clampedLeft}px`, top: `${clampedTop}px` };
+                      })()}
                     >
                       <div className="flex items-center gap-2 mb-3">
                         <div className="w-5 h-5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center">
