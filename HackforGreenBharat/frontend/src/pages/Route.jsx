@@ -109,7 +109,6 @@ const Routes = () => {
   const [destinationCoords, setDestinationCoords] = useState(null);
   const [loading, setLoading] = useState(false);
   const [isNavigating, setIsNavigating] = useState(false);
-  const [showTransportModal, setShowTransportModal] = useState(false);
   const [transportMode, setTransportMode] = useState("car");
 
   const [isPregnancyMode, setIsPregnancyMode] = useState(false);
@@ -596,7 +595,13 @@ const Routes = () => {
                 if (isNavigating) {
                   setIsNavigating(false);
                 } else {
-                  setShowTransportModal(true);
+                  let tMode = 'car';
+                  if (travelMode === 'driving') tMode = 'car';
+                  else if (travelMode === 'bike' || travelMode === 'cycling') tMode = 'bike';
+                  else if (travelMode === 'bus') tMode = 'bus';
+                  else if (travelMode === 'foot') tMode = 'walk';
+                  setTransportMode(tMode);
+                  setIsNavigating(true);
                 }
               }}
               className={`${isNavigating ? 'bg-red-500 hover:bg-red-600 shadow-red-400/30' : 'bg-emerald-500 hover:bg-emerald-600 shadow-emerald-400/30'} h-14 px-8 shadow-xl text-white font-bold text-base flex items-center gap-3 rounded-full group transition-all`}
@@ -604,102 +609,6 @@ const Routes = () => {
               <Navigation className="w-5 h-5 group-hover:rotate-12 transition-transform" />
               {isNavigating ? "EXIT NAVIGATION" : "START NAVIGATION"}
             </Button>
-        </div>
-      )}
-
-      {/* TRANSPORT MODE MODAL */}
-      {showTransportModal && (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
-          {/* Backdrop */}
-          <div
-            className="absolute inset-0 bg-gray-950/60 backdrop-blur-sm"
-            onClick={() => setShowTransportModal(false)}
-          />
-
-          {/* Modal Card */}
-          <div className="relative bg-white rounded-[2.5rem] shadow-2xl shadow-gray-900/20 w-full max-w-md p-8 animate-in zoom-in-95 fade-in duration-300">
-            {/* Close */}
-            <button
-              onClick={() => setShowTransportModal(false)}
-              className="absolute top-5 right-5 w-9 h-9 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center transition-colors"
-            >
-              <X className="w-4 h-4 text-gray-500" />
-            </button>
-
-            {/* Header */}
-            <div className="mb-7">
-              <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-50 border border-emerald-100 mb-4">
-                <Navigation className="w-3.5 h-3.5 text-emerald-600" />
-                <span className="text-[10px] font-black text-emerald-600 uppercase tracking-widest">Navigation Mode</span>
-              </div>
-              <h2 className="text-2xl font-black text-gray-900 tracking-tight leading-tight">
-                How are you travelling?
-              </h2>
-              <p className="text-gray-400 text-sm font-medium mt-1.5">
-                Choose your transport mode to get the most accurate live guidance.
-              </p>
-            </div>
-
-            {/* Mode Grid */}
-            <div className="grid grid-cols-2 gap-3 mb-7">
-              {TRANSPORT_MODES.map((mode) => {
-                const c = TRANSPORT_COLOR[mode.color];
-                const Icon = mode.icon;
-                const isSelected = transportMode === mode.id;
-                return (
-                  <button
-                    key={mode.id}
-                    onClick={() => setTransportMode(mode.id)}
-                    className={`relative flex flex-col items-center gap-3 p-5 rounded-[1.5rem] border-2 transition-all duration-200 cursor-pointer text-center
-                      ${isSelected
-                        ? `${c.bg} ${c.border} ${c.ring} ring-2 shadow-lg`
-                        : "bg-gray-50 border-gray-100 hover:border-gray-200 hover:bg-white"
-                      }`}
-                  >
-                    {isSelected && (
-                      <span className={`absolute top-2.5 right-2.5 w-2.5 h-2.5 rounded-full ${c.badge} animate-ping`} />
-                    )}
-                    <span className="text-3xl leading-none">{mode.emoji}</span>
-                    <div>
-                      <p className={`text-sm font-black leading-none ${isSelected ? c.text : "text-gray-700"}`}>
-                        {mode.label}
-                      </p>
-                      <p className="text-[10px] text-gray-400 font-medium mt-1 leading-tight">
-                        {mode.tip}
-                      </p>
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-
-            {/* Selected mode summary */}
-            {(() => {
-              const selected = TRANSPORT_MODES.find((m) => m.id === transportMode);
-              const c = TRANSPORT_COLOR[selected.color];
-              return (
-                <div className={`flex items-center gap-3 p-4 rounded-2xl ${c.bg} border ${c.border} mb-6`}>
-                  <span className="text-2xl">{selected.emoji}</span>
-                  <div>
-                    <p className={`text-xs font-black uppercase tracking-widest ${c.text}`}>{selected.label}</p>
-                    <p className="text-gray-500 text-[11px] font-medium">{selected.tip}</p>
-                  </div>
-                </div>
-              );
-            })()}
-
-            {/* Start Button */}
-            <Button
-              onClick={() => {
-                setShowTransportModal(false);
-                setIsNavigating(true);
-              }}
-              className="w-full h-14 bg-emerald-500 hover:bg-emerald-600 text-white font-black text-base rounded-2xl shadow-lg shadow-emerald-200 flex items-center justify-center gap-3 transition-all active:scale-95"
-            >
-              <Navigation className="w-5 h-5" />
-              Start {TRANSPORT_MODES.find((m) => m.id === transportMode)?.label} Navigation
-            </Button>
-          </div>
         </div>
       )}
       
