@@ -98,7 +98,6 @@ const TRAVEL_MODES = [
   { id: "bike",     emoji: "🛵", label: "Bike",    osrm: "driving" },
   { id: "bus",      emoji: "🚌", label: "Bus",     osrm: "driving" },
 ];
-
 export const routeController = async (req, res) => {
   try {
     const { originCity, destinationCity, preferences } = req.body;
@@ -144,7 +143,7 @@ export const routeController = async (req, res) => {
     let osrmData = osrmCache.get(osrmKey);
 
     if (!osrmData) {
-      const osrmURL = `https://router.project-osrm.org/route/v1/${osrmProfile}/${origin.lon},${origin.lat};${destination.lon},${destination.lat}?overview=full&geometries=geojson&alternatives=true`;
+      const osrmURL = `https://router.project-osrm.org/route/v1/${osrmProfile}/${origin.lon},${origin.lat};${destination.lon},${destination.lat}?overview=full&geometries=geojson&alternatives=true&steps=true`;
       const osrmRes = await axios.get(osrmURL, { timeout: 12000 });
       osrmData = osrmRes.data;
       osrmCache.set(osrmKey, osrmData);
@@ -271,9 +270,21 @@ export const routeController = async (req, res) => {
         score,
         traffic,
         avgSpeed: avgSpeed.toFixed(1),
+        geometry,
         pollutionSegments,
         evStations,
-        geometry,
+        steps: r.legs?.[0]?.steps?.map((s) => ({
+          instruction: s.maneuver?.type === 'turn' 
+            ? `Turn ${s.maneuver?.modifier || ''} onto ${s.name || 'road'}` 
+            : s.maneuver?.type === 'depart' 
+            ? `Depart towards ${destinationCity}` 
+            : s.maneuver?.type === 'arrive' 
+            ? `Arrive at ${destinationCity}` 
+            : `Continue on ${s.name || 'highway'}`,
+          distance: s.distance ? `${(s.distance / 1000).toFixed(1)} km` : '',
+          lat: s.maneuver?.location?.[1],
+          lon: s.maneuver?.location?.[0]
+        })) || [],
       };
     });
 

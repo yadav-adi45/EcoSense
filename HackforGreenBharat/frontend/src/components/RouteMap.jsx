@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo, Fragment } from "react";
+import { useEffect, useState, useMemo, useRef, Fragment } from "react";
 import {
   MapContainer,
   TileLayer,
@@ -11,7 +11,25 @@ import {
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import StateMap from "./StateMap";
-import { Activity, CloudSun, Compass, Droplets, Info } from "lucide-react";
+import { 
+  Activity, 
+  CloudSun, 
+  Compass, 
+  Droplets, 
+  Info,
+  Navigation,
+  Play,
+  Pause,
+  SkipForward,
+  SkipBack,
+  Volume2,
+  VolumeX,
+  X,
+  ShieldAlert,
+  CornerUpRight,
+  Gauge,
+  CheckCircle2
+} from "lucide-react";
 
 /* ===== LEAFLET ICONS ===== */
 const evIcon = L.divIcon({
@@ -20,6 +38,42 @@ const evIcon = L.divIcon({
   iconSize: [32, 32],
   iconAnchor: [16, 16],
 });
+
+/* ===== TRANSPORT MODE CONFIG ===== */
+const TRANSPORT_CONFIG = {
+  car:  { emoji: "🚗", label: "Car",        color: "#2563eb", speedUnit: "km/h" },
+  bike: { emoji: "🏍️", label: "Bike",       color: "#ea580c", speedUnit: "km/h" },
+  bus:  { emoji: "🚌", label: "Bus",        color: "#7c3aed", speedUnit: "km/h" },
+  walk: { emoji: "🚶", label: "Walking",    color: "#10b981", speedUnit: "km/h" },
+};
+
+/** Build a vehicle marker icon for the given transport mode */
+const makeVehicleIcon = (mode = "car") => {
+  const cfg = TRANSPORT_CONFIG[mode] || TRANSPORT_CONFIG.car;
+  return L.divIcon({
+    className: "custom-vehicle-marker-icon",
+    html: `
+      <div style="
+        background: ${cfg.color};
+        width: 48px;
+        height: 48px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border: 3.5px solid white;
+        box-shadow: 0 0 28px ${cfg.color}99, 0 6px 16px rgba(0,0,0,0.35);
+        color: white;
+        font-size: 22px;
+        transform: translate(-50%, -50%);
+      ">
+        ${cfg.emoji}
+      </div>
+    `,
+    iconSize: [0, 0],
+    iconAnchor: [0, 0],
+  });
+};
 
 const originIcon = new L.Icon({
   iconUrl: "https://maps.gstatic.com/mapfiles/ms2/micons/red-pushpin.png",
@@ -124,6 +178,69 @@ const getLabelCount = (distanceKm) => {
   return 5;
 };
 
+const formatDuration = (durationStr) => {
+  if (!durationStr) return "";
+  const match = durationStr.match(/(\d+)\s*min/);
+  if (match) {
+    const mins = parseInt(match[1], 10);
+    if (mins >= 60) {
+      const hrs = Math.floor(mins / 60);
+      const remMins = mins % 60;
+      return remMins > 0 ? `${hrs} hr ${remMins} min` : `${hrs} hr`;
+    }
+  }
+  return durationStr;
+};
+
+const createDurationBadgeIcon = (durationStr, isSelected) => {
+  const formatted = formatDuration(durationStr);
+  const bg = isSelected ? "#ffffff" : "#f8fafc";
+  const textColor = isSelected ? "#1e293b" : "#64748b";
+  const border = isSelected ? "2.5px solid #2563eb" : "1.5px solid #cbd5e1";
+  const shadow = isSelected ? "0 4px 14px rgba(37,99,235,0.3)" : "0 2px 6px rgba(0,0,0,0.12)";
+
+  return L.divIcon({
+    className: "custom-duration-badge-wrapper",
+    html: `
+      <div style="
+        background: ${bg};
+        color: ${textColor};
+        border: ${border};
+        box-shadow: ${shadow};
+        padding: 5px 12px;
+        border-radius: 14px;
+        font-family: system-ui, -apple-system, sans-serif;
+        font-weight: 800;
+        font-size: 13px;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        white-space: nowrap;
+        transform: translate(-50%, -50%);
+        cursor: pointer;
+        transition: transform 0.2s ease;
+      ">
+        <span style="font-size: 14px;">🚗</span>
+        <span>${formatted}</span>
+      </div>
+    `,
+    iconSize: [0, 0],
+    iconAnchor: [0, 0],
+  });
+};
+
+/* ===== INVALIDATE MAP SIZE (fixes blank tile rendering after DOM layout changes) ===== */
+const InvalidateSizeHelper = ({ isActive }) => {
+  const map = useMap();
+  useEffect(() => {
+    if (isActive) {
+      const timer = setTimeout(() => map.invalidateSize(), 200);
+      return () => clearTimeout(timer);
+    }
+  }, [map, isActive]);
+  return null;
+};
+
 /* ===== AUTO FIT MAP ===== */
 const FitBounds = ({ origin, destination }) => {
   const map = useMap();
@@ -138,29 +255,37 @@ const FitBounds = ({ origin, destination }) => {
   return null;
 };
 
-/* ===== INVALIDATE MAP SIZE HELPER ===== */
-const InvalidateSizeHelper = ({ isActive }) => {
+/* ===== LIVE NAVIGATION MAP TRACKER ===== */
+const NavigationTracker = ({ currentPos }) => {
   const map = useMap();
   useEffect(() => {
-    if (isActive) {
-      // Small timeout ensures container display transition is fully done
-      const timer = setTimeout(() => {
-        map.invalidateSize({ animate: true });
-        console.log("[RouteMap] Invalidated Leaflet size to force tile load");
-      }, 350);
-      return () => clearTimeout(timer);
+    if (currentPos && currentPos.lat && currentPos.lon) {
+      map.flyTo([currentPos.lat, currentPos.lon], 16, { animate: true, duration: 0.8 });
     }
-  }, [map, isActive]);
+  }, [map, currentPos]);
   return null;
 };
 
 /* ===== MAIN MAP ORCHESTRATOR ===== */
-const RouteMap = ({ routes, selectedRouteId, origin, destination, onSelectRoute }) => {
+const RouteMap = ({ routes, selectedRouteId, origin, destination, onSelectRoute, isNavigating, onExitNav, transportMode = "car" }) => {
   const [selectedState, setSelectedState] = useState(null);
   const [pathData, setPathData] = useState(null);
   const [hoveredState, setHoveredState] = useState(null);
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
   const [showHoverBox, setShowHoverBox] = useState(false);
+
+  // Live Navigation State
+  const [navIndex, setNavIndex] = useState(0);
+  const [isPlaying, setIsPlaying] = useState(true);
+  const [simSpeed, setSimSpeed] = useState(1);
+  const [voiceEnabled, setVoiceEnabled] = useState(true);
+
+  // Real-time GPS state
+  const [gpsPos, setGpsPos] = useState(null);       // { lat, lon, speed } from Geolocation API
+  const [gpsError, setGpsError] = useState(null);
+  const [gpsActive, setGpsActive] = useState(false);
+  const [liveSpeed, setLiveSpeed] = useState(null);  // km/h
+  const gpsWatchRef = useRef(null);
 
   // Transition States for Smooth space-to-ground Zoom Animation
   const [heatmapScale, setHeatmapScale] = useState(1);
@@ -169,6 +294,10 @@ const RouteMap = ({ routes, selectedRouteId, origin, destination, onSelectRoute 
 
   const showLeafletMap = destination !== null;
 
+  // Build vehicle icon based on transport mode (memoised to avoid re-creating on every render)
+  const vehicleIcon = useMemo(() => makeVehicleIcon(transportMode), [transportMode]);
+  const modeCfg = TRANSPORT_CONFIG[transportMode] || TRANSPORT_CONFIG.car;
+
   // Load India SVG paths
   useEffect(() => {
     fetch('/india-paths.json')
@@ -176,6 +305,51 @@ const RouteMap = ({ routes, selectedRouteId, origin, destination, onSelectRoute 
       .then((data) => setPathData(data))
       .catch((err) => console.error('Failed to load map paths:', err));
   }, []);
+
+  // ===== REAL-TIME GPS TRACKING =====
+  useEffect(() => {
+    if (!isNavigating) {
+      // Stop watching when navigation exits
+      if (gpsWatchRef.current !== null) {
+        navigator.geolocation?.clearWatch(gpsWatchRef.current);
+        gpsWatchRef.current = null;
+      }
+      setGpsPos(null);
+      setGpsActive(false);
+      setLiveSpeed(null);
+      setGpsError(null);
+      return;
+    }
+
+    if (!navigator.geolocation) {
+      setGpsError("GPS not supported by this browser");
+      return;
+    }
+
+    setGpsError(null);
+    gpsWatchRef.current = navigator.geolocation.watchPosition(
+      (pos) => {
+        const { latitude, longitude, speed } = pos.coords;
+        setGpsPos({ lat: latitude, lon: longitude });
+        setGpsActive(true);
+        // speed is in m/s — convert to km/h
+        setLiveSpeed(speed != null ? Math.round(speed * 3.6) : null);
+      },
+      (err) => {
+        // Permission denied or unavailable → fall back to simulation silently
+        setGpsError(err.code === 1 ? "GPS access denied — using simulation" : "GPS unavailable — using simulation");
+        setGpsActive(false);
+      },
+      { enableHighAccuracy: true, maximumAge: 2000, timeout: 10000 }
+    );
+
+    return () => {
+      if (gpsWatchRef.current !== null) {
+        navigator.geolocation.clearWatch(gpsWatchRef.current);
+        gpsWatchRef.current = null;
+      }
+    };
+  }, [isNavigating]);
 
   // Manage Zoom Scale transition when Destination is searched
   useEffect(() => {
@@ -234,12 +408,74 @@ const RouteMap = ({ routes, selectedRouteId, origin, destination, onSelectRoute 
   const originPos = [leafletOrigin.lat, leafletOrigin.lon];
   const destPos = destination ? [destination.lat, destination.lon] : null;
 
-  const selectedRoute = routes.find((r) => r.id === selectedRouteId);
-  const labelIndexes = new Set();
+  const activeRoute = routes.find((r) => r.id === selectedRouteId) || routes[0];
+  const geometryPoints = activeRoute?.geometry || [];
 
-  if (selectedRoute?.pollutionSegments?.length) {
-    const total = selectedRoute.pollutionSegments.length;
-    const distanceKm = parseFloat(selectedRoute.distance);
+  // Reset and auto-play when navigation mode toggles
+  useEffect(() => {
+    if (isNavigating) {
+      setNavIndex(0);
+      setIsPlaying(true);
+    }
+  }, [isNavigating, selectedRouteId]);
+
+  // Simulation step interval — only runs when GPS is NOT active
+  useEffect(() => {
+    if (!isNavigating || !isPlaying || geometryPoints.length === 0 || gpsActive) return;
+
+    const intervalMs = Math.max(100, Math.floor(750 / simSpeed));
+    const timer = setInterval(() => {
+      setNavIndex((prev) => {
+        if (prev >= geometryPoints.length - 1) {
+          setIsPlaying(false);
+          return prev;
+        }
+        return prev + 1;
+      });
+    }, intervalMs);
+
+    return () => clearInterval(timer);
+  }, [isNavigating, isPlaying, simSpeed, geometryPoints.length, gpsActive]);
+
+  // When GPS is active use the real position, otherwise use simulated geometry point
+  const currentPos = gpsActive && gpsPos
+    ? gpsPos
+    : (geometryPoints[navIndex] || (origin ? { lat: origin.lat, lon: origin.lon } : null));
+
+  const stepsList = activeRoute?.steps?.length ? activeRoute.steps : [
+    { instruction: `Depart from ${origin?.name || "Origin"}`, distance: "Start", lat: origin?.lat, lon: origin?.lon },
+    ...(activeRoute?.pollutionSegments || []).map(seg => ({
+      instruction: `Passing ${seg.area || "Segment"} — AQI ${seg.aqi ?? "Good"} (${seg.zone || "Low"} pollution)`,
+      distance: "En Route",
+      lat: seg.lat,
+      lon: seg.lon
+    })),
+    { instruction: `Arrive at ${destination?.name || "Destination"}`, distance: "0 km", lat: destination?.lat, lon: destination?.lon }
+  ];
+
+  const stepProgress = Math.min(1, navIndex / Math.max(1, geometryPoints.length - 1));
+  const currentStepIndex = Math.min(stepsList.length - 1, Math.floor(stepProgress * stepsList.length));
+  const currentStep = stepsList[currentStepIndex] || stepsList[0];
+  const currentSeg = activeRoute?.pollutionSegments?.[Math.floor(stepProgress * Math.max(1, (activeRoute?.pollutionSegments?.length || 1) - 1))];
+
+  // Voice speech announcement on step changes
+  useEffect(() => {
+    if (!isNavigating || !voiceEnabled || !currentStep?.instruction) return;
+    if ("speechSynthesis" in window) {
+      try {
+        window.speechSynthesis.cancel();
+        const msg = new SpeechSynthesisUtterance(currentStep.instruction);
+        msg.rate = 1;
+        msg.volume = 0.9;
+        window.speechSynthesis.speak(msg);
+      } catch (e) {}
+    }
+  }, [currentStepIndex, isNavigating, voiceEnabled]);
+
+  const labelIndexes = new Set();
+  if (activeRoute?.pollutionSegments?.length) {
+    const total = activeRoute.pollutionSegments.length;
+    const distanceKm = parseFloat(activeRoute.distance);
     const labelsToShow = getLabelCount(distanceKm);
     for (let i = 0; i < labelsToShow; i++) {
       labelIndexes.add(Math.floor((i * total) / labelsToShow));
@@ -277,7 +513,8 @@ const RouteMap = ({ routes, selectedRouteId, origin, destination, onSelectRoute 
 
           <InvalidateSizeHelper isActive={showLeafletMap} />
 
-          {destination && <FitBounds origin={leafletOrigin} destination={destination} />}
+          {destination && !isNavigating && <FitBounds origin={leafletOrigin} destination={destination} />}
+          {isNavigating && currentPos && <NavigationTracker currentPos={currentPos} />}
 
           <Marker position={originPos} icon={originIcon}>
             <Popup><strong>Origin:</strong> {leafletOrigin.name}</Popup>
@@ -286,72 +523,270 @@ const RouteMap = ({ routes, selectedRouteId, origin, destination, onSelectRoute 
             <Popup><strong>Destination:</strong> {destination?.name}</Popup>
           </Marker>}
 
-          {routes.map((route) => {
-            const isSelected = route.id === selectedRouteId;
+          {/* Live Navigation GPS Vehicle Marker */}
+          {isNavigating && currentPos && (
+            <Marker position={[currentPos.lat, currentPos.lon]} icon={vehicleIcon}>
+              <Popup>
+                <div style={{ fontWeight: 800, color: modeCfg.color }}>{modeCfg.emoji} {modeCfg.label}</div>
+                <div style={{ fontSize: "11px", color: "#475569", marginTop: "2px" }}>{currentStep?.instruction}</div>
+                {gpsActive && liveSpeed !== null && (
+                  <div style={{ fontSize: "11px", color: "#10b981", fontWeight: 700, marginTop: "4px" }}>
+                    📡 Live GPS · {liveSpeed} km/h
+                  </div>
+                )}
+              </Popup>
+            </Marker>
+          )}
 
-            if (isSelected && route.pollutionSegments?.length > 1) {
-              const evMarkers = (route.evStations || []).map((ev) => (
-                <Marker key={`ev-${ev.id}`} position={[ev.lat, ev.lon]} icon={evIcon}>
-                  <Popup>
-                    <div style={{ fontWeight: 700, color: "#10b981", textTransform: "uppercase" }}>{ev.name}</div>
-                    <div style={{ fontSize: "11px", color: "#666" }}>Operator: {ev.operator}</div>
-                  </Popup>
-                </Marker>
-              ));
+          {/* Traveled / Remaining polylines during Live Navigation */}
+          {isNavigating && geometryPoints.length > 0 && (
+            <Fragment key="live-nav-polylines">
+              <Polyline
+                positions={geometryPoints.slice(0, navIndex + 1).map((p) => [p.lat, p.lon])}
+                pathOptions={{ color: "#10b981", weight: 9, opacity: 0.95, lineCap: "round", lineJoin: "round" }}
+              />
+              <Polyline
+                positions={geometryPoints.slice(navIndex).map((p) => [p.lat, p.lon])}
+                pathOptions={{ color: "#2563eb", weight: 7, opacity: 0.8, dashArray: "6 8", lineCap: "round" }}
+              />
+            </Fragment>
+          )}
 
-              const routeLines = route.pollutionSegments.map((seg, i) => {
-                if (i === route.pollutionSegments.length - 1) return null;
-                const segColor = getRouteSegmentAQIColor(seg.aqi);
-                const nextSeg = route.pollutionSegments[i + 1];
-
-                return (
-                  <Fragment key={`${route.id}-seg-${i}`}>
-                    <Polyline
-                      positions={[[seg.lat, seg.lon], [nextSeg.lat, nextSeg.lon]]}
-                      pathOptions={{ color: segColor, weight: 8, opacity: 0.85, lineCap: "round" }}
-                      eventHandlers={{ click: () => onSelectRoute && onSelectRoute(route.id) }}
-                    >
-                      {labelIndexes.has(i) && (
-                        <Tooltip permanent direction="top" opacity={1}>
-                          <div style={{
-                            background: "#fff",
-                            border: `3px solid ${segColor}`,
-                            borderRadius: "10px",
-                            padding: "6px 12px",
-                            boxShadow: "0 2px 12px rgba(0,0,0,0.15)",
-                            fontSize: "13px",
-                            fontWeight: 700,
-                            color: "#111",
-                            minWidth: "100px",
-                            textAlign: "center",
-                          }}>
-                            <div style={{ color: segColor, fontWeight: 800 }}>{seg.zone || "Unknown"}</div>
-                            <div style={{ color: "#555", fontWeight: 600 }}>AQI: {seg.aqi ?? "N/A"}</div>
-                          </div>
-                        </Tooltip>
-                      )}
-                    </Polyline>
-                  </Fragment>
-                );
-              });
-
-              return [...evMarkers, ...routeLines];
-            }
-
+          {/* Render unselected routes first so selected route is drawn on top */}
+          {routes.filter((r) => r.id !== selectedRouteId).map((route) => {
             const positions = route.geometry?.map((p) => [p.lat, p.lon]) || [];
-            const colors = ["#3b82f6", "#8b5cf6", "#f59e0b"];
-            const routeColor = colors[route.id % colors.length] || "#9CA3AF";
+            if (!positions.length) return null;
+            const midPos = positions[Math.floor(positions.length / 2)];
 
             return (
-              <Polyline
-                key={route.id}
-                positions={positions}
-                pathOptions={{ color: routeColor, weight: 5, opacity: 0.45, dashArray: "8 4" }}
-                eventHandlers={{ click: () => onSelectRoute && onSelectRoute(route.id) }}
-              />
+              <Fragment key={`alt-route-${route.id}`}>
+                <Polyline
+                  positions={positions}
+                  pathOptions={{ color: "#64748b", weight: 6, opacity: 0.65, lineCap: "round", lineJoin: "round" }}
+                  eventHandlers={{ click: () => onSelectRoute && onSelectRoute(route.id) }}
+                />
+                {midPos && (
+                  <Marker
+                    position={midPos}
+                    icon={createDurationBadgeIcon(route.duration, false)}
+                    eventHandlers={{ click: () => onSelectRoute && onSelectRoute(route.id) }}
+                  />
+                )}
+              </Fragment>
+            );
+          })}
+
+          {/* Render selected route */}
+          {routes.filter((r) => r.id === selectedRouteId).map((route) => {
+            const fullPositions = route.geometry?.map((p) => [p.lat, p.lon]) || [];
+            if (!fullPositions.length) return null;
+            const midPos = fullPositions[Math.floor(fullPositions.length / 2)];
+
+            const evMarkers = (route.evStations || []).map((ev) => (
+              <Marker key={`ev-${ev.id}`} position={[ev.lat, ev.lon]} icon={evIcon}>
+                <Popup>
+                  <div style={{ fontWeight: 700, color: "#10b981", textTransform: "uppercase" }}>{ev.name}</div>
+                  <div style={{ fontSize: "11px", color: "#666" }}>Operator: {ev.operator}</div>
+                </Popup>
+              </Marker>
+            ));
+
+            const segmentTooltips = (route.pollutionSegments || []).map((seg, i) => {
+              if (!labelIndexes.has(i)) return null;
+              const segColor = getRouteSegmentAQIColor(seg.aqi);
+              return (
+                <Marker key={`seg-badge-${i}`} position={[seg.lat, seg.lon]} icon={L.divIcon({ className: "empty-icon" })}>
+                  <Tooltip permanent direction="top" opacity={1}>
+                    <div style={{
+                      background: "#fff",
+                      border: `3px solid ${segColor}`,
+                      borderRadius: "10px",
+                      padding: "4px 10px",
+                      boxShadow: "0 2px 12px rgba(0,0,0,0.15)",
+                      fontSize: "12px",
+                      fontWeight: 700,
+                      color: "#111",
+                      minWidth: "90px",
+                      textAlign: "center",
+                    }}>
+                      <div style={{ color: segColor, fontWeight: 800 }}>{seg.zone || "Unknown"}</div>
+                      <div style={{ color: "#555", fontWeight: 600 }}>AQI: {seg.aqi ?? "N/A"}</div>
+                    </div>
+                  </Tooltip>
+                </Marker>
+              );
+            });
+
+            return (
+              <Fragment key={`selected-route-${route.id}`}>
+                {/* Outer casing halo for high contrast road polyline */}
+                <Polyline
+                  positions={fullPositions}
+                  pathOptions={{ color: "#1e3a8a", weight: 10, opacity: 0.35, lineCap: "round", lineJoin: "round" }}
+                />
+                {/* Core road polyline in Google Maps driving blue */}
+                <Polyline
+                  positions={fullPositions}
+                  pathOptions={{ color: "#2563eb", weight: 6, opacity: 0.95, lineCap: "round", lineJoin: "round" }}
+                  eventHandlers={{ click: () => onSelectRoute && onSelectRoute(route.id) }}
+                />
+                {evMarkers}
+                {segmentTooltips}
+                {midPos && (
+                  <Marker
+                    position={midPos}
+                    icon={createDurationBadgeIcon(route.duration, true)}
+                    eventHandlers={{ click: () => onSelectRoute && onSelectRoute(route.id) }}
+                  />
+                )}
+              </Fragment>
             );
           })}
         </MapContainer>
+
+        {/* 🧭 IN-APP LIVE NAVIGATION HUD OVERLAYS */}
+        {isNavigating && showLeafletMap && (
+        <>
+            {/* Top HUD Direction Banner */}
+            <div className="absolute top-6 left-6 right-6 z-[1000] bg-gray-900/90 backdrop-blur-xl border border-emerald-500/30 text-white rounded-[2rem] p-5 shadow-2xl animate-in slide-in-from-top duration-500 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 pointer-events-auto">
+              <div className="flex items-center gap-4">
+                <div className="w-14 h-14 rounded-2xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center shrink-0">
+                  <CornerUpRight className="w-8 h-8 text-emerald-400 animate-pulse" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2 mb-1 flex-wrap">
+                    {/* Transport mode badge */}
+                    <span
+                      className="px-2.5 py-0.5 rounded-full font-black text-[10px] uppercase tracking-widest text-white"
+                      style={{ backgroundColor: modeCfg.color }}
+                    >
+                      {modeCfg.emoji} {modeCfg.label}
+                    </span>
+                    <span className="px-2.5 py-0.5 rounded-full bg-emerald-500 text-gray-950 font-black text-[10px] uppercase tracking-widest">
+                      {currentStep?.distance || "Ahead"}
+                    </span>
+                    {currentSeg?.aqi !== undefined && (
+                      <span className="px-2.5 py-0.5 rounded-full bg-gray-800 text-emerald-400 font-bold text-[10px] border border-gray-700">
+                        AQI {currentSeg.aqi} • {currentSeg.zone || "Clean Zone"}
+                      </span>
+                    )}
+                    {/* GPS status pill */}
+                    {gpsActive ? (
+                      <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 font-bold text-[10px] border border-emerald-500/30 flex items-center gap-1">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping inline-block" />
+                        Live GPS{liveSpeed !== null ? ` · ${liveSpeed} km/h` : ""}
+                      </span>
+                    ) : (
+                      <span className="px-2.5 py-0.5 rounded-full bg-gray-700/60 text-gray-400 font-bold text-[10px] border border-gray-600/40">
+                        {gpsError ? "Sim Mode" : "Acquiring GPS…"}
+                      </span>
+                    )}
+                  </div>
+                  <h3 className="text-lg md:text-xl font-extrabold tracking-tight text-white leading-tight">
+                    {currentStep?.instruction || "Proceed along route"}
+                  </h3>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 self-end md:self-center">
+                <button
+                  type="button"
+                  onClick={() => setVoiceEnabled(!voiceEnabled)}
+                  className={`p-3 rounded-2xl border transition-all cursor-pointer ${
+                    voiceEnabled
+                      ? "bg-emerald-500/20 border-emerald-500/40 text-emerald-400"
+                      : "bg-gray-800 border-gray-700 text-gray-400"
+                  }`}
+                  title="Toggle Voice Guidance"
+                >
+                  {voiceEnabled ? <Volume2 className="w-5 h-5" /> : <VolumeX className="w-5 h-5" />}
+                </button>
+                <button
+                  type="button"
+                  onClick={onExitNav}
+                  className="p-3 rounded-2xl bg-red-500/20 hover:bg-red-500/30 border border-red-500/40 text-red-400 transition-all font-bold text-xs flex items-center gap-1.5 cursor-pointer"
+                >
+                  <X className="w-5 h-5" /> Exit Nav
+                </button>
+              </div>
+            </div>
+
+            {/* Bottom Control & Progress Toolbar */}
+            <div className="absolute bottom-6 left-6 right-6 z-[1000] bg-gray-900/90 backdrop-blur-xl border border-gray-800 text-white rounded-[2rem] p-4 shadow-2xl flex flex-col gap-3 pointer-events-auto">
+              {/* Route Progress Bar */}
+              <div className="w-full bg-gray-800 rounded-full h-2 overflow-hidden flex">
+                <div
+                  className="h-full transition-all duration-300 rounded-full"
+                  style={{
+                    width: `${(stepProgress * 100).toFixed(1)}%`,
+                    background: `linear-gradient(to right, ${modeCfg.color}, #10b981)`
+                  }}
+                />
+              </div>
+
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3 flex-wrap">
+                  <span className="text-xs font-extrabold tracking-wider" style={{ color: modeCfg.color }}>
+                    {(stepProgress * 100).toFixed(0)}% COMPLETED
+                  </span>
+                  <span className="text-xs text-gray-400 font-bold">
+                    {activeRoute?.duration} • {activeRoute?.distance}
+                  </span>
+                  {/* Speed display when GPS active */}
+                  {gpsActive && liveSpeed !== null && (
+                    <span className="text-xs font-black text-emerald-400 flex items-center gap-1">
+                      <Gauge className="w-3.5 h-3.5" /> {liveSpeed} km/h
+                    </span>
+                  )}
+                </div>
+
+                {/* Simulation Controls — hidden when real GPS is driving position */}
+                {!gpsActive && (
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setNavIndex((p) => Math.max(0, p - 1))}
+                      className="w-10 h-10 rounded-xl bg-gray-800 hover:bg-gray-700 border border-gray-700 flex items-center justify-center text-white cursor-pointer"
+                    >
+                      <SkipBack className="w-4 h-4" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setIsPlaying(!isPlaying)}
+                      className="h-10 px-5 rounded-xl font-extrabold text-gray-950 flex items-center gap-2 shadow-lg cursor-pointer"
+                      style={{ backgroundColor: modeCfg.color }}
+                    >
+                      {isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
+                      <span>{isPlaying ? "Pause" : "Play Nav"}</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setNavIndex((p) => Math.min(geometryPoints.length - 1, p + 1))}
+                      className="w-10 h-10 rounded-xl bg-gray-800 hover:bg-gray-700 border border-gray-700 flex items-center justify-center text-white cursor-pointer"
+                    >
+                      <SkipForward className="w-4 h-4" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSimSpeed((s) => (s === 1 ? 2 : s === 2 ? 5 : 1))}
+                      className="h-10 px-3 rounded-xl bg-gray-800 border border-gray-700 text-xs font-black text-emerald-400 cursor-pointer"
+                    >
+                      {simSpeed}x Speed
+                    </button>
+                  </div>
+                )}
+
+                {/* When GPS is live — show a "following GPS" indicator instead of sim controls */}
+                {gpsActive && (
+                  <div className="flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
+                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+                    <span className="text-xs font-black text-emerald-400 uppercase tracking-widest">Following Live GPS</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          </>
+        )}
       </div>
 
       {/* 🗺️ DYNAMIC CIVICSHIELD-STYLE SVG HEATMAP VIEW WRAPPER */}
@@ -533,7 +968,6 @@ const RouteMap = ({ routes, selectedRouteId, origin, destination, onSelectRoute 
           )}
         </div>
       </div>
-
     </div>
   );
 };

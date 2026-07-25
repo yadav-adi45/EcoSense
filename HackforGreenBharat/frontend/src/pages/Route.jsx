@@ -18,14 +18,62 @@ import {
   Loader2,
   Sparkles,
   Zap,
-  Leaf
+  Leaf,
+  Car,
+  Bike,
+  Bus,
+  PersonStanding,
+  X
 } from "lucide-react";
 import { serverUrl } from "@/main";
 import { getCachedRoute, setCachedRoute } from "@/utils/routeCache";
 import { toast } from "react-toastify";
 import Footer from "@/pages/Footer";
 
-/* AQI color helper */
+/* Transport mode config */
+const TRANSPORT_MODES = [
+  {
+    id: "car",
+    label: "Car",
+    emoji: "🚗",
+    icon: Car,
+    color: "blue",
+    tip: "Fastest option with EV charging support",
+  },
+  {
+    id: "bike",
+    label: "Bike / Moto",
+    emoji: "🏍️",
+    icon: Bike,
+    color: "orange",
+    tip: "Navigate narrow lanes & shortcuts",
+  },
+  {
+    id: "bus",
+    label: "Bus / Transit",
+    emoji: "🚌",
+    icon: Bus,
+    color: "purple",
+    tip: "Low-emission shared transport",
+  },
+  {
+    id: "walk",
+    label: "Walking",
+    emoji: "🚶",
+    icon: PersonStanding,
+    color: "emerald",
+    tip: "Healthiest & zero-emission option",
+  },
+];
+
+const TRANSPORT_COLOR = {
+  blue:    { ring: "ring-blue-500",    bg: "bg-blue-50",    border: "border-blue-200",    text: "text-blue-600",    badge: "bg-blue-500"    },
+  orange:  { ring: "ring-orange-500",  bg: "bg-orange-50",  border: "border-orange-200",  text: "text-orange-600",  badge: "bg-orange-500"  },
+  purple:  { ring: "ring-purple-500",  bg: "bg-purple-50",  border: "border-purple-200",  text: "text-purple-600",  badge: "bg-purple-500"  },
+  emerald: { ring: "ring-emerald-500", bg: "bg-emerald-50", border: "border-emerald-200", text: "text-emerald-600", badge: "bg-emerald-500" },
+};
+
+
 const getAQIColor = (aqi) => {
   if (aqi === null) return "#9CA3AF";
   if (aqi <= 50) return "#10B981"; // Emerald
@@ -60,6 +108,9 @@ const Routes = () => {
   const [originCoords, setOriginCoords] = useState(null);
   const [destinationCoords, setDestinationCoords] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [isNavigating, setIsNavigating] = useState(false);
+  const [showTransportModal, setShowTransportModal] = useState(false);
+  const [transportMode, setTransportMode] = useState("car");
 
   const [isPregnancyMode, setIsPregnancyMode] = useState(false);
   const [preferWellLit, setPreferWellLit] = useState(false);
@@ -119,7 +170,8 @@ const Routes = () => {
 
   useEffect(() => {
     if (!routes.length) return;
-    const segments = routes[selectedRoute]?.pollutionSegments;
+    const activeRoute = routes.find((r) => r.id === selectedRoute) || routes[0];
+    const segments = activeRoute?.pollutionSegments;
     if (!segments?.length) return;
     const high = segments.find((s) => s.aqi >= 150);
     if (!high) return;
@@ -348,13 +400,16 @@ const Routes = () => {
 
             {/* Map Viewer Card */}
             <Card className="border-none bg-white rounded-[2rem] shadow-xl shadow-emerald-900/10 overflow-hidden relative">
-              <CardContent className="p-0 h-[60vh] md:h-[600px] relative overflow-hidden">
+              <CardContent className={`p-0 relative overflow-hidden transition-all duration-500 ${isNavigating ? 'h-[80vh] md:h-[720px]' : 'h-[60vh] md:h-[600px]'}`}>
                 <RouteMap
                   routes={routes}
                   selectedRouteId={selectedRoute}
                   origin={originCoords}
                   destination={destinationCoords}
                   onSelectRoute={setSelectedRoute}
+                  isNavigating={isNavigating}
+                  onExitNav={() => setIsNavigating(false)}
+                  transportMode={transportMode}
                   onSelectDestination={(destName) => {
                     setDestination(destName);
                     setTriggerSearchOnce(destName);
@@ -454,7 +509,7 @@ const Routes = () => {
         </div>
 
         {/* EV STATIONS SECTION */}
-        {routes[selectedRoute]?.evStations && routes[selectedRoute]?.evStations.length > 0 && (
+        {routes.find((r) => r.id === selectedRoute)?.evStations?.length > 0 && (
             <div className="mt-16 animate-in fade-in duration-1000">
                 <div className="flex items-center gap-4 mb-10">
                     <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center border border-blue-100 shadow-sm">
@@ -467,7 +522,7 @@ const Routes = () => {
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {routes[selectedRoute].evStations.map((ev, i) => (
+                    {routes.find((r) => r.id === selectedRoute).evStations.map((ev, i) => (
                         <div key={ev.id} className="p-6 bg-white rounded-[1.5rem] border border-blue-50 shadow-sm hover:shadow-xl transition-all duration-500 relative group overflow-hidden">
                              <div className="absolute top-0 right-0 w-32 h-32 bg-gray-50/50 rounded-full blur-3xl -z-10 group-hover:bg-blue-50 transition-colors"></div>
                             <div className="flex items-start justify-between mb-6">
@@ -494,7 +549,7 @@ const Routes = () => {
         )}
 
         {/* BOTTOM SECTION - AIR QUALITY LOG */}
-        {routes[selectedRoute]?.pollutionSegments && routes[selectedRoute]?.pollutionSegments.length > 0 && (
+        {routes.find((r) => r.id === selectedRoute)?.pollutionSegments?.length > 0 && (
             <div className="mt-16 animate-in fade-in duration-1000">
                 <div className="flex items-center gap-4 mb-10">
                     <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center border border-emerald-100 shadow-sm">
@@ -507,7 +562,7 @@ const Routes = () => {
                 </div>
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {routes[selectedRoute]?.pollutionSegments.slice(0, 6).map((s, i) => (
+                    {routes.find((r) => r.id === selectedRoute)?.pollutionSegments.slice(0, 6).map((s, i) => (
                         <div key={i} className="p-6 bg-white rounded-[1.5rem] border border-emerald-50 shadow-sm hover:shadow-xl transition-all duration-500 relative group overflow-hidden">
                              <div className="absolute top-0 right-0 w-32 h-32 bg-gray-50/50 rounded-full blur-3xl -z-10 group-hover:bg-emerald-50 transition-colors"></div>
                             <div className="flex items-start justify-between mb-6">
@@ -537,20 +592,114 @@ const Routes = () => {
       {routes.length > 0 && (
         <div className="fixed bottom-10 right-10 z-[100] animate-bounce-slow">
             <Button
-              onClick={() => navigate("/navigation", {
-                state: {
-                  route: routes[selectedRoute] || routes[0],
-                  origin,
-                  destination,
-                  originCoords,
-                  destinationCoords,
+              onClick={() => {
+                if (isNavigating) {
+                  setIsNavigating(false);
+                } else {
+                  setShowTransportModal(true);
                 }
-              })}
-              className="bg-emerald-500 hover:bg-emerald-600 h-14 px-8 shadow-xl shadow-emerald-400/30 text-white font-bold text-base flex items-center gap-3 rounded-full group"
+              }}
+              className={`${isNavigating ? 'bg-red-500 hover:bg-red-600 shadow-red-400/30' : 'bg-emerald-500 hover:bg-emerald-600 shadow-emerald-400/30'} h-14 px-8 shadow-xl text-white font-bold text-base flex items-center gap-3 rounded-full group transition-all`}
             >
               <Navigation className="w-5 h-5 group-hover:rotate-12 transition-transform" />
-              NAVIGATE
+              {isNavigating ? "EXIT NAVIGATION" : "START NAVIGATION"}
             </Button>
+        </div>
+      )}
+
+      {/* TRANSPORT MODE MODAL */}
+      {showTransportModal && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
+          {/* Backdrop */}
+          <div
+            className="absolute inset-0 bg-gray-950/60 backdrop-blur-sm"
+            onClick={() => setShowTransportModal(false)}
+          />
+
+          {/* Modal Card */}
+          <div className="relative bg-white rounded-[2.5rem] shadow-2xl shadow-gray-900/20 w-full max-w-md p-8 animate-in zoom-in-95 fade-in duration-300">
+            {/* Close */}
+            <button
+              onClick={() => setShowTransportModal(false)}
+              className="absolute top-5 right-5 w-9 h-9 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center transition-colors"
+            >
+              <X className="w-4 h-4 text-gray-500" />
+            </button>
+
+            {/* Header */}
+            <div className="mb-7">
+              <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-50 border border-emerald-100 mb-4">
+                <Navigation className="w-3.5 h-3.5 text-emerald-600" />
+                <span className="text-[10px] font-black text-emerald-600 uppercase tracking-widest">Navigation Mode</span>
+              </div>
+              <h2 className="text-2xl font-black text-gray-900 tracking-tight leading-tight">
+                How are you travelling?
+              </h2>
+              <p className="text-gray-400 text-sm font-medium mt-1.5">
+                Choose your transport mode to get the most accurate live guidance.
+              </p>
+            </div>
+
+            {/* Mode Grid */}
+            <div className="grid grid-cols-2 gap-3 mb-7">
+              {TRANSPORT_MODES.map((mode) => {
+                const c = TRANSPORT_COLOR[mode.color];
+                const Icon = mode.icon;
+                const isSelected = transportMode === mode.id;
+                return (
+                  <button
+                    key={mode.id}
+                    onClick={() => setTransportMode(mode.id)}
+                    className={`relative flex flex-col items-center gap-3 p-5 rounded-[1.5rem] border-2 transition-all duration-200 cursor-pointer text-center
+                      ${isSelected
+                        ? `${c.bg} ${c.border} ${c.ring} ring-2 shadow-lg`
+                        : "bg-gray-50 border-gray-100 hover:border-gray-200 hover:bg-white"
+                      }`}
+                  >
+                    {isSelected && (
+                      <span className={`absolute top-2.5 right-2.5 w-2.5 h-2.5 rounded-full ${c.badge} animate-ping`} />
+                    )}
+                    <span className="text-3xl leading-none">{mode.emoji}</span>
+                    <div>
+                      <p className={`text-sm font-black leading-none ${isSelected ? c.text : "text-gray-700"}`}>
+                        {mode.label}
+                      </p>
+                      <p className="text-[10px] text-gray-400 font-medium mt-1 leading-tight">
+                        {mode.tip}
+                      </p>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Selected mode summary */}
+            {(() => {
+              const selected = TRANSPORT_MODES.find((m) => m.id === transportMode);
+              const c = TRANSPORT_COLOR[selected.color];
+              return (
+                <div className={`flex items-center gap-3 p-4 rounded-2xl ${c.bg} border ${c.border} mb-6`}>
+                  <span className="text-2xl">{selected.emoji}</span>
+                  <div>
+                    <p className={`text-xs font-black uppercase tracking-widest ${c.text}`}>{selected.label}</p>
+                    <p className="text-gray-500 text-[11px] font-medium">{selected.tip}</p>
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* Start Button */}
+            <Button
+              onClick={() => {
+                setShowTransportModal(false);
+                setIsNavigating(true);
+              }}
+              className="w-full h-14 bg-emerald-500 hover:bg-emerald-600 text-white font-black text-base rounded-2xl shadow-lg shadow-emerald-200 flex items-center justify-center gap-3 transition-all active:scale-95"
+            >
+              <Navigation className="w-5 h-5" />
+              Start {TRANSPORT_MODES.find((m) => m.id === transportMode)?.label} Navigation
+            </Button>
+          </div>
         </div>
       )}
       
