@@ -1,3 +1,10 @@
+import "./config/dns.js"; // Force Google DNS before any network calls
+import https from "https";
+import axios from "axios";
+
+// Disable SSL verification globally — needed for networks with SSL inspection (antivirus/proxy)
+axios.defaults.httpsAgent = new https.Agent({ rejectUnauthorized: false });
+
 import express from "express";
 import dotenv from "dotenv";
 import database from "./utils/database.js";
@@ -24,6 +31,7 @@ app.use(
   cors({
     origin: [
       "http://localhost:5173",
+      "http://localhost:5174",
       "https://ecosense-8.onrender.com",
       "https://timely-pastelito-b3d105.netlify.app",
     ],

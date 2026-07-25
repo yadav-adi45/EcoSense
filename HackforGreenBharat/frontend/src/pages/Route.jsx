@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import axios from "axios";
+import { useNavigate } from "react-router-dom";
 import Navbar from "@/components/Navbar";
 import RouteMap from "@/components/RouteMap";
 import AQIBadge from "../components/AQIBadge";
+import LocationAutocomplete from "@/components/LocationAutocomplete";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -50,6 +52,7 @@ const speak = (text) => {
 };
 
 const Routes = () => {
+  const navigate = useNavigate();
   const [origin, setOrigin] = useState("Delhi");
   const [destination, setDestination] = useState("");
   const [routes, setRoutes] = useState([]);
@@ -61,10 +64,50 @@ const Routes = () => {
   const [isPregnancyMode, setIsPregnancyMode] = useState(false);
   const [preferWellLit, setPreferWellLit] = useState(false);
   const [season, setSeason] = useState("none");
+  const [travelMode, setTravelMode] = useState("driving");
+
+  const [locatingUser, setLocatingUser] = useState(false);
+
+  const handleUseMyLocation = () => {
+    if (!("geolocation" in navigator)) {
+      toast.error("Geolocation is not supported by your browser.");
+      return;
+    }
+    setLocatingUser(true);
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        try {
+          const { latitude, longitude } = pos.coords;
+          // Reverse geocode to city name using Nominatim
+          const res = await axios.get(
+            `https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json`,
+            { headers: { "User-Agent": "ecosense-app" }, timeout: 8000 }
+          );
+          const city =
+            res.data?.address?.city ||
+            res.data?.address?.town ||
+            res.data?.address?.village ||
+            res.data?.address?.county ||
+            "Current Location";
+          setOrigin(city);
+          setOriginCoords({ lat: latitude, lon: longitude, name: city, fromGPS: true });
+          toast.success(`📍 Location set to ${city}`);
+        } catch {
+          toast.error("Could not detect your city. Please enter it manually.");
+        } finally {
+          setLocatingUser(false);
+        }
+      },
+      (err) => {
+        setLocatingUser(false);
+        if (err.code === 1) toast.error("Location permission denied. Please enter your city manually.");
+        else toast.error("Could not get your location. Please enter it manually.");
+      },
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
+  };
 
   const [triggerSearchOnce, setTriggerSearchOnce] = useState(null);
-
-  const lastAlertRef = useRef(null);
   const voiceEnabledRef = useRef(true);
 
   useEffect(() => {
@@ -98,8 +141,11 @@ const Routes = () => {
     setSelectedRoute(0);
     setLoading(true);
     try {
-      const prefs = { isPregnancyMode, preferWellLit, season };
-      const cached = getCachedRoute(origin, destination, prefs);
+      const prefs = { isPregnancyMode, preferWellLit, season, travelMode };
+      // Use the plain city name (not "City, State" label) for geocoding
+      const originCity = originCoords?.name || origin.split(",")[0].trim();
+      const destinationCity = destinationCoords?.name || destination.split(",")[0].trim();
+      const cached = getCachedRoute(originCity, destinationCity, prefs);
       if (cached) {
         setRoutes(cached.routes || []);
         setSelectedRoute(0);
@@ -109,9 +155,10 @@ const Routes = () => {
         return;
       }
       const fastRes = await axios.post(`${serverUrl}/api/v2/routes?fast=true`, {
-        originCity: origin,
-        destinationCity: destination,
-        preferences: prefs
+        originCity,
+        destinationCity,
+        preferences: prefs,
+        ...(originCoords?.fromGPS && { originCoords })
       });
       if (fastRes.data.success) {
         setRoutes(fastRes.data.routes);
@@ -120,12 +167,13 @@ const Routes = () => {
         setLoading(false);
       }
       const eliteRes = await axios.post(`${serverUrl}/api/v2/routes`, {
-        originCity: origin,
-        destinationCity: destination,
-        preferences: prefs
+        originCity,
+        destinationCity,
+        preferences: prefs,
+        ...(originCoords?.fromGPS && { originCoords })
       });
       if (eliteRes.data.success) {
-        setCachedRoute(origin, destination, eliteRes.data, prefs);
+        setCachedRoute(originCity, destinationCity, eliteRes.data, prefs);
         setRoutes(eliteRes.data.routes || []);
         setOriginCoords(eliteRes.data.origin);
         setDestinationCoords(eliteRes.data.destination);
@@ -164,82 +212,51 @@ const Routes = () => {
             {/* Search Input Card */}
             <Card className="border-none bg-white rounded-[2rem] shadow-lg shadow-emerald-900/5 p-6 md:p-8">
               <div className="flex flex-col md:flex-row gap-4">
-                <div className="flex-1 relative">
-                  <div className="absolute left-6 top-1/2 -translate-y-1/2 w-8 h-8 rounded-xl bg-emerald-50 flex items-center justify-center border border-emerald-100">
-                     <MapPin className="text-emerald-500 w-4 h-4" />
-                  </div>
-                  <Input
-                    list="indian-cities"
-                    value={origin}
-                    onChange={(e) => setOrigin(e.target.value)}
-                    placeholder="Find routes..."
-                    className="pl-16 h-14 bg-gray-50 border-gray-100 text-base font-semibold rounded-2xl focus:bg-white focus:border-emerald-400 transition-all shadow-inner"
-                  />
-                </div>
-                <div className="flex-1 relative">
-                   <div className="absolute left-6 top-1/2 -translate-y-1/2 w-8 h-8 rounded-xl bg-red-50 flex items-center justify-center border border-red-100">
-                     <Navigation className="text-red-500 w-4 h-4" />
-                  </div>
-                  <Input
-                    list="indian-cities"
-                    value={destination}
-                    onChange={(e) => setDestination(e.target.value)}
-                    placeholder="Find routes..."
-                    className="pl-16 h-14 bg-gray-50 border-gray-100 text-base font-semibold rounded-2xl focus:bg-white focus:border-emerald-400 transition-all shadow-inner"
-                  />
-                  <datalist id="indian-cities">
-                    <option value="Delhi" />
-                    <option value="Dehradun" />
-                    <option value="Mumbai" />
-                    <option value="Bangalore" />
-                    <option value="Pune" />
-                    <option value="Chennai" />
-                    <option value="Kolkata" />
-                    <option value="Hyderabad" />
-                    <option value="Ahmedabad" />
-                    <option value="Surat" />
-                    <option value="Jaipur" />
-                    <option value="Lucknow" />
-                    <option value="Kanpur" />
-                    <option value="Nagpur" />
-                    <option value="Indore" />
-                    <option value="Thane" />
-                    <option value="Bhopal" />
-                    <option value="Visakhapatnam" />
-                    <option value="Patna" />
-                    <option value="Vadodara" />
-                    <option value="Ghaziabad" />
-                    <option value="Ludhiana" />
-                    <option value="Agra" />
-                    <option value="Nashik" />
-                    <option value="Faridabad" />
-                    <option value="Meerut" />
-                    <option value="Rajkot" />
-                    <option value="Kalyan-Dombivli" />
-                    <option value="Vasai-Virar" />
-                    <option value="Varanasi" />
-                    <option value="Srinagar" />
-                    <option value="Aurangabad" />
-                    <option value="Dhanbad" />
-                    <option value="Amritsar" />
-                    <option value="Navi Mumbai" />
-                    <option value="Allahabad" />
-                    <option value="Ranchi" />
-                    <option value="Howrah" />
-                    <option value="Coimbatore" />
-                    <option value="Jabalpur" />
-                    <option value="Gwalior" />
-                    <option value="Vijayawada" />
-                    <option value="Jodhpur" />
-                    <option value="Madurai" />
-                    <option value="Raipur" />
-                    <option value="Kota" />
-                    <option value="Guwahati" />
-                    <option value="Chandigarh" />
-                    <option value="Solapur" />
-                    <option value="Hubli-Dharwad" />
-                  </datalist>
-                </div>
+                {/* ── ORIGIN ── */}
+                <LocationAutocomplete
+                  value={origin}
+                  onChange={(v) => { setOrigin(v); if (!v) setOriginCoords(null); }}
+                  onSelect={(s) => {
+                    if (!s) { setOriginCoords(null); return; }
+                    setOrigin(s.label);
+                    setOriginCoords({ lat: s.lat, lon: s.lon, name: s.name, fromGPS: false });
+                  }}
+                  placeholder="Origin city..."
+                  iconBg="bg-emerald-50 border-emerald-100"
+                  iconColor="text-emerald-500"
+                  extraDropdownTop={
+                    <button
+                      type="button"
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => handleUseMyLocation()}
+                      className="w-full flex items-center gap-3 px-4 py-3.5 hover:bg-sky-50 transition-colors border-b border-gray-50 group"
+                    >
+                      <div className="w-10 h-10 rounded-full bg-sky-100 flex items-center justify-center shrink-0 group-hover:bg-sky-200 transition-colors">
+                        {locatingUser
+                          ? <Loader2 className="w-5 h-5 text-sky-600 animate-spin" />
+                          : <Navigation className="w-5 h-5 text-sky-600" />}
+                      </div>
+                      <span className="text-sm font-black text-gray-800">
+                        {locatingUser ? "Detecting your location…" : "Your location"}
+                      </span>
+                    </button>
+                  }
+                />
+
+                {/* ── DESTINATION ── */}
+                <LocationAutocomplete
+                  value={destination}
+                  onChange={(v) => { setDestination(v); if (!v) setDestinationCoords(null); }}
+                  onSelect={(s) => {
+                    if (!s) { setDestinationCoords(null); return; }
+                    setDestination(s.label);
+                    setDestinationCoords({ lat: s.lat, lon: s.lon, name: s.name });
+                  }}
+                  placeholder="Destination city..."
+                  iconBg="bg-red-50 border-red-100"
+                  iconColor="text-red-500"
+                  icon={<Navigation className="w-4 h-4 text-red-500" />}
+                />
                 <Button
                   onClick={handleSearch}
                   disabled={loading}
@@ -251,6 +268,34 @@ const Routes = () => {
                     </>
                   )}
                 </Button>
+              </div>
+
+              {/* Travel Mode Selector */}
+              <div className="mt-5 pt-5 border-t border-gray-100">
+                <span className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-3">Travel Mode</span>
+                <div className="flex gap-2 flex-wrap">
+                  {[
+                    { id: "driving",  emoji: "🚗", label: "Car"     },
+                    { id: "cycling",  emoji: "🚲", label: "Bicycle" },
+                    { id: "foot",     emoji: "🚶", label: "Walk"    },
+                    { id: "bike",     emoji: "🛵", label: "Bike"    },
+                    { id: "bus",      emoji: "🚌", label: "Bus"     },
+                  ].map((mode) => (
+                    <button
+                      key={mode.id}
+                      type="button"
+                      onClick={() => { setTravelMode(mode.id); setRoutes([]); }}
+                      className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl border text-xs font-black transition-all duration-200 ${
+                        travelMode === mode.id
+                          ? "bg-emerald-500 text-white border-emerald-500 shadow-lg shadow-emerald-200"
+                          : "bg-gray-50 text-gray-600 border-gray-100 hover:border-emerald-200 hover:bg-emerald-50/50"
+                      }`}
+                    >
+                      <span className="text-base leading-none">{mode.emoji}</span>
+                      {mode.label}
+                    </button>
+                  ))}
+                </div>
               </div>
 
               {/* Preferences Selection */}
@@ -492,7 +537,15 @@ const Routes = () => {
       {routes.length > 0 && (
         <div className="fixed bottom-10 right-10 z-[100] animate-bounce-slow">
             <Button
-              onClick={() => window.open(`https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${destination}`, "_blank")}
+              onClick={() => navigate("/navigation", {
+                state: {
+                  route: routes[selectedRoute] || routes[0],
+                  origin,
+                  destination,
+                  originCoords,
+                  destinationCoords,
+                }
+              })}
               className="bg-emerald-500 hover:bg-emerald-600 h-14 px-8 shadow-xl shadow-emerald-400/30 text-white font-bold text-base flex items-center gap-3 rounded-full group"
             >
               <Navigation className="w-5 h-5 group-hover:rotate-12 transition-transform" />
