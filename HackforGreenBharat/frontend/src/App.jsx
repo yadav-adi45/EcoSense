@@ -22,8 +22,6 @@ import Insights from "./pages/Insights";
 import Presentation from "./pages/Pitch";
 import BillScanner from "./pages/BillScanner";
 import BillResult from "./pages/BillResult";
-import PathwayListener from "./components/PathwayListener";
-import PathwayDashboard from "./pages/PathwayDashboard";
 import EcoStores from "./pages/EcoStores";
 import Community from "./pages/Community";
 import NavigationScreen from "./pages/NavigationScreen";
@@ -31,7 +29,6 @@ import NavigationScreen from "./pages/NavigationScreen";
 const App = () => {
   return (
     <div>
-      <PathwayListener />
       <Routes>
         <Route path="/" element={<Home />} />
         <Route path="/register" element={<Register />} />
@@ -61,8 +58,7 @@ const App = () => {
         <Route path="/bill-result" element = {<BillResult />}/>
 
 
-        <Route path="/pathway-demo" element={<PathwayDashboard />} />
-         <Route path="/eco-store" element={<EcoStores />}/>
+        <Route path="/eco-store" element={<EcoStores />}/>
          <Route path="/community" element={<Community />}/>
          <Route path="/navigation" element={<NavigationScreen />}/>
       </Routes>
