@@ -1,5 +1,4 @@
 import { useEffect, useState, useMemo, Fragment, useRef, useCallback } from "react";
-import { createPortal } from "react-dom";
 import {
   MapContainer,
   TileLayer,
@@ -160,10 +159,6 @@ const RouteMap = ({ routes, selectedRouteId, origin, destination, onSelectRoute 
   const [selectedState, setSelectedState] = useState(null);
   const [pathData, setPathData] = useState(null);
   const [hoveredState, setHoveredState] = useState(null);
-  const [tooltipPos, setTooltipPos] = useState({ x: 0, y: 0 });
-  const [showHoverBox, setShowHoverBox] = useState(false);
-  const tooltipRef = useRef(null);
-  const mapContainerRef = useRef(null);
 
   // Transition States for Smooth space-to-ground Zoom Animation
   const [heatmapScale, setHeatmapScale] = useState(1);
@@ -201,56 +196,20 @@ const RouteMap = ({ routes, selectedRouteId, origin, destination, onSelectRoute 
     }
   }, [showLeafletMap]);
 
-  const handleStateHover = useCallback((stateName, evt) => {
+  const handleStateHover = useCallback((stateName) => {
     const code = STATE_NAME_TO_CODE[stateName];
     if (!code) return;
-
-    // Use raw viewport coordinates — the tooltip will be fixed-positioned
-    const cursorX = evt.clientX;
-    const cursorY = evt.clientY;
-
-    // Tooltip dimensions from last known render, or safe defaults
-    const tipW = tooltipRef.current?.offsetWidth  || 240;
-    const tipH = tooltipRef.current?.offsetHeight || 300;
-
-    const OFFSET = 14; // gap from cursor
-    const PAD    = 8;  // minimum gap from viewport edge
-
-    const vW = window.innerWidth;
-    const vH = window.innerHeight;
-
-    // Prefer right; flip left if it overflows right edge
-    let x = cursorX + OFFSET;
-    if (x + tipW > vW - PAD) {
-      x = cursorX - tipW - OFFSET;
-    }
-    // Hard-clamp to never exit left edge
-    x = Math.max(PAD, x);
-
-    // Prefer below; flip above if it overflows bottom edge
-    let y = cursorY + OFFSET;
-    if (y + tipH > vH - PAD) {
-      y = cursorY - tipH - OFFSET;
-    }
-    // Hard-clamp to never exit top edge
-    y = Math.max(PAD, y);
-
     setHoveredState({ name: stateName, code, data: STATE_ENV_DATA[code] });
-    setTooltipPos({ x, y });
-    setShowHoverBox(true);
   }, []);
 
   const handleStateClick = (stateName) => {
     const code = STATE_NAME_TO_CODE[stateName];
     if (code) {
       setSelectedState(code);
-      setShowHoverBox(false);
     }
   };
 
-  const handleMouseLeave = () => {
-    setShowHoverBox(false);
-  };
+  const handleMouseLeave = () => {};
 
   const leafletOrigin = origin || { lat: 28.6139, lon: 77.2090, name: "Delhi" };
   const originPos = [leafletOrigin.lat, leafletOrigin.lon];
@@ -418,120 +377,126 @@ const RouteMap = ({ routes, selectedRouteId, origin, destination, onSelectRoute 
                 </div>
               </div>
 
-              {/* SVG Map of India */}
+              {/* SVG Map + Static Info Card side by side */}
               {pathData ? (
-                <div ref={mapContainerRef} className="relative w-full max-h-[460px] flex items-center justify-center" style={{ overflow: "visible" }}>
-                  <svg 
-                    viewBox="0 0 600 700" 
-                    preserveAspectRatio="xMidYMid meet"
-                    className="w-full h-full max-h-[450px]"
-                  >
-                    {Object.entries(pathData).map(([stateName, d]) => {
-                      const code = STATE_NAME_TO_CODE[stateName];
-                      const stateData = STATE_ENV_DATA[code];
-                      const fillColor = stateData ? getAQIColor(stateData.aqi) : "rgba(200, 200, 200, 0.4)";
+                <div className="relative w-full flex gap-3 items-start">
 
-                      return (
-                        <path
-                          key={stateName}
-                          d={d}
-                          fill={fillColor}
-                          stroke="rgba(255, 255, 255, 0.55)"
-                          strokeWidth={hoveredState?.name === stateName ? 1.5 : 0.55}
-                          onMouseEnter={(e) => handleStateHover(stateName, e)}
-                          onMouseMove={(e) => handleStateHover(stateName, e)}
-                          onMouseLeave={handleMouseLeave}
-                          onClick={() => handleStateClick(stateName)}
-                          className="cursor-pointer transition-all duration-200"
-                          style={{
-                            filter: hoveredState?.name === stateName ? "brightness(1.1)" : "none"
-                          }}
-                        />
-                      );
-                    })}
-                  </svg>
-
-                  {/* 📊 Smart-positioned State Tooltip — rendered via Portal into document.body
-                       so it can never be clipped by any overflow:hidden ancestor */}
-                  {showHoverBox && hoveredState && hoveredState.data && createPortal(
-                    <div 
-                      ref={tooltipRef}
-                      className="w-60 bg-white/95 backdrop-blur-md shadow-2xl shadow-emerald-950/15 border border-emerald-100/60 rounded-[2rem] p-5 pointer-events-none"
-                      style={{
-                        position: "fixed",
-                        left: tooltipPos.x,
-                        top:  tooltipPos.y,
-                        zIndex: 99999,
-                        transition: "left 60ms ease-out, top 60ms ease-out",
-                      }}
+                  {/* SVG Map */}
+                  <div className="flex-1 min-w-0">
+                    <svg
+                      viewBox="0 0 600 700"
+                      preserveAspectRatio="xMidYMid meet"
+                      className="w-full max-h-[420px]"
                     >
-                      <div className="flex items-center gap-2 mb-3">
-                        <div className="w-5 h-5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center">
-                          <Activity className="w-3 h-3 text-emerald-600 animate-pulse" />
-                        </div>
-                        <div>
-                          <h4 className="text-[11px] font-black text-emerald-800 uppercase tracking-widest leading-none">{hoveredState.name}</h4>
-                          <span className="text-[8px] text-gray-400 font-black mt-0.5 block">State Level Metrics</span>
-                        </div>
-                      </div>
+                      {Object.entries(pathData).map(([stateName, d]) => {
+                        const code = STATE_NAME_TO_CODE[stateName];
+                        const stateData = STATE_ENV_DATA[code];
+                        const fillColor = stateData ? getAQIColor(stateData.aqi) : "rgba(200, 200, 200, 0.4)";
+                        return (
+                          <path
+                            key={stateName}
+                            d={d}
+                            fill={fillColor}
+                            stroke="rgba(255, 255, 255, 0.55)"
+                            strokeWidth={hoveredState?.name === stateName ? 1.5 : 0.55}
+                            onMouseEnter={() => handleStateHover(stateName)}
+                            onMouseLeave={handleMouseLeave}
+                            onClick={() => handleStateClick(stateName)}
+                            className="cursor-pointer transition-all duration-200"
+                            style={{ filter: hoveredState?.name === stateName ? "brightness(1.1)" : "none" }}
+                          />
+                        );
+                      })}
+                    </svg>
+                  </div>
 
-                      {/* AQI Indicator */}
-                      <div className="border-t border-b border-gray-100/60 py-2.5 mb-2.5 flex items-center justify-between">
-                        <div>
-                          <p className="text-[8px] text-gray-400 font-bold uppercase tracking-wider">State Avg AQI</p>
-                          <p className="text-2xl font-black tracking-tight" style={{ color: getAQIColor(hoveredState.data.aqi) }}>
-                            {hoveredState.data.aqi}
-                          </p>
-                        </div>
-                        <span 
-                          className="px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-widest border"
-                          style={{ 
-                            color: getAQIColor(hoveredState.data.aqi), 
-                            borderColor: `${getAQIColor(hoveredState.data.aqi)}30`, 
-                            backgroundColor: `${getAQIColor(hoveredState.data.aqi)}10` 
-                          }}
-                        >
-                          {getAQILabel(hoveredState.data.aqi)}
-                        </span>
-                      </div>
-
-                      {/* Weather, Temp, Greenery */}
-                      <div className="grid grid-cols-2 gap-2 mb-2">
-                        <div className="flex items-center gap-1.5 bg-gray-50/50 p-1.5 rounded-lg border border-gray-100/30">
-                          <CloudSun className="w-3.5 h-3.5 text-orange-400" />
-                          <div>
-                            <p className="text-[8px] text-gray-400 font-bold uppercase">Temp</p>
-                            <p className="text-[10px] font-black text-gray-700">{hoveredState.data.temp}°C</p>
+                  {/* 📊 Static Info Card — fixed at right side, never moves */}
+                  <div className="w-52 shrink-0 self-end mb-4">
+                    <div
+                      className="w-full bg-white/95 backdrop-blur-md shadow-2xl shadow-emerald-950/15 border border-emerald-100/60 rounded-[1.5rem] p-4"
+                      style={{ transition: "opacity 200ms ease" }}
+                    >
+                      {hoveredState && hoveredState.data ? (
+                        <>
+                          <div className="flex items-center gap-2 mb-3">
+                            <div className="w-5 h-5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center">
+                              <Activity className="w-3 h-3 text-emerald-600 animate-pulse" />
+                            </div>
+                            <div>
+                              <h4 className="text-[10px] font-black text-emerald-800 uppercase tracking-widest leading-none">{hoveredState.name}</h4>
+                              <span className="text-[8px] text-gray-400 font-black mt-0.5 block">State Level Metrics</span>
+                            </div>
                           </div>
-                        </div>
-                        <div className="flex items-center gap-1.5 bg-gray-50/50 p-1.5 rounded-lg border border-gray-100/30">
-                          <Compass className="w-3.5 h-3.5 text-emerald-400" />
-                          <div>
-                            <p className="text-[8px] text-gray-400 font-bold uppercase">Roads</p>
-                            <p className="text-[9px] font-black text-gray-700 leading-tight">{hoveredState.data.roadQuality}</p>
+
+                          {/* AQI Indicator */}
+                          <div className="border-t border-b border-gray-100/60 py-2 mb-2 flex items-center justify-between">
+                            <div>
+                              <p className="text-[8px] text-gray-400 font-bold uppercase tracking-wider">State Avg AQI</p>
+                              <p className="text-2xl font-black tracking-tight" style={{ color: getAQIColor(hoveredState.data.aqi) }}>
+                                {hoveredState.data.aqi}
+                              </p>
+                            </div>
+                            <span
+                              className="px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-widest border"
+                              style={{
+                                color: getAQIColor(hoveredState.data.aqi),
+                                borderColor: `${getAQIColor(hoveredState.data.aqi)}30`,
+                                backgroundColor: `${getAQIColor(hoveredState.data.aqi)}10`,
+                              }}
+                            >
+                              {getAQILabel(hoveredState.data.aqi)}
+                            </span>
                           </div>
-                        </div>
-                      </div>
 
-                      <div className="flex items-center gap-1.5 bg-gray-50/50 p-2 rounded-lg border border-gray-100/30 mb-2 text-xs">
-                        <Droplets className="w-3.5 h-3.5 text-blue-400" />
-                        <div>
-                          <span className="text-[8px] text-gray-400 font-bold uppercase block leading-none">Green Canopy</span>
-                          <span className="font-extrabold text-[10px] text-gray-700">{hoveredState.data.greenery}</span>
-                        </div>
-                      </div>
+                          {/* Temp + Roads */}
+                          <div className="grid grid-cols-2 gap-1.5 mb-2">
+                            <div className="flex items-center gap-1 bg-gray-50/50 p-1.5 rounded-lg border border-gray-100/30">
+                              <CloudSun className="w-3 h-3 text-orange-400 shrink-0" />
+                              <div>
+                                <p className="text-[7px] text-gray-400 font-bold uppercase">Temp</p>
+                                <p className="text-[9px] font-black text-gray-700">{hoveredState.data.temp}°C</p>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-1 bg-gray-50/50 p-1.5 rounded-lg border border-gray-100/30">
+                              <Compass className="w-3 h-3 text-emerald-400 shrink-0" />
+                              <div>
+                                <p className="text-[7px] text-gray-400 font-bold uppercase">Roads</p>
+                                <p className="text-[8px] font-black text-gray-700 leading-tight">{hoveredState.data.roadQuality}</p>
+                              </div>
+                            </div>
+                          </div>
 
-                      {/* Primary Source */}
-                      <div className="bg-emerald-500/5 p-2 rounded-xl border border-emerald-500/10 flex items-start gap-1.5">
-                        <Info className="w-3 h-3 text-emerald-600 shrink-0 mt-0.5" />
-                        <div>
-                          <span className="text-[8px] font-black text-emerald-800 uppercase tracking-widest block leading-none mb-1">Eco Travel Advice</span>
-                          <p className="text-[9px] text-gray-500 font-bold leading-tight">{hoveredState.data.advice}</p>
+                          {/* Greenery */}
+                          <div className="flex items-center gap-1.5 bg-gray-50/50 p-1.5 rounded-lg border border-gray-100/30 mb-2">
+                            <Droplets className="w-3 h-3 text-blue-400 shrink-0" />
+                            <div>
+                              <span className="text-[7px] text-gray-400 font-bold uppercase block leading-none">Green Canopy</span>
+                              <span className="font-extrabold text-[9px] text-gray-700">{hoveredState.data.greenery}</span>
+                            </div>
+                          </div>
+
+                          {/* Advice */}
+                          <div className="bg-emerald-500/5 p-2 rounded-xl border border-emerald-500/10 flex items-start gap-1.5">
+                            <Info className="w-3 h-3 text-emerald-600 shrink-0 mt-0.5" />
+                            <div>
+                              <span className="text-[7px] font-black text-emerald-800 uppercase tracking-widest block leading-none mb-1">Eco Travel Advice</span>
+                              <p className="text-[8px] text-gray-500 font-bold leading-tight">{hoveredState.data.advice}</p>
+                            </div>
+                          </div>
+                        </>
+                      ) : (
+                        /* Placeholder when no state is hovered */
+                        <div className="flex flex-col items-center justify-center py-6 text-center">
+                          <div className="w-8 h-8 rounded-full bg-emerald-50 border border-emerald-100 flex items-center justify-center mb-2">
+                            <Activity className="w-4 h-4 text-emerald-300" />
+                          </div>
+                          <p className="text-[9px] font-black text-gray-300 uppercase tracking-widest">Hover a state</p>
+                          <p className="text-[8px] text-gray-300 font-bold mt-0.5">to see metrics</p>
                         </div>
-                      </div>
-                    </div>,
-                    document.body
-                  )}
+                      )}
+                    </div>
+                  </div>
+
                 </div>
               ) : (
                 <div className="flex flex-col items-center justify-center h-[400px] text-gray-400">
