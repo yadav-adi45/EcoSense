@@ -75,36 +75,7 @@ const LiveAQISection = () => {
       () => setLoading(false)
     );
 
-    // 2. Poll Pathway for "Live Stream" overrides
-    const interval = setInterval(async () => {
-      try {
-        const res = await fetch("https://hackforgreenbharat.onrender.com/api/v9/alert");
-        const json = await res.json();
-        
-        if (json.success && json.data) {
-           // Override with Pathway Data
-           setData(prev => {
-             // Only update if we have previous data to merge with, or create new
-             if (!prev) return prev;
-             
-             // If the data is significantly different or just new, take it.
-             // For demo purposes, we ALWAYS take Pathway data if it exists to show the "Simulation" working.
-             return {
-                 ...prev,
-                 source: 'Pathway Live Stream',
-                 aqi: json.data.aqi,
-                 // We can also simulate other metrics if we want, or keep real weather
-                 // Let's keep real weather but update AQI-related stuff
-             };
-           });
-           setLastUpdated(new Date());
-        }
-      } catch (e) {
-        // Ignore errors, stay on real data
-      }
-    }, 2000);
-
-    return () => clearInterval(interval);
+    return () => {};
   }, []);
 
   /* ================= LOADER ================= */
@@ -140,11 +111,6 @@ const LiveAQISection = () => {
             <span className="flex items-center gap-1">
               <RefreshCw size={14} /> {lastUpdated.toLocaleTimeString()}
             </span>
-            {data.source === 'Pathway Live Stream' && (
-              <span className="flex items-center gap-1 text-emerald-500 animate-pulse font-medium">
-                <Wind size={14} /> Source: Pathway AI Stream
-              </span>
-            )}
           </div>
         </div>
 
