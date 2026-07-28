@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import axios from "axios";
+import { useNavigate } from "react-router-dom";
 import Navbar from "@/components/Navbar";
 import RouteMap from "@/components/RouteMap";
 import AQIBadge from "../components/AQIBadge";
+import LocationAutocomplete from "@/components/LocationAutocomplete";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,14 +18,62 @@ import {
   Loader2,
   Sparkles,
   Zap,
-  Leaf
+  Leaf,
+  Car,
+  Bike,
+  Bus,
+  PersonStanding,
+  X
 } from "lucide-react";
 import { serverUrl } from "@/main";
 import { getCachedRoute, setCachedRoute } from "@/utils/routeCache";
 import { toast } from "react-toastify";
 import Footer from "@/pages/Footer";
 
-/* AQI color helper */
+/* Transport mode config */
+const TRANSPORT_MODES = [
+  {
+    id: "car",
+    label: "Car",
+    emoji: "🚗",
+    icon: Car,
+    color: "blue",
+    tip: "Fastest option with EV charging support",
+  },
+  {
+    id: "bike",
+    label: "Bike / Moto",
+    emoji: "🏍️",
+    icon: Bike,
+    color: "orange",
+    tip: "Navigate narrow lanes & shortcuts",
+  },
+  {
+    id: "bus",
+    label: "Bus / Transit",
+    emoji: "🚌",
+    icon: Bus,
+    color: "purple",
+    tip: "Low-emission shared transport",
+  },
+  {
+    id: "walk",
+    label: "Walking",
+    emoji: "🚶",
+    icon: PersonStanding,
+    color: "emerald",
+    tip: "Healthiest & zero-emission option",
+  },
+];
+
+const TRANSPORT_COLOR = {
+  blue:    { ring: "ring-blue-500",    bg: "bg-blue-50",    border: "border-blue-200",    text: "text-blue-600",    badge: "bg-blue-500"    },
+  orange:  { ring: "ring-orange-500",  bg: "bg-orange-50",  border: "border-orange-200",  text: "text-orange-600",  badge: "bg-orange-500"  },
+  purple:  { ring: "ring-purple-500",  bg: "bg-purple-50",  border: "border-purple-200",  text: "text-purple-600",  badge: "bg-purple-500"  },
+  emerald: { ring: "ring-emerald-500", bg: "bg-emerald-50", border: "border-emerald-200", text: "text-emerald-600", badge: "bg-emerald-500" },
+};
+
+
 const getAQIColor = (aqi) => {
   if (aqi === null) return "#9CA3AF";
   if (aqi <= 50) return "#10B981"; // Emerald
@@ -50,6 +100,7 @@ const speak = (text) => {
 };
 
 const Routes = () => {
+  const navigate = useNavigate();
   const [origin, setOrigin] = useState("Delhi");
   const [destination, setDestination] = useState("");
   const [routes, setRoutes] = useState([]);
@@ -57,14 +108,56 @@ const Routes = () => {
   const [originCoords, setOriginCoords] = useState(null);
   const [destinationCoords, setDestinationCoords] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [isNavigating, setIsNavigating] = useState(false);
+  const [transportMode, setTransportMode] = useState("car");
 
   const [isPregnancyMode, setIsPregnancyMode] = useState(false);
   const [preferWellLit, setPreferWellLit] = useState(false);
   const [season, setSeason] = useState("none");
+  const [travelMode, setTravelMode] = useState("driving");
+
+  const [locatingUser, setLocatingUser] = useState(false);
+
+  const handleUseMyLocation = () => {
+    if (!("geolocation" in navigator)) {
+      toast.error("Geolocation is not supported by your browser.");
+      return;
+    }
+    setLocatingUser(true);
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        try {
+          const { latitude, longitude } = pos.coords;
+          // Reverse geocode to city name using Nominatim
+          const res = await axios.get(
+            `https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json`,
+            { headers: { "User-Agent": "ecosense-app" }, timeout: 8000 }
+          );
+          const city =
+            res.data?.address?.city ||
+            res.data?.address?.town ||
+            res.data?.address?.village ||
+            res.data?.address?.county ||
+            "Current Location";
+          setOrigin(city);
+          setOriginCoords({ lat: latitude, lon: longitude, name: city, fromGPS: true });
+          toast.success(`📍 Location set to ${city}`);
+        } catch {
+          toast.error("Could not detect your city. Please enter it manually.");
+        } finally {
+          setLocatingUser(false);
+        }
+      },
+      (err) => {
+        setLocatingUser(false);
+        if (err.code === 1) toast.error("Location permission denied. Please enter your city manually.");
+        else toast.error("Could not get your location. Please enter it manually.");
+      },
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
+  };
 
   const [triggerSearchOnce, setTriggerSearchOnce] = useState(null);
-
-  const lastAlertRef = useRef(null);
   const voiceEnabledRef = useRef(true);
 
   useEffect(() => {
@@ -76,7 +169,8 @@ const Routes = () => {
 
   useEffect(() => {
     if (!routes.length) return;
-    const segments = routes[selectedRoute]?.pollutionSegments;
+    const activeRoute = routes.find((r) => r.id === selectedRoute) || routes[0];
+    const segments = activeRoute?.pollutionSegments;
     if (!segments?.length) return;
     const high = segments.find((s) => s.aqi >= 150);
     if (!high) return;
@@ -98,8 +192,11 @@ const Routes = () => {
     setSelectedRoute(0);
     setLoading(true);
     try {
-      const prefs = { isPregnancyMode, preferWellLit, season };
-      const cached = getCachedRoute(origin, destination, prefs);
+      const prefs = { isPregnancyMode, preferWellLit, season, travelMode };
+      // Use the plain city name (not "City, State" label) for geocoding
+      const originCity = originCoords?.name || origin.split(",")[0].trim();
+      const destinationCity = destinationCoords?.name || destination.split(",")[0].trim();
+      const cached = getCachedRoute(originCity, destinationCity, prefs);
       if (cached) {
         setRoutes(cached.routes || []);
         setSelectedRoute(0);
@@ -109,9 +206,10 @@ const Routes = () => {
         return;
       }
       const fastRes = await axios.post(`${serverUrl}/api/v2/routes?fast=true`, {
-        originCity: origin,
-        destinationCity: destination,
-        preferences: prefs
+        originCity,
+        destinationCity,
+        preferences: prefs,
+        ...(originCoords?.fromGPS && { originCoords })
       });
       if (fastRes.data.success) {
         setRoutes(fastRes.data.routes);
@@ -120,12 +218,13 @@ const Routes = () => {
         setLoading(false);
       }
       const eliteRes = await axios.post(`${serverUrl}/api/v2/routes`, {
-        originCity: origin,
-        destinationCity: destination,
-        preferences: prefs
+        originCity,
+        destinationCity,
+        preferences: prefs,
+        ...(originCoords?.fromGPS && { originCoords })
       });
       if (eliteRes.data.success) {
-        setCachedRoute(origin, destination, eliteRes.data, prefs);
+        setCachedRoute(originCity, destinationCity, eliteRes.data, prefs);
         setRoutes(eliteRes.data.routes || []);
         setOriginCoords(eliteRes.data.origin);
         setDestinationCoords(eliteRes.data.destination);
@@ -164,82 +263,51 @@ const Routes = () => {
             {/* Search Input Card */}
             <Card className="border-none bg-white rounded-[2rem] shadow-lg shadow-emerald-900/5 p-6 md:p-8">
               <div className="flex flex-col md:flex-row gap-4">
-                <div className="flex-1 relative">
-                  <div className="absolute left-6 top-1/2 -translate-y-1/2 w-8 h-8 rounded-xl bg-emerald-50 flex items-center justify-center border border-emerald-100">
-                     <MapPin className="text-emerald-500 w-4 h-4" />
-                  </div>
-                  <Input
-                    list="indian-cities"
-                    value={origin}
-                    onChange={(e) => setOrigin(e.target.value)}
-                    placeholder="Find routes..."
-                    className="pl-16 h-14 bg-gray-50 border-gray-100 text-base font-semibold rounded-2xl focus:bg-white focus:border-emerald-400 transition-all shadow-inner"
-                  />
-                </div>
-                <div className="flex-1 relative">
-                   <div className="absolute left-6 top-1/2 -translate-y-1/2 w-8 h-8 rounded-xl bg-red-50 flex items-center justify-center border border-red-100">
-                     <Navigation className="text-red-500 w-4 h-4" />
-                  </div>
-                  <Input
-                    list="indian-cities"
-                    value={destination}
-                    onChange={(e) => setDestination(e.target.value)}
-                    placeholder="Find routes..."
-                    className="pl-16 h-14 bg-gray-50 border-gray-100 text-base font-semibold rounded-2xl focus:bg-white focus:border-emerald-400 transition-all shadow-inner"
-                  />
-                  <datalist id="indian-cities">
-                    <option value="Delhi" />
-                    <option value="Dehradun" />
-                    <option value="Mumbai" />
-                    <option value="Bangalore" />
-                    <option value="Pune" />
-                    <option value="Chennai" />
-                    <option value="Kolkata" />
-                    <option value="Hyderabad" />
-                    <option value="Ahmedabad" />
-                    <option value="Surat" />
-                    <option value="Jaipur" />
-                    <option value="Lucknow" />
-                    <option value="Kanpur" />
-                    <option value="Nagpur" />
-                    <option value="Indore" />
-                    <option value="Thane" />
-                    <option value="Bhopal" />
-                    <option value="Visakhapatnam" />
-                    <option value="Patna" />
-                    <option value="Vadodara" />
-                    <option value="Ghaziabad" />
-                    <option value="Ludhiana" />
-                    <option value="Agra" />
-                    <option value="Nashik" />
-                    <option value="Faridabad" />
-                    <option value="Meerut" />
-                    <option value="Rajkot" />
-                    <option value="Kalyan-Dombivli" />
-                    <option value="Vasai-Virar" />
-                    <option value="Varanasi" />
-                    <option value="Srinagar" />
-                    <option value="Aurangabad" />
-                    <option value="Dhanbad" />
-                    <option value="Amritsar" />
-                    <option value="Navi Mumbai" />
-                    <option value="Allahabad" />
-                    <option value="Ranchi" />
-                    <option value="Howrah" />
-                    <option value="Coimbatore" />
-                    <option value="Jabalpur" />
-                    <option value="Gwalior" />
-                    <option value="Vijayawada" />
-                    <option value="Jodhpur" />
-                    <option value="Madurai" />
-                    <option value="Raipur" />
-                    <option value="Kota" />
-                    <option value="Guwahati" />
-                    <option value="Chandigarh" />
-                    <option value="Solapur" />
-                    <option value="Hubli-Dharwad" />
-                  </datalist>
-                </div>
+                {/* ── ORIGIN ── */}
+                <LocationAutocomplete
+                  value={origin}
+                  onChange={(v) => { setOrigin(v); if (!v) setOriginCoords(null); }}
+                  onSelect={(s) => {
+                    if (!s) { setOriginCoords(null); return; }
+                    setOrigin(s.label);
+                    setOriginCoords({ lat: s.lat, lon: s.lon, name: s.name, fromGPS: false });
+                  }}
+                  placeholder="Origin city..."
+                  iconBg="bg-emerald-50 border-emerald-100"
+                  iconColor="text-emerald-500"
+                  extraDropdownTop={
+                    <button
+                      type="button"
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => handleUseMyLocation()}
+                      className="w-full flex items-center gap-3 px-4 py-3.5 hover:bg-sky-50 transition-colors border-b border-gray-50 group"
+                    >
+                      <div className="w-10 h-10 rounded-full bg-sky-100 flex items-center justify-center shrink-0 group-hover:bg-sky-200 transition-colors">
+                        {locatingUser
+                          ? <Loader2 className="w-5 h-5 text-sky-600 animate-spin" />
+                          : <Navigation className="w-5 h-5 text-sky-600" />}
+                      </div>
+                      <span className="text-sm font-black text-gray-800">
+                        {locatingUser ? "Detecting your location…" : "Your location"}
+                      </span>
+                    </button>
+                  }
+                />
+
+                {/* ── DESTINATION ── */}
+                <LocationAutocomplete
+                  value={destination}
+                  onChange={(v) => { setDestination(v); if (!v) setDestinationCoords(null); }}
+                  onSelect={(s) => {
+                    if (!s) { setDestinationCoords(null); return; }
+                    setDestination(s.label);
+                    setDestinationCoords({ lat: s.lat, lon: s.lon, name: s.name });
+                  }}
+                  placeholder="Destination city..."
+                  iconBg="bg-red-50 border-red-100"
+                  iconColor="text-red-500"
+                  icon={<Navigation className="w-4 h-4 text-red-500" />}
+                />
                 <Button
                   onClick={handleSearch}
                   disabled={loading}
@@ -251,6 +319,34 @@ const Routes = () => {
                     </>
                   )}
                 </Button>
+              </div>
+
+              {/* Travel Mode Selector */}
+              <div className="mt-5 pt-5 border-t border-gray-100">
+                <span className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-3">Travel Mode</span>
+                <div className="flex gap-2 flex-wrap">
+                  {[
+                    { id: "driving",  emoji: "🚗", label: "Car"     },
+                    { id: "cycling",  emoji: "🚲", label: "Bicycle" },
+                    { id: "foot",     emoji: "🚶", label: "Walk"    },
+                    { id: "bike",     emoji: "🛵", label: "Bike"    },
+                    { id: "bus",      emoji: "🚌", label: "Bus"     },
+                  ].map((mode) => (
+                    <button
+                      key={mode.id}
+                      type="button"
+                      onClick={() => { setTravelMode(mode.id); setRoutes([]); }}
+                      className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl border text-xs font-black transition-all duration-200 ${
+                        travelMode === mode.id
+                          ? "bg-emerald-500 text-white border-emerald-500 shadow-lg shadow-emerald-200"
+                          : "bg-gray-50 text-gray-600 border-gray-100 hover:border-emerald-200 hover:bg-emerald-50/50"
+                      }`}
+                    >
+                      <span className="text-base leading-none">{mode.emoji}</span>
+                      {mode.label}
+                    </button>
+                  ))}
+                </div>
               </div>
 
               {/* Preferences Selection */}
@@ -303,13 +399,16 @@ const Routes = () => {
 
             {/* Map Viewer Card */}
             <Card className="border-none bg-white rounded-[2rem] shadow-xl shadow-emerald-900/10 overflow-hidden relative">
-              <CardContent className="p-0 h-[60vh] md:h-[600px] relative overflow-hidden">
+              <CardContent className={`p-0 relative overflow-hidden transition-all duration-500 ${isNavigating ? 'h-[80vh] md:h-[720px]' : 'h-[60vh] md:h-[600px]'}`}>
                 <RouteMap
                   routes={routes}
                   selectedRouteId={selectedRoute}
                   origin={originCoords}
                   destination={destinationCoords}
                   onSelectRoute={setSelectedRoute}
+                  isNavigating={isNavigating}
+                  onExitNav={() => setIsNavigating(false)}
+                  transportMode={transportMode}
                   onSelectDestination={(destName) => {
                     setDestination(destName);
                     setTriggerSearchOnce(destName);
@@ -409,7 +508,7 @@ const Routes = () => {
         </div>
 
         {/* EV STATIONS SECTION */}
-        {routes[selectedRoute]?.evStations && routes[selectedRoute]?.evStations.length > 0 && (
+        {routes.find((r) => r.id === selectedRoute)?.evStations?.length > 0 && (
             <div className="mt-16 animate-in fade-in duration-1000">
                 <div className="flex items-center gap-4 mb-10">
                     <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center border border-blue-100 shadow-sm">
@@ -422,7 +521,7 @@ const Routes = () => {
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {routes[selectedRoute].evStations.map((ev, i) => (
+                    {routes.find((r) => r.id === selectedRoute).evStations.map((ev, i) => (
                         <div key={ev.id} className="p-6 bg-white rounded-[1.5rem] border border-blue-50 shadow-sm hover:shadow-xl transition-all duration-500 relative group overflow-hidden">
                              <div className="absolute top-0 right-0 w-32 h-32 bg-gray-50/50 rounded-full blur-3xl -z-10 group-hover:bg-blue-50 transition-colors"></div>
                             <div className="flex items-start justify-between mb-6">
@@ -449,7 +548,7 @@ const Routes = () => {
         )}
 
         {/* BOTTOM SECTION - AIR QUALITY LOG */}
-        {routes[selectedRoute]?.pollutionSegments && routes[selectedRoute]?.pollutionSegments.length > 0 && (
+        {routes.find((r) => r.id === selectedRoute)?.pollutionSegments?.length > 0 && (
             <div className="mt-16 animate-in fade-in duration-1000">
                 <div className="flex items-center gap-4 mb-10">
                     <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center border border-emerald-100 shadow-sm">
@@ -462,7 +561,7 @@ const Routes = () => {
                 </div>
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {routes[selectedRoute]?.pollutionSegments.slice(0, 6).map((s, i) => (
+                    {routes.find((r) => r.id === selectedRoute)?.pollutionSegments.slice(0, 6).map((s, i) => (
                         <div key={i} className="p-6 bg-white rounded-[1.5rem] border border-emerald-50 shadow-sm hover:shadow-xl transition-all duration-500 relative group overflow-hidden">
                              <div className="absolute top-0 right-0 w-32 h-32 bg-gray-50/50 rounded-full blur-3xl -z-10 group-hover:bg-emerald-50 transition-colors"></div>
                             <div className="flex items-start justify-between mb-6">
@@ -492,11 +591,23 @@ const Routes = () => {
       {routes.length > 0 && (
         <div className="fixed bottom-10 right-10 z-[100] animate-bounce-slow">
             <Button
-              onClick={() => window.open(`https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${destination}`, "_blank")}
-              className="bg-emerald-500 hover:bg-emerald-600 h-14 px-8 shadow-xl shadow-emerald-400/30 text-white font-bold text-base flex items-center gap-3 rounded-full group"
+              onClick={() => {
+                if (isNavigating) {
+                  setIsNavigating(false);
+                } else {
+                  let tMode = 'car';
+                  if (travelMode === 'driving') tMode = 'car';
+                  else if (travelMode === 'bike' || travelMode === 'cycling') tMode = 'bike';
+                  else if (travelMode === 'bus') tMode = 'bus';
+                  else if (travelMode === 'foot') tMode = 'walk';
+                  setTransportMode(tMode);
+                  setIsNavigating(true);
+                }
+              }}
+              className={`${isNavigating ? 'bg-red-500 hover:bg-red-600 shadow-red-400/30' : 'bg-emerald-500 hover:bg-emerald-600 shadow-emerald-400/30'} h-14 px-8 shadow-xl text-white font-bold text-base flex items-center gap-3 rounded-full group transition-all`}
             >
               <Navigation className="w-5 h-5 group-hover:rotate-12 transition-transform" />
-              NAVIGATE
+              {isNavigating ? "EXIT NAVIGATION" : "START NAVIGATION"}
             </Button>
         </div>
       )}

@@ -90,6 +90,14 @@ const fetchArea = async (lat, lon) => {
 };
 
 
+/* ============ TRAVEL MODE ============ */
+const TRAVEL_MODES = [
+  { id: "driving",  emoji: "🚗", label: "Car",     osrm: "driving" },
+  { id: "cycling",  emoji: "🚲", label: "Bicycle", osrm: "bike"    },
+  { id: "foot",     emoji: "🚶", label: "Walk",    osrm: "foot"    },
+  { id: "bike",     emoji: "🛵", label: "Bike",    osrm: "driving" },
+  { id: "bus",      emoji: "🚌", label: "Bus",     osrm: "driving" },
+];
 export const routeController = async (req, res) => {
   try {
     const { originCity, destinationCity, preferences } = req.body;
@@ -102,9 +110,20 @@ export const routeController = async (req, res) => {
     const isPregnancyMode = !!prefs.isPregnancyMode;
     const preferWellLit = !!prefs.preferWellLit;
     const season = prefs.season || "none"; // "winter" | "summer" | "none"
+    const travelMode = prefs.travelMode || "driving"; // "driving" | "cycling" | "foot" | "bike" | "bus"
 
-    /* ✅ Route-level cache key adjusted to include preferences */
-    const routeCacheKey = `route_v17:${originCity.toLowerCase()}:${destinationCity.toLowerCase()}:${isPregnancyMode}:${preferWellLit}:${season}`;
+    // Map travel mode to OSRM profile
+    const modeConfig = TRAVEL_MODES.find((m) => m.id === travelMode) || TRAVEL_MODES[0];
+    const osrmProfile = modeConfig.osrm;
+
+    // Speed multipliers for duration adjustment (bike/bus don't have separate OSRM profiles)
+    const durationMultiplier =
+      travelMode === "bike" ? 1.3    // motorbike ~25% slower than car in city
+      : travelMode === "bus" ? 2.0   // bus ~2x slower (stops, traffic)
+      : 1.0;
+
+    /* ✅ Route-level cache key includes travel mode */
+    const routeCacheKey = `route_v18:${originCity.toLowerCase()}:${destinationCity.toLowerCase()}:${isPregnancyMode}:${preferWellLit}:${season}:${travelMode}`;
     const cached = aqiCache.get(routeCacheKey);
     if (cached) {
       console.log(`[CACHE HIT] ${routeCacheKey}`);
@@ -120,11 +139,11 @@ export const routeController = async (req, res) => {
     }
 
     /* 🛣️ OSRM with in-memory cache */
-    const osrmKey = `${origin.lon},${origin.lat};${destination.lon},${destination.lat}`;
+    const osrmKey = `${osrmProfile}:${origin.lon},${origin.lat};${destination.lon},${destination.lat}`;
     let osrmData = osrmCache.get(osrmKey);
 
     if (!osrmData) {
-      const osrmURL = `https://router.project-osrm.org/route/v1/driving/${osrmKey}?overview=full&geometries=geojson&alternatives=true`;
+      const osrmURL = `https://router.project-osrm.org/route/v1/${osrmProfile}/${origin.lon},${origin.lat};${destination.lon},${destination.lat}?overview=full&geometries=geojson&alternatives=true&steps=true`;
       const osrmRes = await axios.get(osrmURL, { timeout: 12000 });
       osrmData = osrmRes.data;
       osrmCache.set(osrmKey, osrmData);
@@ -136,7 +155,7 @@ export const routeController = async (req, res) => {
         id: i,
         name: `Quick Path ${i + 1}`,
         distance: `${(r.distance / 1000).toFixed(1)} km`,
-        duration: `${Math.round(r.duration / 60)} min`,
+        duration: `${Math.round((r.duration * durationMultiplier) / 60)} min`,
         avgAQI: null,
         geometry: simplifyGeometry(r.geometry.coordinates.map(([lon, lat]) => ({ lat, lon }))),
         pollutionSegments: [],
@@ -150,7 +169,7 @@ export const routeController = async (req, res) => {
     /* 🚀 CONCURRENT FULL ANALYSIS — all routes processed in parallel */
     const routePromises = osrmData.routes.map(async (r, i) => {
       const distanceKm = r.distance / 1000;
-      const durationMin = r.duration / 60;
+      const durationMin = (r.duration * durationMultiplier) / 60;
       const avgSpeed = distanceKm / (r.duration / 3600);
       const traffic = getTrafficLevel(avgSpeed);
 
@@ -251,9 +270,21 @@ export const routeController = async (req, res) => {
         score,
         traffic,
         avgSpeed: avgSpeed.toFixed(1),
+        geometry,
         pollutionSegments,
         evStations,
-        geometry,
+        steps: r.legs?.[0]?.steps?.map((s) => ({
+          instruction: s.maneuver?.type === 'turn' 
+            ? `Turn ${s.maneuver?.modifier || ''} onto ${s.name || 'road'}` 
+            : s.maneuver?.type === 'depart' 
+            ? `Depart towards ${destinationCity}` 
+            : s.maneuver?.type === 'arrive' 
+            ? `Arrive at ${destinationCity}` 
+            : `Continue on ${s.name || 'highway'}`,
+          distance: s.distance ? `${(s.distance / 1000).toFixed(1)} km` : '',
+          lat: s.maneuver?.location?.[1],
+          lon: s.maneuver?.location?.[0]
+        })) || [],
       };
     });
 
@@ -323,7 +354,7 @@ export const routeController = async (req, res) => {
 
     const response = { success: true, origin, destination, routes: humanizedRoutes };
 
-    console.log(`[v17] ${originCity}→${destinationCity} | ${routes.length} routes | lit/pregnancy preferences processed`);
+    console.log(`[v18] ${originCity}→${destinationCity} | ${routes.length} routes | mode:${travelMode} | preferences processed`);
 
     aqiCache.set(routeCacheKey, response);
     res.json(response);
@@ -331,4 +362,4 @@ export const routeController = async (req, res) => {
     console.error("ROUTE CONTROLLER ERROR:", err.message);
     res.status(500).json({ success: false, message: err.message });
   }
-};
+};

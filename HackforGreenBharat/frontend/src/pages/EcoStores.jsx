@@ -275,10 +275,14 @@ const EcoStores = () => {
                  ))}
                </div>
                <button 
-                onClick={() => window.open(`https://www.google.com/maps/search/?api=1&query=${selectedStore.location.lat},${selectedStore.location.lng}`, '_blank')}
-                className="w-full mt-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg text-sm font-medium transition-colors shadow-sm"
+                onClick={() => {
+                  if (mapRef.current) {
+                    mapRef.current.flyTo([selectedStore.location.lat, selectedStore.location.lng], 16, { animate: true });
+                  }
+                }}
+                className="w-full mt-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg text-sm font-bold transition-colors shadow-sm flex items-center justify-center gap-2"
                >
-                 Get Directions
+                 <MapPin className="w-4 h-4" /> Focus Store on Map
                </button>
              </div>
            )}

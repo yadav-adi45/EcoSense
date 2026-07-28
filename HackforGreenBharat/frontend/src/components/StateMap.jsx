@@ -113,10 +113,13 @@ export default function StateMap({ stateCode, stateData, stateName, onBack }) {
   }, [mapData, searchQuery]);
 
   const handleMouseMove = (evt) => {
-    const rect = evt.currentTarget.closest('.state-map-wrapper').getBoundingClientRect();
+    const container = evt.currentTarget.closest('.relative');
+    const rect = container ? container.getBoundingClientRect() : evt.currentTarget.closest('.state-map-wrapper').getBoundingClientRect();
     setMousePos({
       x: evt.clientX - rect.left,
       y: evt.clientY - rect.top,
+      containerWidth: rect.width,
+      containerHeight: rect.height,
     });
   };
 
@@ -236,7 +239,23 @@ export default function StateMap({ stateCode, stateData, stateName, onBack }) {
             style={{
               left: `${mousePos.x}px`,
               top: `${mousePos.y}px`,
-              transform: `translate(${mousePos.x > 300 ? "-110%" : "10%"}, ${mousePos.y > 280 ? "-110%" : "10%"})`,
+              transform: `translate(${
+                mousePos.containerWidth
+                  ? mousePos.x > mousePos.containerWidth / 2
+                    ? "-110%"
+                    : "10%"
+                  : mousePos.x > 300
+                  ? "-110%"
+                  : "10%"
+              }, ${
+                mousePos.containerHeight
+                  ? mousePos.y > mousePos.containerHeight / 2
+                    ? "-110%"
+                    : "10%"
+                  : mousePos.y > 280
+                  ? "-110%"
+                  : "10%"
+              })`,
             }}
           >
             <div className="flex items-center gap-2 mb-3">
