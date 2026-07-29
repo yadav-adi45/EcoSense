@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "build": "echo 'no build needed'",
-    "dev": "concurrently --names \"BACKEND,FRONTEND\" --prefix-colors \"green,cyan\" \"nodemon index.js\" \"cd ../frontend && npm run dev\"",
+    "dev": "cd ../frontend && npm run build && cd ../backend && node index.js",
     "start": "node index.js",
     "build:frontend": "cd ../frontend && npm run build",
     "start:full": "npm run build:frontend && npm run start",
@@ -38,6 +38,6 @@
     "tesseract.js": "^7.0.0"
   },
   "devDependencies": {
-    "concurrently": "^10.0.3"
+    "concurrently": "^10.0.4"
   }
 }
