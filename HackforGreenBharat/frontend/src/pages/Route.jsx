@@ -29,6 +29,7 @@ import { serverUrl } from "@/main";
 import { getCachedRoute, setCachedRoute } from "@/utils/routeCache";
 import { toast } from "react-toastify";
 import Footer from "@/pages/Footer";
+import RouteInsights from "@/components/RouteInsights";
 
 /* Transport mode config */
 const TRANSPORT_MODES = [
@@ -159,6 +160,7 @@ const Routes = () => {
 
   const [triggerSearchOnce, setTriggerSearchOnce] = useState(null);
   const voiceEnabledRef = useRef(true);
+  const lastAlertRef = useRef("");
 
   useEffect(() => {
     if (triggerSearchOnce && destination === triggerSearchOnce) {
@@ -491,6 +493,13 @@ const Routes = () => {
                                       </p>
                                     )}
                                 </div>
+
+                                {/* ── Route Insights (expandable) ── */}
+                                <RouteInsights
+                                  route={route}
+                                  originCoords={originCoords}
+                                  destinationCoords={destinationCoords}
+                                />
                              </div>
                           )}
                         </CardContent>
@@ -590,25 +599,122 @@ const Routes = () => {
 
       {routes.length > 0 && (
         <div className="fixed bottom-10 right-10 z-[100] animate-bounce-slow">
-            <Button
-              onClick={() => {
-                if (isNavigating) {
-                  setIsNavigating(false);
+          <Button
+            onClick={() => {
+              if (isNavigating) {
+                // Already in nav state — just reset (user navigated back from /navigation)
+                setIsNavigating(false);
+                return;
+              }
+
+              if (!originCoords || !destinationCoords) {
+                toast.error("Please search for a route first.");
+                return;
+              }
+
+              const ua = navigator.userAgent || '';
+              const isAndroid = /android/i.test(ua);
+              const isIOS = /iphone|ipad|ipod/i.test(ua);
+              const isMobile = isAndroid || isIOS;
+
+              const destLat = destinationCoords.lat;
+              const destLon = destinationCoords.lon;
+              const origLat = originCoords.lat;
+              const origLon = originCoords.lon;
+
+              // Map travelMode → Google Maps web param
+              let gmTravelMode = 'driving';
+              if (travelMode === 'cycling' || travelMode === 'bike') gmTravelMode = 'bicycling';
+              else if (travelMode === 'foot') gmTravelMode = 'walking';
+              else if (travelMode === 'bus') gmTravelMode = 'transit';
+
+              if (isMobile) {
+                // ── Mobile: launch Google Maps native app ──────────────
+                const webFallbackUrl =
+                  `https://www.google.com/maps/dir/?api=1` +
+                  `&origin=${encodeURIComponent(`${origLat},${origLon}`)}` +
+                  `&destination=${encodeURIComponent(`${destLat},${destLon}`)}` +
+                  `&travelmode=${gmTravelMode}`;
+
+                if (isAndroid) {
+                  // Android navigation intent mode: d/w/b/r
+                  let androidMode = 'd';
+                  if (travelMode === 'cycling' || travelMode === 'bike') androidMode = 'b';
+                  else if (travelMode === 'foot') androidMode = 'w';
+                  else if (travelMode === 'bus') androidMode = 'r';
+
+                  const intentUrl =
+                    `intent://maps.google.com/maps?saddr=${origLat},${origLon}` +
+                    `&daddr=${destLat},${destLon}` +
+                    `&directionsmode=${gmTravelMode}` +
+                    `#Intent;scheme=https;package=com.google.android.apps.maps;` +
+                    `S.browser_fallback_url=${encodeURIComponent(webFallbackUrl)};end`;
+
+                  const navIntent = `google.navigation:q=${destLat},${destLon}&mode=${androidMode}`;
+                  let appLaunched = false;
+                  const onHide = () => { appLaunched = true; };
+                  document.addEventListener('visibilitychange', onHide, { once: true });
+
+                  const a = document.createElement('a');
+                  a.href = navIntent;
+                  a.style.display = 'none';
+                  document.body.appendChild(a);
+                  a.click();
+                  document.body.removeChild(a);
+
+                  setTimeout(() => {
+                    document.removeEventListener('visibilitychange', onHide);
+                    if (!appLaunched) {
+                      const w = window.open(intentUrl, '_blank', 'noopener,noreferrer');
+                      if (!w) window.location.href = webFallbackUrl;
+                    }
+                  }, 1500);
+
                 } else {
-                  let tMode = 'car';
-                  if (travelMode === 'driving') tMode = 'car';
-                  else if (travelMode === 'bike' || travelMode === 'cycling') tMode = 'bike';
-                  else if (travelMode === 'bus') tMode = 'bus';
-                  else if (travelMode === 'foot') tMode = 'walk';
-                  setTransportMode(tMode);
-                  setIsNavigating(true);
+                  // iOS: comgooglemaps:// scheme
+                  const iosNavUrl =
+                    `comgooglemaps://?saddr=${origLat},${origLon}` +
+                    `&daddr=${destLat},${destLon}` +
+                    `&directionsmode=${gmTravelMode === 'bicycling' ? 'bicycling' : gmTravelMode === 'walking' ? 'walking' : gmTravelMode === 'transit' ? 'transit' : 'driving'}`;
+
+                  let appLaunched = false;
+                  const onHide = () => { appLaunched = true; };
+                  document.addEventListener('visibilitychange', onHide, { once: true });
+                  window.location.href = iosNavUrl;
+
+                  setTimeout(() => {
+                    document.removeEventListener('visibilitychange', onHide);
+                    if (!appLaunched) {
+                      const w = window.open(webFallbackUrl, '_blank', 'noopener,noreferrer');
+                      if (!w) window.location.href = webFallbackUrl;
+                    }
+                  }, 1500);
                 }
-              }}
-              className={`${isNavigating ? 'bg-red-500 hover:bg-red-600 shadow-red-400/30' : 'bg-emerald-500 hover:bg-emerald-600 shadow-emerald-400/30'} h-14 px-8 shadow-xl text-white font-bold text-base flex items-center gap-3 rounded-full group transition-all`}
-            >
-              <Navigation className="w-5 h-5 group-hover:rotate-12 transition-transform" />
-              {isNavigating ? "EXIT NAVIGATION" : "START NAVIGATION"}
-            </Button>
+
+                // Mobile: mark navigating so button flips to EXIT
+                setIsNavigating(true);
+
+              } else {
+                // ── Desktop: open in-app EcoSense NavigationScreen ─────
+                const activeRoute = routes.find((r) => r.id === selectedRoute) || routes[0];
+                setIsNavigating(true);
+                navigate('/navigation', {
+                  state: {
+                    route:             activeRoute,
+                    origin:            origin,
+                    destination:       destination,
+                    originCoords:      originCoords,
+                    destinationCoords: destinationCoords,
+                    travelMode:        travelMode,
+                  },
+                });
+              }
+            }}
+            className={`${isNavigating ? 'bg-red-500 hover:bg-red-600 shadow-red-400/30' : 'bg-emerald-500 hover:bg-emerald-600 shadow-emerald-400/30'} h-14 px-8 shadow-xl text-white font-bold text-base flex items-center gap-3 rounded-full group transition-all`}
+          >
+            <Navigation className="w-5 h-5 group-hover:rotate-12 transition-transform" />
+            {isNavigating ? "EXIT NAVIGATION" : "START NAVIGATION"}
+          </Button>
         </div>
       )}
       
