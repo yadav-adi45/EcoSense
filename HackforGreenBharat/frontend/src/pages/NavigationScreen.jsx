@@ -9,9 +9,102 @@ import axios from "axios";
 import {
   Navigation, X, Volume2, VolumeX, RotateCcw, ZoomIn, ZoomOut,
   MapPin, Leaf, ChevronRight, Wind, Gauge, Thermometer, Droplets,
-  AlertTriangle, RefreshCw,
+  AlertTriangle, RefreshCw, Hospital, ShieldCheck,
 } from "lucide-react";
 import { serverUrl } from "@/main";
+
+/* ─── Overpass URL (same as RouteInsights) ───────────────── */
+const OVERPASS_URL = "https://overpass.openstreetmap.fr/api/interpreter";
+
+/* ─── Sample N evenly-spaced points from route geometry ─── */
+const sampleGeometry = (geometry, maxPoints = 10) => {
+  if (!geometry || geometry.length === 0) return [];
+  if (geometry.length <= maxPoints) return geometry;
+  const step = Math.floor(geometry.length / (maxPoints - 1));
+  const pts = [];
+  for (let i = 0; i < maxPoints - 1; i++) pts.push(geometry[i * step]);
+  pts.push(geometry[geometry.length - 1]);
+  return pts;
+};
+
+/* ─── Fetch hospitals & police along the FULL route ──────── */
+/* Searches around every sampled point (radius scales with    */
+/* segment spacing) so no stretch of the route is missed.    */
+const fetchRouteEmergency = async (geometry) => {
+  if (!geometry || geometry.length === 0) return { hospitals: [], police: [] };
+
+  // Pick up to 10 evenly-spaced anchor points along the route
+  const anchors = sampleGeometry(geometry, 10);
+  // Radius = 8 km per anchor so circles overlap on long routes
+  const radiusM = 8000;
+
+  let queryStr = `[out:json][timeout:25];\n(\n`;
+  anchors.forEach(({ lat, lon }) => {
+    queryStr += `  node["amenity"="hospital"](around:${radiusM},${lat},${lon});\n`;
+    queryStr += `  node["amenity"="clinic"](around:${radiusM},${lat},${lon});\n`;
+    queryStr += `  node["amenity"="police"](around:${radiusM},${lat},${lon});\n`;
+  });
+  queryStr += `);\nout body;`;
+
+  const res = await axios.post(OVERPASS_URL, queryStr, {
+    headers: { "Content-Type": "text/plain" },
+    timeout: 28000,
+  });
+
+  const elements = res.data?.elements || [];
+  const seenIds = new Set();
+  const hospitals = [];
+  const police = [];
+
+  elements.forEach((el) => {
+    if (!el.lat || !el.lon || seenIds.has(el.id)) return;
+    seenIds.add(el.id);
+    const name = el.tags?.name || el.tags?.["name:en"] || "Unnamed";
+    // Distance from nearest route point
+    let minRouteDist = Infinity;
+    anchors.forEach(({ lat, lon }) => {
+      const d = haversine(lat, lon, el.lat, el.lon);
+      if (d < minRouteDist) minRouteDist = d;
+    });
+    const item = { id: el.id, name, lat: el.lat, lon: el.lon, routeDist: minRouteDist, userDist: null };
+    const a = el.tags?.amenity;
+    if (a === "hospital" || a === "clinic") hospitals.push(item);
+    else if (a === "police") police.push(item);
+  });
+
+  return { hospitals, police };
+};
+
+/* ─── Recompute userDist for every item and sort by it ────── */
+const refreshUserDistances = (items, userLat, userLon) =>
+  items
+    .map((item) => ({ ...item, userDist: haversine(userLat, userLon, item.lat, item.lon) }))
+    .sort((a, b) => a.userDist - b.userDist);
+
+/* ─── Leaflet icons for hospital & police ────────────────── */
+const hospitalIcon = L.divIcon({
+  className: "",
+  html: `<div style="
+    width:30px;height:30px;border-radius:50%;
+    background:#ef4444;border:3px solid white;
+    box-shadow:0 2px 8px rgba(0,0,0,0.35);
+    display:flex;align-items:center;justify-content:center;
+    font-size:14px;line-height:1;">🏥</div>`,
+  iconSize: [30, 30],
+  iconAnchor: [15, 15],
+});
+
+const policeIcon = L.divIcon({
+  className: "",
+  html: `<div style="
+    width:30px;height:30px;border-radius:50%;
+    background:#2563eb;border:3px solid white;
+    box-shadow:0 2px 8px rgba(0,0,0,0.35);
+    display:flex;align-items:center;justify-content:center;
+    font-size:14px;line-height:1;">🚔</div>`,
+  iconSize: [30, 30],
+  iconAnchor: [15, 15],
+});
 
 /* ─── AQI helpers ─────────────────────────────────────────── */
 const getAQIColor = (aqi) => {
@@ -276,6 +369,15 @@ const NavigationScreen = () => {
   const [liveAQI,     setLiveAQI]     = useState(route.avgAQI ?? null);
   const [weather,     setWeather]     = useState(null);
 
+  /* ── Emergency services (full route) ── */
+  const [allHospitals,   setAllHospitals]   = useState([]); // sorted by userDist
+  const [allPolice,      setAllPolice]      = useState([]); // sorted by userDist
+  const [emergencyLoading, setEmergencyLoading] = useState(false);
+  const [showEmergency,  setShowEmergency]  = useState(false);
+  const rawHospitalsRef = useRef([]); // unsorted master list (stable after fetch)
+  const rawPoliceRef    = useRef([]);
+  const emergencyFetchRef = useRef(null);
+
   /* ── Refs ── */
   const watchIdRef       = useRef(null);
   const lastVoiceRef     = useRef("");
@@ -469,6 +571,41 @@ const NavigationScreen = () => {
     return () => clearInterval(weatherIntervalRef.current);
   }, []);
 
+  /* ── Fetch emergency services along the full route (once) ── */
+  useEffect(() => {
+    const geometry = route.geometry || routeGeometry;
+    if (!geometry || geometry.length === 0) return;
+    setEmergencyLoading(true);
+    fetchRouteEmergency(geometry)
+      .then(({ hospitals, police }) => {
+        const [uLat, uLon] = realPos;
+        const h = refreshUserDistances(hospitals, uLat, uLon);
+        const p = refreshUserDistances(police, uLat, uLon);
+        rawHospitalsRef.current = hospitals;
+        rawPoliceRef.current    = police;
+        setAllHospitals(h);
+        setAllPolice(p);
+      })
+      .catch(() => { /* silent */ })
+      .finally(() => setEmergencyLoading(false));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // run once on mount
+
+  // Re-sort by distance whenever user position changes significantly (> 200 m)
+  const lastSortPosRef = useRef([originCoords.lat, originCoords.lon]);
+  useEffect(() => {
+    if (rawHospitalsRef.current.length === 0 && rawPoliceRef.current.length === 0) return;
+    const [prevLat, prevLon] = lastSortPosRef.current;
+    const [curLat, curLon]   = realPos;
+    if (haversine(prevLat, prevLon, curLat, curLon) < 0.2) return;
+    lastSortPosRef.current = realPos;
+    clearTimeout(emergencyFetchRef.current);
+    emergencyFetchRef.current = setTimeout(() => {
+      setAllHospitals(refreshUserDistances(rawHospitalsRef.current, curLat, curLon));
+      setAllPolice(refreshUserDistances(rawPoliceRef.current, curLat, curLon));
+    }, 1000);
+  }, [realPos]);
+
   /* ── Cleanup voice on unmount ── */
   useEffect(() => () => window.speechSynthesis?.cancel(), []);
 
@@ -589,7 +726,252 @@ const NavigationScreen = () => {
             <Popup><strong style={{ color: "#10b981" }}>{ev.name}</strong><br /><small>{ev.operator}</small></Popup>
           </Marker>
         ))}
+
+        {/* Nearby Hospitals */}
+        {allHospitals.map((h, i) => (
+          <Marker key={`hosp-${h.id ?? i}`} position={[h.lat, h.lon]} icon={hospitalIcon}>
+            <Popup>
+              <strong style={{ color: "#ef4444" }}>🏥 {h.name}</strong><br />
+              <small>{h.userDist != null ? (h.userDist < 1 ? `${Math.round(h.userDist * 1000)} m from you` : `${h.userDist.toFixed(1)} km from you`) : ""}</small>
+            </Popup>
+          </Marker>
+        ))}
+
+        {/* Nearby Police Stations */}
+        {allPolice.map((p, i) => (
+          <Marker key={`police-${p.id ?? i}`} position={[p.lat, p.lon]} icon={policeIcon}>
+            <Popup>
+              <strong style={{ color: "#2563eb" }}>🚔 {p.name}</strong><br />
+              <small>{p.userDist != null ? (p.userDist < 1 ? `${Math.round(p.userDist * 1000)} m from you` : `${p.userDist.toFixed(1)} km from you`) : ""}</small>
+            </Popup>
+          </Marker>
+        ))}
       </MapContainer>
+
+      {/* ══ FIXED LEFT — EMERGENCY SERVICES PANEL ═══════════════ */}
+      <div
+        className="fixed left-3 z-[600] pointer-events-auto"
+        style={{
+          top: "186px",
+          bottom: "212px",
+          width: "224px",
+        }}
+      >
+        <div
+          className="flex flex-col bg-white/95 backdrop-blur-md rounded-2xl shadow-2xl shadow-black/20 border border-white/70 overflow-hidden"
+          style={{ height: "100%", maxHeight: "100%" }}
+        >
+
+          {/* ── Panel header ── */}
+          <button
+            onClick={() => setShowEmergency((v) => !v)}
+            className="flex items-center justify-between px-3 py-2.5 bg-gray-900/90 text-white rounded-t-2xl shrink-0 hover:bg-gray-800/90 transition-colors"
+          >
+            <span className="text-[11px] font-black uppercase tracking-widest">🚨 Emergency Services</span>
+            <span className="text-[10px] font-black opacity-60">{showEmergency ? "◀" : "▶"}</span>
+          </button>
+
+          {/* ── Expanded: two independent sections ── */}
+          {showEmergency && (
+            <div className="flex flex-col overflow-hidden" style={{ flex: "1 1 0", minHeight: 0 }}>
+
+              {/* Loading state */}
+              {emergencyLoading && (
+                <div className="flex items-center justify-center gap-2 py-4 shrink-0">
+                  <div className="w-4 h-4 border-2 border-red-400 border-t-transparent rounded-full animate-spin" />
+                  <span className="text-[10px] text-gray-400 font-bold">Scanning route…</span>
+                </div>
+              )}
+
+              {/* ════ HOSPITALS SECTION ════ */}
+              {/* Takes exactly half the available height, has its own scroll */}
+              <div
+                className="flex flex-col border-b border-gray-200"
+                style={{ flex: "1 1 0", minHeight: 0, overflow: "hidden" }}
+              >
+
+                {/* Section header — fixed, never scrolls */}
+                <div className="shrink-0 px-2.5 pt-2 pb-1">
+                  <div className="flex items-center justify-between mb-1">
+                    <div className="flex items-center gap-1.5">
+                      <div className="w-5 h-5 rounded-md bg-red-100 flex items-center justify-center shrink-0">
+                        <Hospital className="w-3 h-3 text-red-600" />
+                      </div>
+                      <span className="text-[10px] font-black text-gray-700 uppercase tracking-wider">Hospitals</span>
+                    </div>
+                    <span className="text-[10px] font-black text-red-600 bg-red-50 border border-red-100 px-1.5 py-0.5 rounded-full leading-none">
+                      {allHospitals.length}
+                    </span>
+                  </div>
+
+                  {/* Nearest hospital — always visible, updates live */}
+                  {allHospitals[0] ? (
+                    <div className="px-2 py-1.5 bg-red-50 border border-red-100 rounded-xl mb-1">
+                      <p className="text-[8px] font-black text-red-400 uppercase tracking-widest leading-none mb-0.5">Nearest</p>
+                      <p className="text-[10px] font-black text-gray-800 leading-tight truncate">{allHospitals[0].name}</p>
+                      <p className="text-[9px] font-bold text-red-500 leading-none mt-0.5">
+                        {allHospitals[0].userDist != null
+                          ? allHospitals[0].userDist < 1
+                            ? `${Math.round(allHospitals[0].userDist * 1000)} m away`
+                            : `${allHospitals[0].userDist.toFixed(1)} km away`
+                          : "—"}
+                      </p>
+                    </div>
+                  ) : (
+                    !emergencyLoading && (
+                      <p className="text-[9px] text-gray-400 italic px-1 mb-1">None found along route.</p>
+                    )
+                  )}
+                </div>
+
+                {/* Hospital scrollable list — independent scroll */}
+                {allHospitals.length > 0 && (
+                  <div
+                    className="px-2.5 pb-2 space-y-1"
+                    style={{ flex: "1 1 0", minHeight: 0, overflowY: "auto" }}
+                  >
+                    {allHospitals.map((h, i) => (
+                      <div
+                        key={h.id ?? i}
+                        className="flex items-start justify-between gap-1 py-1 px-2 rounded-lg bg-red-50/50 border border-red-100/60"
+                      >
+                        <div className="flex items-start gap-1 min-w-0">
+                          <span className="text-[8px] font-black text-red-300 mt-0.5 shrink-0">{i + 1}.</span>
+                          <span className="text-[10px] font-bold text-gray-700 leading-tight">{h.name}</span>
+                        </div>
+                        <div className="flex flex-col items-end shrink-0 ml-1 gap-0.5">
+                          <span className="text-[9px] font-black text-red-600 whitespace-nowrap">
+                            {h.userDist != null
+                              ? h.userDist < 1 ? `${Math.round(h.userDist * 1000)} m` : `${h.userDist.toFixed(1)} km`
+                              : "—"}
+                          </span>
+                          {h.routeDist != null && (
+                            <span className="text-[8px] text-gray-400 font-bold whitespace-nowrap">
+                              ~{h.routeDist < 1 ? `${Math.round(h.routeDist * 1000)} m` : `${h.routeDist.toFixed(1)} km`} rt
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* ════ POLICE STATIONS SECTION ════ */}
+              {/* Takes the other half, has its own independent scroll */}
+              <div
+                className="flex flex-col"
+                style={{ flex: "1 1 0", minHeight: 0, overflow: "hidden" }}
+              >
+
+                {/* Section header — fixed, never scrolls */}
+                <div className="shrink-0 px-2.5 pt-2 pb-1">
+                  <div className="flex items-center justify-between mb-1">
+                    <div className="flex items-center gap-1.5">
+                      <div className="w-5 h-5 rounded-md bg-blue-100 flex items-center justify-center shrink-0">
+                        <ShieldCheck className="w-3 h-3 text-blue-600" />
+                      </div>
+                      <span className="text-[10px] font-black text-gray-700 uppercase tracking-wider">Police</span>
+                    </div>
+                    <span className="text-[10px] font-black text-blue-600 bg-blue-50 border border-blue-100 px-1.5 py-0.5 rounded-full leading-none">
+                      {allPolice.length}
+                    </span>
+                  </div>
+
+                  {/* Nearest police — always visible, updates live */}
+                  {allPolice[0] ? (
+                    <div className="px-2 py-1.5 bg-blue-50 border border-blue-100 rounded-xl mb-1">
+                      <p className="text-[8px] font-black text-blue-400 uppercase tracking-widest leading-none mb-0.5">Nearest</p>
+                      <p className="text-[10px] font-black text-gray-800 leading-tight truncate">{allPolice[0].name}</p>
+                      <p className="text-[9px] font-bold text-blue-500 leading-none mt-0.5">
+                        {allPolice[0].userDist != null
+                          ? allPolice[0].userDist < 1
+                            ? `${Math.round(allPolice[0].userDist * 1000)} m away`
+                            : `${allPolice[0].userDist.toFixed(1)} km away`
+                          : "—"}
+                      </p>
+                    </div>
+                  ) : (
+                    !emergencyLoading && (
+                      <p className="text-[9px] text-gray-400 italic px-1 mb-1">None found along route.</p>
+                    )
+                  )}
+                </div>
+
+                {/* Police scrollable list — independent scroll */}
+                {allPolice.length > 0 && (
+                  <div
+                    className="px-2.5 pb-2 space-y-1"
+                    style={{ flex: "1 1 0", minHeight: 0, overflowY: "auto" }}
+                  >
+                    {allPolice.map((p, i) => (
+                      <div
+                        key={p.id ?? i}
+                        className="flex items-start justify-between gap-1 py-1 px-2 rounded-lg bg-blue-50/50 border border-blue-100/60"
+                      >
+                        <div className="flex items-start gap-1 min-w-0">
+                          <span className="text-[8px] font-black text-blue-300 mt-0.5 shrink-0">{i + 1}.</span>
+                          <span className="text-[10px] font-bold text-gray-700 leading-tight">{p.name}</span>
+                        </div>
+                        <div className="flex flex-col items-end shrink-0 ml-1 gap-0.5">
+                          <span className="text-[9px] font-black text-blue-600 whitespace-nowrap">
+                            {p.userDist != null
+                              ? p.userDist < 1 ? `${Math.round(p.userDist * 1000)} m` : `${p.userDist.toFixed(1)} km`
+                              : "—"}
+                          </span>
+                          {p.routeDist != null && (
+                            <span className="text-[8px] text-gray-400 font-bold whitespace-nowrap">
+                              ~{p.routeDist < 1 ? `${Math.round(p.routeDist * 1000)} m` : `${p.routeDist.toFixed(1)} km`} rt
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+            </div>
+          )}
+
+          {/* ── Collapsed state — compact summary pills ── */}
+          {!showEmergency && (
+            <div className="flex flex-col justify-start gap-2 px-2.5 py-2">
+              <div className="flex items-center gap-1.5 px-2 py-1.5 rounded-xl bg-red-50 border border-red-100">
+                <Hospital className="w-3 h-3 text-red-500 shrink-0" />
+                <div className="min-w-0">
+                  <p className="text-[9px] font-black text-red-600">{allHospitals.length} Hospitals</p>
+                  {allHospitals[0] && (
+                    <p className="text-[8px] text-gray-500 font-bold truncate">
+                      {allHospitals[0].userDist != null
+                        ? allHospitals[0].userDist < 1
+                          ? `Nearest: ${Math.round(allHospitals[0].userDist * 1000)} m`
+                          : `Nearest: ${allHospitals[0].userDist.toFixed(1)} km`
+                        : ""}
+                    </p>
+                  )}
+                </div>
+              </div>
+              <div className="flex items-center gap-1.5 px-2 py-1.5 rounded-xl bg-blue-50 border border-blue-100">
+                <ShieldCheck className="w-3 h-3 text-blue-500 shrink-0" />
+                <div className="min-w-0">
+                  <p className="text-[9px] font-black text-blue-600">{allPolice.length} Police Stns</p>
+                  {allPolice[0] && (
+                    <p className="text-[8px] text-gray-500 font-bold truncate">
+                      {allPolice[0].userDist != null
+                        ? allPolice[0].userDist < 1
+                          ? `Nearest: ${Math.round(allPolice[0].userDist * 1000)} m`
+                          : `Nearest: ${allPolice[0].userDist.toFixed(1)} km`
+                        : ""}
+                    </p>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+        </div>
+      </div>
 
       {/* ══ TOP — STEP INSTRUCTION BANNER ═══════════════════════ */}
       <div className="absolute top-0 left-0 right-0 z-[600] px-4 pt-4 pb-2 pointer-events-none">
