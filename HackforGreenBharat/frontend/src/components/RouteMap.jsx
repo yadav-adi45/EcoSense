@@ -143,12 +143,17 @@ const InvalidateSizeHelper = ({ isActive }) => {
   const map = useMap();
   useEffect(() => {
     if (isActive) {
-      // Small timeout ensures container display transition is fully done
-      const timer = setTimeout(() => {
-        map.invalidateSize({ animate: true });
-        console.log("[RouteMap] Invalidated Leaflet size to force tile load");
-      }, 350);
-      return () => clearTimeout(timer);
+      map.invalidateSize({ animate: false });
+      const t1 = setTimeout(() => map.invalidateSize({ animate: true }), 100);
+      const t2 = setTimeout(() => map.invalidateSize({ animate: true }), 400);
+      const t3 = setTimeout(() => map.invalidateSize({ animate: true }), 800);
+      const t4 = setTimeout(() => map.invalidateSize({ animate: true }), 1200);
+      return () => {
+        clearTimeout(t1);
+        clearTimeout(t2);
+        clearTimeout(t3);
+        clearTimeout(t4);
+      };
     }
   }, [map, isActive]);
   return null;

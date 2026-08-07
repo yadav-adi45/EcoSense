@@ -64,15 +64,25 @@ const AQIBadge = ({ value, size = "md" }) => {
         border: `1px solid ${color}40`,
       }}
     >
-      <div
-        style={{
-          width: size === "lg" ? "10px" : "8px",
-          height: size === "lg" ? "10px" : "8px",
-          borderRadius: "50%",
-          background: color,
-          boxShadow: `0 0 8px ${color}`,
+      <div 
+        className="relative flex shrink-0" 
+        style={{ 
+          width: size === "lg" ? "10px" : "8px", 
+          height: size === "lg" ? "10px" : "8px" 
         }}
-      />
+      >
+        <span 
+          className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-75" 
+          style={{ background: color }}
+        />
+        <span 
+          className="relative inline-flex rounded-full h-full w-full" 
+          style={{ 
+            background: color, 
+            boxShadow: `0 0 8px ${color}` 
+          }}
+        />
+      </div>
       <span style={{ fontSize: styles.fontSize, fontWeight: 600, color }}>
         {value}
       </span>
