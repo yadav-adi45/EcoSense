@@ -15,7 +15,6 @@ const communityPostSchema = new mongoose.Schema(
     image: { type: String, default: "" },
     postType: {
       type: String,
-      enum: ["thought", "rideshare"],
       default: "thought",
     },
     rideDetails: {
@@ -23,6 +22,10 @@ const communityPostSchema = new mongoose.Schema(
       to: { type: String, default: "" },
       date: { type: String, default: "" },
       seats: { type: Number, default: 1 },
+    },
+    proofDetails: {
+      issueType: { type: String, default: "" },
+      location: { type: String, default: "" },
     },
     likes: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
     comments: [commentSchema],

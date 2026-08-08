@@ -170,6 +170,12 @@ const Routes = () => {
   }, [destination, triggerSearchOnce]);
 
   useEffect(() => {
+    if (origin.trim() && destination.trim()) {
+      handleSearch();
+    }
+  }, [travelMode, isPregnancyMode, preferWellLit, season]);
+
+  useEffect(() => {
     if (!routes.length) return;
     const activeRoute = routes.find((r) => r.id === selectedRoute) || routes[0];
     const segments = activeRoute?.pollutionSegments;

@@ -16,14 +16,28 @@ import { serverUrl } from "@/main";
 /* ─── Overpass URL (same as RouteInsights) ───────────────── */
 const OVERPASS_URL = "https://overpass.openstreetmap.fr/api/interpreter";
 
+/* ─── Normalize array [lat,lon] or object {lat,lon} geometry ─── */
+const normalizeGeometry = (geom) => {
+  if (!Array.isArray(geom) || geom.length === 0) return [];
+  return geom
+    .map((p) => {
+      if (Array.isArray(p) && p.length >= 2) return { lat: Number(p[0]), lon: Number(p[1]) };
+      if (p && typeof p === "object" && "lat" in p && "lon" in p)
+        return { lat: Number(p.lat), lon: Number(p.lon) };
+      return null;
+    })
+    .filter(Boolean);
+};
+
 /* ─── Sample N evenly-spaced points from route geometry ─── */
 const sampleGeometry = (geometry, maxPoints = 10) => {
-  if (!geometry || geometry.length === 0) return [];
-  if (geometry.length <= maxPoints) return geometry;
-  const step = Math.floor(geometry.length / (maxPoints - 1));
+  const norm = normalizeGeometry(geometry);
+  if (norm.length === 0) return [];
+  if (norm.length <= maxPoints) return norm;
+  const step = Math.floor(norm.length / (maxPoints - 1));
   const pts = [];
-  for (let i = 0; i < maxPoints - 1; i++) pts.push(geometry[i * step]);
-  pts.push(geometry[geometry.length - 1]);
+  for (let i = 0; i < maxPoints - 1; i++) pts.push(norm[i * step]);
+  pts.push(norm[norm.length - 1]);
   return pts;
 };
 
@@ -310,8 +324,13 @@ const lerpPos = ([la, loa], [lb, lob], t) => [lerp(la, lb, t), lerp(loa, lob, t)
 /* ─── Find closest point index on geometry ───────────────── */
 const closestPointIndex = (geometry, lat, lon) => {
   let best = 0, bestDist = Infinity;
+  if (!geometry || !Array.isArray(geometry)) return 0;
   geometry.forEach((p, i) => {
-    const d = haversine(lat, lon, p.lat, p.lon);
+    if (!p) return;
+    const pLat = p.lat ?? (Array.isArray(p) ? p[0] : null);
+    const pLon = p.lon ?? (Array.isArray(p) ? p[1] : null);
+    if (pLat == null || pLon == null) return;
+    const d = haversine(lat, lon, pLat, pLon);
     if (d < bestDist) { bestDist = d; best = i; }
   });
   return best;
@@ -352,7 +371,7 @@ const NavigationScreen = () => {
 
   /* ── Route data ── */
   const [steps,         setSteps]         = useState([]);
-  const [routeGeometry, setRouteGeometry] = useState(route.geometry || []);
+  const [routeGeometry, setRouteGeometry] = useState(normalizeGeometry(route.geometry));
   const [totalDist,     setTotalDist]     = useState(0); // metres from OSRM
   const [loadingSteps,  setLoadingSteps]  = useState(true);
   const [recalculating, setRecalculating] = useState(false);
@@ -387,7 +406,7 @@ const NavigationScreen = () => {
   const targetPosRef     = useRef([originCoords.lat, originCoords.lon]);
   const currentPosRef    = useRef([originCoords.lat, originCoords.lon]);
   const voiceRef         = useRef(true);
-  const geometryRef      = useRef(routeGeometry);
+  const geometryRef      = useRef(normalizeGeometry(route.geometry));
   const lastRecalcRef    = useRef(0);
   voiceRef.current       = voiceEnabled;
 
@@ -406,9 +425,10 @@ const NavigationScreen = () => {
             { icon: "🏁", text: `Arrive at ${destination}`, dist: "End", distanceMeters: 0 },
           ]);
         }
-        if (g.length > 1) {
-          setRouteGeometry(g);
-          geometryRef.current = g;
+        const normG = normalizeGeometry(g);
+        if (normG.length > 1) {
+          setRouteGeometry(normG);
+          geometryRef.current = normG;
         }
         if (totalDistance) setTotalDist(totalDistance);
         setLoadingSteps(false);
@@ -677,11 +697,25 @@ const NavigationScreen = () => {
         {completedGeometry.length > 1 && (
           <Polyline
             positions={completedGeometry.map((p) => [p.lat, p.lon])}
-            pathOptions={{ color: "#94a3b8", weight: 7, opacity: 0.45, lineCap: "round" }}
+            pathOptions={{ color: "#94a3b8", weight: 6, opacity: 0.4, lineCap: "round", lineJoin: "round" }}
           />
         )}
 
-        {/* Remaining route — AQI coloured or solid green */}
+        {/* Outer Casing / Deep Emerald Glow Path */}
+        {remainingGeometry.length > 1 && (
+          <Polyline
+            positions={remainingGeometry.map((p) => [p.lat, p.lon])}
+            pathOptions={{
+              color: "#064e3b",
+              weight: 14,
+              opacity: 0.65,
+              lineCap: "round",
+              lineJoin: "round",
+            }}
+          />
+        )}
+
+        {/* Primary Core Route Path — AQI coloured or solid Eco-Emerald */}
         {segments.length > 1
           ? segments.map((seg, i) => {
               if (i === segments.length - 1) return null;
@@ -690,14 +724,26 @@ const NavigationScreen = () => {
                 <Polyline
                   key={i}
                   positions={[[seg.lat, seg.lon], [next.lat, next.lon]]}
-                  pathOptions={{ color: getAQIColor(seg.aqi), weight: 8, opacity: 0.9, lineCap: "round" }}
+                  pathOptions={{
+                    color: getAQIColor(seg.aqi),
+                    weight: 8,
+                    opacity: 0.95,
+                    lineCap: "round",
+                    lineJoin: "round",
+                  }}
                 />
               );
             })
           : remainingGeometry.length > 1 && (
               <Polyline
                 positions={remainingGeometry.map((p) => [p.lat, p.lon])}
-                pathOptions={{ color: "#2563eb", weight: 8, opacity: 0.85, lineCap: "round" }}
+                pathOptions={{
+                  color: "#10b981", // Vibrant Emerald Green matching EcoSense theme!
+                  weight: 8,
+                  opacity: 0.95,
+                  lineCap: "round",
+                  lineJoin: "round",
+                }}
               />
             )}
 
@@ -1003,7 +1049,7 @@ const NavigationScreen = () => {
               </div>
             ) : (
               <div className="flex items-center gap-4">
-                <div className="w-14 h-14 rounded-2xl bg-blue-600 flex items-center justify-center text-2xl shadow-lg shadow-blue-500/30 shrink-0">
+                <div className="w-14 h-14 rounded-2xl bg-emerald-500 text-white flex items-center justify-center text-2xl shadow-lg shadow-emerald-500/30 shrink-0">
                   {currentStep?.icon || "⬆"}
                 </div>
                 <div className="flex-1 min-w-0">
@@ -1014,7 +1060,7 @@ const NavigationScreen = () => {
                 </div>
                 <div className="text-right shrink-0">
                   <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Step</p>
-                  <p className="text-sm font-black text-blue-600">{currentStepIdx + 1}/{steps.length}</p>
+                  <p className="text-sm font-black text-emerald-600">{currentStepIdx + 1}/{steps.length}</p>
                 </div>
               </div>
             )}
@@ -1037,7 +1083,7 @@ const NavigationScreen = () => {
                 className="h-full rounded-full transition-all duration-700 ease-out"
                 style={{
                   width: `${progressPct}%`,
-                  background: "linear-gradient(90deg, #2563eb, #60a5fa)",
+                  background: "linear-gradient(90deg, #10b981, #059669)",
                 }}
               />
             </div>

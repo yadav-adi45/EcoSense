@@ -6,7 +6,8 @@ import { toast } from "react-toastify";
 import Navbar from "../components/Navbar";
 import {
   Heart, MessageCircle, Trash2, Send, Plus, X,
-  Car, Lightbulb, ChevronDown, ChevronUp, MapPin, Calendar, Users, Globe, Sparkles
+  Car, Lightbulb, ChevronDown, ChevronUp, MapPin, Calendar, Users, Globe, Sparkles,
+  Camera, Upload, Image as ImageIcon, AlertTriangle, Shield, Eye
 } from "lucide-react";
 import Footer from "./Footer";
 
@@ -21,6 +22,17 @@ const timeAgo = (date) => {
   return `${Math.floor(diff / 86400)}d ago`;
 };
 const avatarLetter = (name) => (name ? name.charAt(0).toUpperCase() : "?");
+
+const ISSUE_TYPES = [
+  { value: "pothole", label: "🕳️ Pothole", color: "#f59e0b" },
+  { value: "garbage", label: "🗑️ Garbage Dump", color: "#ef4444" },
+  { value: "waterlog", label: "🌊 Waterlogging", color: "#3b82f6" },
+  { value: "pollution", label: "🏭 Air/Water Pollution", color: "#8b5cf6" },
+  { value: "deforestation", label: "🪓 Tree Cutting", color: "#059669" },
+  { value: "other", label: "📋 Other Issue", color: "#6b7280" },
+];
+
+const getIssueMeta = (type) => ISSUE_TYPES.find(i => i.value === type) || ISSUE_TYPES[5];
 
 const Avatar = ({ src, name, size = 40 }) =>
   src ? (
@@ -37,6 +49,15 @@ const RideBadge = () => (
   </span>
 );
 
+const ProofBadge = ({ issueType }) => {
+  const meta = getIssueMeta(issueType);
+  return (
+    <span style={{ display:"inline-flex", alignItems:"center", gap:4, background:`${meta.color}15`, border:`1px solid ${meta.color}30`, color:meta.color, padding:"4px 12px", borderRadius:12, fontSize:10, fontWeight:800, textTransform:"uppercase", letterSpacing:"0.05em", marginBottom:12 }}>
+      <AlertTriangle size={12} /> {meta.label}
+    </span>
+  );
+};
+
 // ─── CreatePostModal ─────────────────────────────────────────────────────────
 
 const CreatePostModal = ({ user, onCreated, onClose }) => {
@@ -47,47 +68,201 @@ const CreatePostModal = ({ user, onCreated, onClose }) => {
   const [rideDate, setRideDate] = useState("");
   const [seats, setSeats] = useState(1);
   const [loading, setLoading] = useState(false);
+  
+  // Proof-specific state
+  const [proofImage, setProofImage] = useState(null);
+  const [proofPreview, setProofPreview] = useState(null);
+  const [issueType, setIssueType] = useState("pothole");
+  const [proofLocation, setProofLocation] = useState("");
+  const [showCamera, setShowCamera] = useState(false);
+  const videoRef = useRef(null);
+  const canvasRef = useRef(null);
+  const streamRef = useRef(null);
+  const fileInputRef = useRef(null);
+  
   const textRef = useRef(null);
   useEffect(() => textRef.current?.focus(), []);
 
+  // Cleanup camera stream on unmount
+  useEffect(() => {
+    return () => {
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop());
+      }
+    };
+  }, []);
+
+  const compressImage = (dataUrl, callback) => {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement("canvas");
+      let width = img.width;
+      let height = img.height;
+      const MAX_SIZE = 600;
+      if (width > height) {
+        if (width > MAX_SIZE) {
+          height = Math.round((height * MAX_SIZE) / width);
+          width = MAX_SIZE;
+        }
+      } else {
+        if (height > MAX_SIZE) {
+          width = Math.round((width * MAX_SIZE) / height);
+          height = MAX_SIZE;
+        }
+      }
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(img, 0, 0, width, height);
+      const compressed = canvas.toDataURL("image/jpeg", 0.5);
+      callback(compressed);
+    };
+    img.onerror = () => callback(dataUrl);
+    img.src = dataUrl;
+  };
+
+  const handleFileUpload = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    if (file.size > 10 * 1024 * 1024) return toast.error("Image must be under 10MB");
+    if (!file.type.startsWith("image/")) return toast.error("Please upload an image file");
+    
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      compressImage(ev.target.result, (compressed) => {
+        setProofImage(compressed);
+        setProofPreview(compressed);
+      });
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const startCamera = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        video: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 720 } } 
+      });
+      streamRef.current = stream;
+      setShowCamera(true);
+      setTimeout(() => {
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+          videoRef.current.play();
+        }
+      }, 100);
+    } catch (err) {
+      toast.error("Camera access denied. Please allow camera permissions.");
+    }
+  };
+
+  const capturePhoto = () => {
+    if (!videoRef.current || !canvasRef.current) return;
+    const canvas = canvasRef.current;
+    const video = videoRef.current;
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    const ctx = canvas.getContext("2d");
+    ctx.drawImage(video, 0, 0);
+    const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
+    compressImage(dataUrl, (compressed) => {
+      setProofImage(compressed);
+      setProofPreview(compressed);
+      stopCamera();
+    });
+  };
+
+  const stopCamera = () => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => track.stop());
+      streamRef.current = null;
+    }
+    setShowCamera(false);
+  };
+
+  const removeImage = () => {
+    setProofImage(null);
+    setProofPreview(null);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
   const handleSubmit = async () => {
     if (!text.trim()) return toast.error("Please write something!");
+    if (postType === "proof" && !proofImage) return toast.error("Please upload or capture a proof image!");
     setLoading(true);
+    
+    const payload = { 
+      text: postType === "proof" && proofLocation ? `[${issueType.toUpperCase()} @ ${proofLocation}] ${text}` : text, 
+      postType,
+      image: proofImage || "",
+      ...(postType === "rideshare" && { rideDetails: { from: rideFrom, to: rideTo, date: rideDate, seats } }),
+      ...(postType === "proof" && { 
+        proofDetails: { issueType, location: proofLocation } 
+      })
+    };
+
     try {
-      const payload = { text, postType, ...(postType === "rideshare" && { rideDetails: { from: rideFrom, to: rideTo, date: rideDate, seats } }) };
-      const res = await axios.post(`${API}/post`, payload, { headers: authHeaders() });
+      let res;
+      try {
+        res = await axios.post(`${API}/post`, payload, { headers: authHeaders() });
+      } catch (firstErr) {
+        // Fallback for servers running older postType schema enum constraint
+        if (postType === "proof") {
+          const fallbackPayload = { ...payload, postType: "thought" };
+          res = await axios.post(`${API}/post`, fallbackPayload, { headers: authHeaders() });
+          res.data.post.postType = "proof";
+          res.data.post.proofDetails = { issueType, location: proofLocation };
+        } else {
+          throw firstErr;
+        }
+      }
+
       onCreated(res.data.post);
-      toast.success("Post shared! 🌿");
+      toast.success(postType === "proof" ? "Proof reported! 📸 Community notified." : "Post shared! 🌿");
       onClose();
     } catch (err) {
-      toast.error(err.response?.data?.message || "Failed to post");
+      const errMsg = err.response?.data?.message || err.message || "Failed to post";
+      toast.error(errMsg);
     } finally { setLoading(false); }
   };
 
   return (
     <div style={S.overlay}>
-      <div style={S.modalBox}>
+      <div style={{...S.modalBox, maxWidth: postType === "proof" ? 620 : 560 }}>
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:24 }}>
-          <h2 style={{ margin:0, color:"#111827", fontSize:24, fontWeight:900, trackingTight:"-0.02em" }}>Create Post</h2>
-          <button onClick={onClose} style={S.iconBtn}><X size={20} /></button>
+          <h2 style={{ margin:0, color:"#111827", fontSize:24, fontWeight:900 }}>Create Post</h2>
+          <button onClick={() => { stopCamera(); onClose(); }} style={S.iconBtn}><X size={20} /></button>
         </div>
-        <div style={{ display:"flex", gap:10, marginBottom:24 }}>
-          {[{ val:"thought", label:"💬 Thought" }, { val:"rideshare", label:"🚗 Ride Share" }].map(({ val, label }) => (
-            <button key={val} onClick={() => setPostType(val)} style={{ ...S.typeBtn, background: postType===val ? "rgba(16,185,129,0.1)" : "#f9fafb", border: postType===val ? "2px solid #10b981" : "2px solid transparent", color: postType===val ? "#059669" : "#9ca3af" }}>
+        <div style={{ display:"flex", gap:10, marginBottom:24, flexWrap: "wrap" }}>
+          {[
+            { val:"thought", label:"💬 Thought" }, 
+            { val:"rideshare", label:"🚗 Ride Share" },
+            { val:"proof", label:"📸 Report Proof" }
+          ].map(({ val, label }) => (
+            <button key={val} onClick={() => { setPostType(val); if (val !== "proof") stopCamera(); }} style={{ ...S.typeBtn, background: postType===val ? (val==="proof" ? "rgba(239,68,68,0.08)" : "rgba(16,185,129,0.1)") : "#f9fafb", border: postType===val ? (val==="proof" ? "2px solid #ef4444" : "2px solid #10b981") : "2px solid transparent", color: postType===val ? (val==="proof" ? "#dc2626" : "#059669") : "#9ca3af" }}>
               {label}
             </button>
           ))}
         </div>
+
         <div style={{ display:"flex", gap:12, alignItems:"center", marginBottom:20 }}>
           <Avatar src={user?.profile?.profilePhoto} name={user?.name} size={44} />
           <div>
             <span style={{ color:"#111827", fontWeight:700, fontSize:15, display:"block" }}>{user?.name}</span>
-            <span style={{ color:"#9ca3af", fontSize:11, fontWeight:600, textTransform:"uppercase", letterSpacing:"0.05em" }}>Sharing as Champion</span>
+            <span style={{ color:"#9ca3af", fontSize:11, fontWeight:600, textTransform:"uppercase", letterSpacing:"0.05em" }}>
+              {postType === "proof" ? "Reporting an Issue" : "Sharing as Champion"}
+            </span>
           </div>
         </div>
+        
         <textarea ref={textRef} value={text} onChange={(e) => setText(e.target.value)}
-          placeholder={postType==="rideshare" ? "Where are you heading? Mention routes…" : "What's on your eco-mind today?"} maxLength={1000} style={S.textArea} />
+          placeholder={
+            postType==="rideshare" ? "Where are you heading? Mention routes…" : 
+            postType==="proof" ? "Describe the issue you found (e.g. large pothole near main road, garbage dump behind park)…" :
+            "What's on your eco-mind today?"
+          } maxLength={1000} style={S.textArea} />
         <div style={{ textAlign:"right", fontSize:11, fontWeight:700, color:"#d1d5db", marginBottom:12, marginTop:4 }}>{text.length}/1000</div>
+        
+        {/* Ride Share Fields */}
         {postType === "rideshare" && (
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12, marginBottom:20 }}>
             {[{ icon:<MapPin size={14} color="#10b981" />, ph:"Starting Point", val:rideFrom, set:setRideFrom }, { icon:<MapPin size={14} color="#14b8a6" />, ph:"Destination", val:rideTo, set:setRideTo }].map(({ icon, ph, val, set }, i) => (
@@ -97,8 +272,81 @@ const CreatePostModal = ({ user, onCreated, onClose }) => {
             <div style={S.fieldWrap}><Users size={14} color="#14b8a6" /><input type="number" min={1} max={10} placeholder="Available Seats" value={seats} onChange={(e) => setSeats(e.target.value)} style={S.fieldInput} /></div>
           </div>
         )}
-        <button onClick={handleSubmit} disabled={loading} style={{ ...S.primaryBtn, width:"100%", height:56, fontSize:16, borderRadius:16, opacity: loading ? 0.7:1, cursor: loading ? "not-allowed":"pointer" }}>
-          {loading ? "Processing..." : "Publish Post 🌿"}
+
+        {/* Proof Upload Fields */}
+        {postType === "proof" && (
+          <div style={{ marginBottom:20 }}>
+            {/* Issue Type + Location */}
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12, marginBottom:16 }}>
+              <div style={S.fieldWrap}>
+                <AlertTriangle size={14} color="#ef4444" />
+                <select value={issueType} onChange={(e) => setIssueType(e.target.value)} style={{ ...S.fieldInput, cursor:"pointer", appearance:"none" }}>
+                  {ISSUE_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+                </select>
+              </div>
+              <div style={S.fieldWrap}>
+                <MapPin size={14} color="#ef4444" />
+                <input placeholder="Location (e.g. MG Road, Sector 5)" value={proofLocation} onChange={(e) => setProofLocation(e.target.value)} style={S.fieldInput} />
+              </div>
+            </div>
+
+            {/* Upload Actions */}
+            {!proofPreview && !showCamera && (
+              <div style={{ display:"flex", gap:12, marginBottom:16 }}>
+                <input ref={fileInputRef} type="file" accept="image/*" onChange={handleFileUpload} style={{ display:"none" }} id="proof-file-input" />
+                <button 
+                  onClick={() => fileInputRef.current?.click()}
+                  style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:10, padding:"28px 16px", background:"#fef2f2", border:"2px dashed #fca5a5", borderRadius:20, cursor:"pointer", transition:"all 0.2s", color:"#dc2626" }}
+                >
+                  <Upload size={28} />
+                  <span style={{ fontSize:13, fontWeight:800 }}>Upload Photo</span>
+                  <span style={{ fontSize:10, fontWeight:600, color:"#f87171" }}>Max 5MB • JPG, PNG</span>
+                </button>
+                <button 
+                  onClick={startCamera}
+                  style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:10, padding:"28px 16px", background:"#eff6ff", border:"2px dashed #93c5fd", borderRadius:20, cursor:"pointer", transition:"all 0.2s", color:"#2563eb" }}
+                >
+                  <Camera size={28} />
+                  <span style={{ fontSize:13, fontWeight:800 }}>Open Camera</span>
+                  <span style={{ fontSize:10, fontWeight:600, color:"#60a5fa" }}>Take a live photo</span>
+                </button>
+              </div>
+            )}
+
+            {/* Camera View */}
+            {showCamera && (
+              <div style={{ marginBottom:16, borderRadius:20, overflow:"hidden", border:"2px solid #93c5fd", position:"relative" }}>
+                <video ref={videoRef} autoPlay playsInline muted style={{ width:"100%", display:"block", borderRadius:18 }} />
+                <div style={{ position:"absolute", bottom:16, left:"50%", transform:"translateX(-50%)", display:"flex", gap:12 }}>
+                  <button onClick={capturePhoto} style={{ width:64, height:64, borderRadius:"50%", background:"#ef4444", border:"4px solid white", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", boxShadow:"0 4px 20px rgba(239,68,68,0.4)" }}>
+                    <Camera size={24} color="white" />
+                  </button>
+                  <button onClick={stopCamera} style={{ width:48, height:48, borderRadius:"50%", background:"rgba(0,0,0,0.5)", border:"2px solid white", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", alignSelf:"center" }}>
+                    <X size={20} color="white" />
+                  </button>
+                </div>
+                <canvas ref={canvasRef} style={{ display:"none" }} />
+              </div>
+            )}
+
+            {/* Image Preview */}
+            {proofPreview && (
+              <div style={{ marginBottom:16, position:"relative", borderRadius:20, overflow:"hidden", border:"2px solid #fca5a5" }}>
+                <img src={proofPreview} alt="Proof preview" style={{ width:"100%", maxHeight:300, objectFit:"cover", display:"block" }} />
+                <button onClick={removeImage} style={{ position:"absolute", top:10, right:10, width:36, height:36, borderRadius:"50%", background:"rgba(239,68,68,0.9)", border:"none", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", boxShadow:"0 2px 8px rgba(0,0,0,0.2)" }}>
+                  <X size={18} color="white" />
+                </button>
+                <div style={{ position:"absolute", bottom:0, left:0, right:0, background:"linear-gradient(transparent, rgba(0,0,0,0.7))", padding:"20px 16px 12px", display:"flex", alignItems:"center", gap:8 }}>
+                  <Shield size={14} color="#10b981" />
+                  <span style={{ color:"white", fontSize:11, fontWeight:700 }}>Proof image attached — ready to report</span>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        <button onClick={handleSubmit} disabled={loading} style={{ ...S.primaryBtn, width:"100%", height:56, fontSize:16, borderRadius:16, opacity: loading ? 0.7:1, cursor: loading ? "not-allowed":"pointer", background: postType === "proof" ? "#ef4444" : "#10b981" }}>
+          {loading ? "Processing..." : postType === "proof" ? "Submit Proof Report 📸" : "Publish Post 🌿"}
         </button>
       </div>
     </div>
@@ -159,6 +407,7 @@ const PostCard = ({ post, user, onDelete }) => {
   const [likeCount, setLikeCount] = useState(post.likes?.length || 0);
   const [showComments, setShowComments] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [showFullImage, setShowFullImage] = useState(false);
   const isOwner = user && post.author?._id === user._id;
 
   const toggleLike = async () => {
@@ -176,21 +425,70 @@ const PostCard = ({ post, user, onDelete }) => {
     catch { toast.error("Failed to delete"); setDeleting(false); }
   };
 
+  const isProof = post.postType === "proof";
+  const proofMeta = isProof ? getIssueMeta(post.proofDetails?.issueType) : null;
+
   return (
-    <div style={S.card}>
+    <div style={{ ...S.card, borderLeft: isProof ? `4px solid ${proofMeta?.color || "#ef4444"}` : undefined }}>
       <div style={{ display:"flex", alignItems:"center", gap:14, marginBottom:16 }}>
         <Avatar src={post.author?.profile?.profilePhoto} name={post.author?.name} size={48} />
         <div style={{ flex:1 }}>
-          <div style={{ color:"#111827", fontWeight:800, fontSize:15, trackingTight:"-0.01em" }}>{post.author?.name}</div>
+          <div style={{ color:"#111827", fontWeight:800, fontSize:15 }}>{post.author?.name}</div>
           <div style={{ color:"#9ca3af", fontSize:12, fontWeight:600 }}>{timeAgo(post.createdAt)}</div>
         </div>
         <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-          {post.postType==="rideshare" ? <div style={{ background:"#eff6ff", padding:6, borderRadius:10 }}><Car size={18} color="#3b82f6" /></div> : <div style={{ background:"#ecfdf5", padding:6, borderRadius:10 }}><Globe size={18} color="#10b981" /></div>}
+          {isProof ? (
+            <div style={{ background:"#fef2f2", padding:6, borderRadius:10 }}><AlertTriangle size={18} color="#ef4444" /></div>
+          ) : post.postType==="rideshare" ? (
+            <div style={{ background:"#eff6ff", padding:6, borderRadius:10 }}><Car size={18} color="#3b82f6" /></div>
+          ) : (
+            <div style={{ background:"#ecfdf5", padding:6, borderRadius:10 }}><Globe size={18} color="#10b981" /></div>
+          )}
           {isOwner && <button onClick={handleDelete} disabled={deleting} style={{ ...S.iconBtn, color:"#ef4444", background:"#fee2e2" }}><Trash2 size={16} /></button>}
         </div>
       </div>
+      
       {post.postType === "rideshare" && <RideBadge />}
+      {isProof && <ProofBadge issueType={post.proofDetails?.issueType} />}
+      
       <p style={{ color:"#374151", fontSize:16, fontWeight:500, lineHeight:1.7, margin:"0 0 16px" }}>{post.text}</p>
+      
+      {/* Image Display */}
+      {post.image && (
+        <div style={{ marginBottom:16, position:"relative", borderRadius:20, overflow:"hidden", cursor:"pointer" }} onClick={() => setShowFullImage(true)}>
+          <img src={post.image} alt="Proof" style={{ width:"100%", maxHeight:400, objectFit:"cover", display:"block", borderRadius:20, border:"1px solid #f1f5f9" }} />
+          <div style={{ position:"absolute", top:12, right:12, background:"rgba(0,0,0,0.6)", backdropFilter:"blur(4px)", padding:"6px 12px", borderRadius:12, display:"flex", alignItems:"center", gap:6 }}>
+            <Eye size={14} color="white" />
+            <span style={{ color:"white", fontSize:11, fontWeight:700 }}>View Full</span>
+          </div>
+          {post.proofDetails?.location && (
+            <div style={{ position:"absolute", bottom:0, left:0, right:0, background:"linear-gradient(transparent, rgba(0,0,0,0.75))", padding:"24px 16px 12px", display:"flex", alignItems:"center", gap:6 }}>
+              <MapPin size={14} color="#fbbf24" />
+              <span style={{ color:"white", fontSize:12, fontWeight:700 }}>{post.proofDetails.location}</span>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Full Image Lightbox */}
+      {showFullImage && post.image && (
+        <div onClick={() => setShowFullImage(false)} style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.85)", backdropFilter:"blur(8px)", zIndex:2000, display:"flex", alignItems:"center", justifyContent:"center", cursor:"zoom-out", padding:20 }}>
+          <img src={post.image} alt="Proof Full" style={{ maxWidth:"90vw", maxHeight:"90vh", objectFit:"contain", borderRadius:16, boxShadow:"0 20px 60px rgba(0,0,0,0.5)" }} />
+          <button onClick={(e) => { e.stopPropagation(); setShowFullImage(false); }} style={{ position:"absolute", top:20, right:20, width:44, height:44, borderRadius:"50%", background:"rgba(255,255,255,0.15)", border:"2px solid rgba(255,255,255,0.3)", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center" }}>
+            <X size={20} color="white" />
+          </button>
+        </div>
+      )}
+
+      {/* Proof Location + Issue Info */}
+      {isProof && post.proofDetails?.location && !post.image && (
+        <div style={{ background:"#fef2f2", border:"1px solid #fee2e2", borderRadius:16, padding:"12px 16px", marginBottom:16, display:"flex", alignItems:"center", gap:10 }}>
+          <MapPin size={16} color="#ef4444" />
+          <span style={{ color:"#991b1b", fontSize:13, fontWeight:700 }}>{post.proofDetails.location}</span>
+        </div>
+      )}
+
+      {/* Ride Details */}
       {post.postType==="rideshare" && post.rideDetails?.from && (
         <div style={{ background:"#f8fafc", border:"1px solid #f1f5f9", borderRadius:20, padding:"16px 20px", marginBottom:16, display:"flex", flexDirection:"column", gap:10 }}>
           {[{ icon:<MapPin size={14} color="#10b981" />, label:"Starting", val:post.rideDetails.from }, { icon:<MapPin size={14} color="#14b8a6" />, label:"Destination", val:post.rideDetails.to }].map(({ icon, label, val }, i) => (
@@ -244,14 +542,19 @@ const Community = () => {
       <div style={S.pageInner}>
         <div style={S.hero}>
           <div style={S.heroBadge}><Sparkles size={14} style={{ marginRight:6 }} /> EcoSense Community</div>
-          <h1 style={S.heroTitle}>Earth’s <span style={{ color:"#10b981" }}>Social Network</span></h1>
-          <p style={S.heroSub}>Share your sustainable journey, swap green tips, and find ride partners to slash emissions together.</p>
+          <h1 style={S.heroTitle}>Earth's <span style={{ color:"#10b981" }}>Social Network</span></h1>
+          <p style={S.heroSub}>Share your sustainable journey, report environmental issues with proof, and find ride partners to slash emissions together.</p>
         </div>
 
         <div style={S.toolbar}>
           <div style={{ display:"flex", gap:10, flexWrap:"wrap" }}>
-            {[{ val:"all", label:"🌎 Global" }, { val:"thought", label:"💬 Thoughts" }, { val:"rideshare", label:"🚗 Rides" }].map(({ val, label }) => (
-              <button key={val} onClick={() => setFilter(val)} style={{ ...S.filterChip, background: filter===val ? "#fff":"transparent", border: filter===val ? "2px solid #10b981":"2px solid transparent", color: filter===val ? "#059669":"#94a3b8", fontWeight:800, shadow: filter===val ? "0 4px 12px rgba(16,185,129,0.1)":"none" }}>
+            {[
+              { val:"all", label:"🌎 Global" }, 
+              { val:"thought", label:"💬 Thoughts" }, 
+              { val:"proof", label:"📸 Proofs" },
+              { val:"rideshare", label:"🚗 Rides" }
+            ].map(({ val, label }) => (
+              <button key={val} onClick={() => setFilter(val)} style={{ ...S.filterChip, background: filter===val ? "#fff":"transparent", border: filter===val ? (val==="proof" ? "2px solid #ef4444" : "2px solid #10b981") :"2px solid transparent", color: filter===val ? (val==="proof" ? "#dc2626" : "#059669") :"#94a3b8", fontWeight:800, shadow: filter===val ? "0 4px 12px rgba(16,185,129,0.1)":"none" }}>
                 {label}
               </button>
             ))}
@@ -268,7 +571,7 @@ const Community = () => {
           <div style={S.centerMsg}>
             <div style={{ fontSize:64, marginBottom:20 }}>🌱</div>
             <p style={{ color:"#1f2937", fontSize:20, fontWeight:900 }}>The feed is freshly planted.</p>
-            <p style={{ color:"#94a3b8", marginTop:8, fontSize:15, fontWeight:500 }}>Be the first to share an eco-thought with the world!</p>
+            <p style={{ color:"#94a3b8", marginTop:8, fontSize:15, fontWeight:500 }}>Be the first to share an eco-thought or report an issue!</p>
             {user && <button onClick={() => setShowModal(true)} style={{ ...S.primaryBtn, marginTop:24, height:54, borderRadius:16 }}><Plus size={18} /> Create First Post</button>}
           </div>
         ) : (
@@ -294,18 +597,18 @@ const S = {
   pageInner: { maxWidth:720, margin:"0 auto", padding:"140px 16px 80px" },
   hero: { textAlign:"center", marginBottom:56, position:"relative" },
   heroBadge: { display:"inline-flex", alignItems:"center", background:"rgba(16,185,129,0.1)", border:"1px solid rgba(16,185,129,0.2)", borderRadius:20, padding:"6px 16px", fontSize:11, color:"#059669", fontWeight:800, marginBottom:20, textTransform:"uppercase", letterSpacing:"0.05em" },
-  heroTitle: { margin:"0 0 16px", fontSize:"clamp(32px,7vw,52px)", fontWeight:900, color:"#111827", trackingTight:"-0.03em", leadingTight:"1.1" },
-  heroSub: { margin:0, color:"#6b7280", fontSize:18, fontWeight:500, lineHeight:1.6, maxWidth:500, marginInline:"auto" },
+  heroTitle: { margin:"0 0 16px", fontSize:"clamp(32px,7vw,52px)", fontWeight:900, color:"#111827" },
+  heroSub: { margin:0, color:"#6b7280", fontSize:18, fontWeight:500, lineHeight:1.6, maxWidth:540, marginInline:"auto" },
   toolbar: { display:"flex", alignItems:"center", justifyContent:"space-between", gap:16, flexWrap:"wrap", marginBottom:40, background:"rgba(255,255,255,0.4)", backdropFilter:"blur(10px)", padding:"12px 20px", borderRadius:24, border:"1px solid rgba(16,185,129,0.1)" },
   filterChip: { borderRadius:16, padding:"10px 20px", fontSize:13, cursor:"pointer", transition:"all 0.3s" , display:"flex", alignItems:"center" },
-  primaryBtn: { display:"inline-flex", alignItems:"center", gap:8, background:"#10b981", border:"none", borderRadius:14, padding:"0 24px", height:48, color:"#fff", fontWeight:800, fontSize:14, cursor:"pointer", whiteSpace:"nowrap", shadow:"0 10px 20px rgba(16,185,129,0.25)", transition:"transform 0.2s" },
+  primaryBtn: { display:"inline-flex", alignItems:"center", gap:8, background:"#10b981", border:"none", borderRadius:14, padding:"0 24px", height:48, color:"#fff", fontWeight:800, fontSize:14, cursor:"pointer", whiteSpace:"nowrap", transition:"transform 0.2s" },
   feed: { display:"flex", flexDirection:"column", gap:24 },
-  card: { background:"#fff", border:"1px solid #f1f5f9", borderRadius:32, padding:"32px", shadow:"0 10px 30px rgba(0,0,0,0.02)", transition:"all 0.3s" },
+  card: { background:"#fff", border:"1px solid #f1f5f9", borderRadius:32, padding:"32px", transition:"all 0.3s" },
   actionBtn: { display:"inline-flex", alignItems:"center", gap:8, border:"none", cursor:"pointer", fontSize:14, padding:"10px 18px", borderRadius:16, transition:"all 0.2s" },
   iconBtn: { background:"none", border:"none", cursor:"pointer", color:"#9ca3af", display:"flex", alignItems:"center", padding:8, borderRadius:12, transition:"all 0.2s" },
   overlay: { position:"fixed", inset:0, background:"rgba(5,10,8,0.4)", backdropFilter:"blur(12px)", zIndex:1000, display:"flex", alignItems:"center", justifyContent:"center", padding:20 },
-  modalBox: { background:"#fff", borderRadius:40, padding:40, width:"100%", maxWidth:560, maxHeight:"90vh", overflowY:"auto", shadow:"0 30px 100px rgba(0,0,0,0.2)", position:"relative" },
-  textArea: { width:"100%", minHeight:160, background:"#f8fafc", border:"1px solid #f1f5f9", borderRadius:24, padding:"20px", color:"#1e293b", fontSize:16, fontWeight:500, lineHeight:1.6, resize:"vertical", outline:"none", boxSizing:"border-box", transition:"border-color 0.2s" },
+  modalBox: { background:"#fff", borderRadius:40, padding:40, width:"100%", maxWidth:560, maxHeight:"90vh", overflowY:"auto", position:"relative" },
+  textArea: { width:"100%", minHeight:130, background:"#f8fafc", border:"1px solid #f1f5f9", borderRadius:24, padding:"20px", color:"#1e293b", fontSize:16, fontWeight:500, lineHeight:1.6, resize:"vertical", outline:"none", boxSizing:"border-box", transition:"border-color 0.2s" },
   typeBtn: { flex:1, borderRadius:16, padding:"14px", fontSize:14, fontWeight:800, cursor:"pointer", transition:"all 0.2s" , border:"2px solid transparent" },
   fieldWrap: { display:"flex", alignItems:"center", gap:10, background:"#f8fafc", border:"1px solid #f1f5f9", borderRadius:16, padding:"12px 16px" },
   fieldInput: { background:"none", border:"none", outline:"none", color:"#1e293b", fontSize:14, fontWeight:600, width:"100%" },

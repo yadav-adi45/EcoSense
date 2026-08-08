@@ -196,7 +196,7 @@ const Home = () => {
                           stroke="currentColor"
                           strokeWidth="10"
                           fill="none"
-                          className="text-emerald-500"
+                          className={item.color}
                           strokeDasharray="440"
                           strokeDashoffset={440 - (440 * percentage) / 100}
                           strokeLinecap="round"

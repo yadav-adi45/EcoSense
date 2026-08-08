@@ -44,8 +44,8 @@ const Navbar = () => {
   const mainNavLinks = [
     { path: "/bill-scanner", label: "Scanner", icon: LayoutDashboard },
     { path: "/dashboard", label: "Dashboard", icon: Database },
+    { path: "/environment-reports", label: "Reports", icon: Inspect },
     { path: "/recommendations", label: "Eco Products", icon: Gamepad2 },
-    { path: "/chat", label: "EcoBot", icon: Trophy },
     { path: "/routes", label: "Routes", icon: Presentation },
     { path: "/pollution", label: "Pollution", icon: Factory },
   ];

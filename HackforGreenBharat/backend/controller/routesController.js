@@ -23,6 +23,18 @@ const sampleRoutePoints = (geometry) => {
   return pts;
 };
 
+const haversine = (lat1, lon1, lat2, lon2) => {
+  const R = 6371; // km
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLon / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+};
+
 /** Cap map geometry at maxPoints to keep payload tiny */
 const simplifyGeometry = (coords, maxPoints = 300) => {
   if (coords.length <= maxPoints) return coords;
@@ -151,26 +163,54 @@ export const routeController = async (req, res) => {
 
     /* 🏎️ FAST FALLBACK MODE — no AQI, just geometry */
     if (req.query.fast === "true") {
-      const fastRoutes = osrmData.routes.map((r, i) => ({
-        id: i,
-        name: `Quick Path ${i + 1}`,
-        distance: `${(r.distance / 1000).toFixed(1)} km`,
-        duration: `${Math.round((r.duration * durationMultiplier) / 60)} min`,
-        avgAQI: null,
-        geometry: simplifyGeometry(r.geometry.coordinates.map(([lon, lat]) => ({ lat, lon }))),
-        pollutionSegments: [],
-        healthAdvice: "Calculating air quality...",
-        travelTip: "Just a moment while we find the cleanest air.",
-      }));
+      const fastRoutes = osrmData.routes.map((r, i) => {
+        const straightLineDist = haversine(origin.lat, origin.lon, destination.lat, destination.lon);
+        let distanceKm = r.distance / 1000;
+        if ((travelMode === "cycling" || travelMode === "foot") && distanceKm > straightLineDist * 1.25) {
+          distanceKm = straightLineDist * 1.15;
+        }
+        let durationMin = (r.duration * durationMultiplier) / 60;
+        if (travelMode === "cycling") {
+          durationMin = (distanceKm / 15) * 60;
+        } else if (travelMode === "foot") {
+          durationMin = (distanceKm / 5) * 60;
+        }
+        return {
+          id: i,
+          name: `Quick Path ${i + 1}`,
+          distance: `${distanceKm.toFixed(1)} km`,
+          duration: `${Math.round(durationMin)} min`,
+          avgAQI: null,
+          geometry: simplifyGeometry(r.geometry.coordinates.map(([lon, lat]) => ({ lat, lon }))),
+          pollutionSegments: [],
+          healthAdvice: "Calculating air quality...",
+          travelTip: "Just a moment while we find the cleanest air.",
+        };
+      });
 
       return res.json({ success: true, origin, destination, routes: fastRoutes, isFastFallback: true });
     }
 
     /* 🚀 CONCURRENT FULL ANALYSIS — all routes processed in parallel */
     const routePromises = osrmData.routes.map(async (r, i) => {
-      const distanceKm = r.distance / 1000;
-      const durationMin = (r.duration * durationMultiplier) / 60;
-      const avgSpeed = distanceKm / (r.duration / 3600);
+      const straightLineDist = haversine(origin.lat, origin.lon, destination.lat, destination.lon);
+      
+      let distanceKm = r.distance / 1000;
+      
+      // For walking/cycling, routes scale to local/shorter paths rather than highway loops
+      if ((travelMode === "cycling" || travelMode === "foot") && distanceKm > straightLineDist * 1.25) {
+        distanceKm = straightLineDist * 1.15; // realistic local route factor
+      }
+
+      // Calculate realistic durations based on travel mode speeds
+      let durationMin = (r.duration * durationMultiplier) / 60;
+      if (travelMode === "cycling") {
+        durationMin = (distanceKm / 15) * 60; // 15 km/h avg cycling speed
+      } else if (travelMode === "foot") {
+        durationMin = (distanceKm / 5) * 60;  // 5 km/h avg walking speed
+      }
+
+      const avgSpeed = distanceKm / (durationMin / 60);
       const traffic = getTrafficLevel(avgSpeed);
 
       const fullGeometry = r.geometry.coordinates.map(([lon, lat]) => ({ lat, lon }));

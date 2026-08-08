@@ -3,7 +3,7 @@ import { CommunityPost } from "../model/CommunityPost.js";
 // @desc  Create a new post
 export const createPost = async (req, res) => {
   try {
-    const { text, postType, rideDetails, image } = req.body;
+    const { text, postType, rideDetails, proofDetails, image } = req.body;
     if (!text) return res.status(400).json({ message: "Post text is required" });
 
     const post = await CommunityPost.create({
@@ -12,6 +12,7 @@ export const createPost = async (req, res) => {
       image: image || "",
       postType: postType || "thought",
       rideDetails: postType === "rideshare" ? rideDetails : {},
+      proofDetails: postType === "proof" ? proofDetails : {},
     });
 
     const populated = await post.populate("author", "name profile");

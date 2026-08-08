@@ -5,7 +5,7 @@ import Home from "./pages/Home";
 import Register from "./pages/Register";
 import Routeing from "./pages/Route";
 import "./leafletFix";
-import EcoBot from "./pages/EcoBot";
+// import EcoBot from "./pages/EcoBot";
 import Login from "./pages/Login";
 import Dasboard from "./components/Dasboard";
 import Questionnaire from "./pages/Questionnaire";
@@ -25,15 +25,17 @@ import BillResult from "./pages/BillResult";
 import EcoStores from "./pages/EcoStores";
 import Community from "./pages/Community";
 import NavigationScreen from "./pages/NavigationScreen";
+import EnvironmentReports from "./pages/EnvironmentReports";
 
 const App = () => {
   return (
     <div>
       <Routes>
         <Route path="/" element={<Home />} />
+        <Route path="/environment-reports" element={<EnvironmentReports />} />
         <Route path="/register" element={<Register />} />
         <Route path="/routes" element={<Routeing />} />
-        <Route path="/chat" element={<EcoBot />} />
+        {/* <Route path="/chat" element={<EcoBot />} /> */}
         <Route path="/login" element={<Login />} />
         <Route path="/dashboard" element={<Dasboard />} />
         <Route path="/questionnaire" element={<Questionnaire />} />
