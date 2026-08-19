@@ -4,10 +4,9 @@ import { useNavigate } from "react-router-dom";
 import Navbar from "@/components/Navbar";
 import RouteMap from "@/components/RouteMap";
 import AQIBadge from "../components/AQIBadge";
-import LocationAutocomplete from "@/components/LocationAutocomplete";
+import LocationAutocomplete, { geocodeLocation, parseRouteQuery } from "@/components/LocationAutocomplete";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import {
   MapPin,
   Navigation,
@@ -23,65 +22,46 @@ import {
   Bike,
   Bus,
   PersonStanding,
-  X
+  ArrowUpDown,
+  SlidersHorizontal,
+  ChevronDown,
+  ChevronUp,
+  BatteryCharging,
+  ShieldCheck,
+  Compass,
+  Info,
+  CheckCircle2,
 } from "lucide-react";
 import { serverUrl } from "@/main";
 import { getCachedRoute, setCachedRoute } from "@/utils/routeCache";
 import { toast } from "react-toastify";
-import Footer from "@/pages/Footer";
 import RouteInsights from "@/components/RouteInsights";
 
 /* Transport mode config */
 const TRANSPORT_MODES = [
-  {
-    id: "car",
-    label: "Car",
-    emoji: "🚗",
-    icon: Car,
-    color: "blue",
-    tip: "Fastest option with EV charging support",
-  },
-  {
-    id: "bike",
-    label: "Bike / Moto",
-    emoji: "🏍️",
-    icon: Bike,
-    color: "orange",
-    tip: "Navigate narrow lanes & shortcuts",
-  },
-  {
-    id: "bus",
-    label: "Bus / Transit",
-    emoji: "🚌",
-    icon: Bus,
-    color: "purple",
-    tip: "Low-emission shared transport",
-  },
-  {
-    id: "walk",
-    label: "Walking",
-    emoji: "🚶",
-    icon: PersonStanding,
-    color: "emerald",
-    tip: "Healthiest & zero-emission option",
-  },
+  { id: "driving", emoji: "🚗", label: "Car", icon: Car },
+  { id: "bike", emoji: "🏍️", label: "Moto", icon: Bike },
+  { id: "bus", emoji: "🚌", label: "Transit", icon: Bus },
+  { id: "cycling", emoji: "🚲", label: "Bicycle", icon: Bike },
+  { id: "foot", emoji: "🚶", label: "Walk", icon: PersonStanding },
 ];
 
-const TRANSPORT_COLOR = {
-  blue:    { ring: "ring-blue-500",    bg: "bg-blue-50",    border: "border-blue-200",    text: "text-blue-600",    badge: "bg-blue-500"    },
-  orange:  { ring: "ring-orange-500",  bg: "bg-orange-50",  border: "border-orange-200",  text: "text-orange-600",  badge: "bg-orange-500"  },
-  purple:  { ring: "ring-purple-500",  bg: "bg-purple-50",  border: "border-purple-200",  text: "text-purple-600",  badge: "bg-purple-500"  },
-  emerald: { ring: "ring-emerald-500", bg: "bg-emerald-50", border: "border-emerald-200", text: "text-emerald-600", badge: "bg-emerald-500" },
-};
-
-
 const getAQIColor = (aqi) => {
-  if (aqi === null) return "#9CA3AF";
+  if (aqi === null || aqi === undefined) return "#9CA3AF";
   if (aqi <= 50) return "#10B981"; // Emerald
   if (aqi <= 100) return "#FACC15"; // Yellow
   if (aqi <= 150) return "#FB923C"; // Orange
   if (aqi <= 200) return "#EF4444"; // Red
   return "#7F1D1D"; // Dark Red
+};
+
+const getAQILabel = (aqi) => {
+  if (aqi === null || aqi === undefined) return "Unknown";
+  if (aqi <= 50) return "Good";
+  if (aqi <= 100) return "Moderate";
+  if (aqi <= 150) return "Unhealthy for Sensitive";
+  if (aqi <= 200) return "Unhealthy";
+  return "Hazardous";
 };
 
 const unlockSpeech = () => {
@@ -106,18 +86,23 @@ const Routes = () => {
   const [destination, setDestination] = useState("");
   const [routes, setRoutes] = useState([]);
   const [selectedRoute, setSelectedRoute] = useState(0);
-  const [originCoords, setOriginCoords] = useState(null);
+  const [originCoords, setOriginCoords] = useState({ lat: 28.6139, lon: 77.2090, name: "Delhi" });
   const [destinationCoords, setDestinationCoords] = useState(null);
   const [loading, setLoading] = useState(false);
   const [isNavigating, setIsNavigating] = useState(false);
-  const [transportMode, setTransportMode] = useState("car");
 
   const [isPregnancyMode, setIsPregnancyMode] = useState(false);
   const [preferWellLit, setPreferWellLit] = useState(false);
   const [season, setSeason] = useState("none");
   const [travelMode, setTravelMode] = useState("driving");
+  const [showPreferences, setShowPreferences] = useState(false);
+  const [showEVList, setShowEVList] = useState(false);
+  const [showSegmentsList, setShowSegmentsList] = useState(false);
 
   const [locatingUser, setLocatingUser] = useState(false);
+  const [triggerSearchOnce, setTriggerSearchOnce] = useState(null);
+  const voiceEnabledRef = useRef(true);
+  const lastAlertRef = useRef("");
 
   const handleUseMyLocation = () => {
     if (!("geolocation" in navigator)) {
@@ -129,7 +114,6 @@ const Routes = () => {
       async (pos) => {
         try {
           const { latitude, longitude } = pos.coords;
-          // Reverse geocode to city name using Nominatim
           const res = await axios.get(
             `https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json`,
             { headers: { "User-Agent": "ecosense-app" }, timeout: 8000 }
@@ -158,9 +142,52 @@ const Routes = () => {
     );
   };
 
-  const [triggerSearchOnce, setTriggerSearchOnce] = useState(null);
-  const voiceEnabledRef = useRef(true);
-  const lastAlertRef = useRef("");
+  const handleSwapLocations = () => {
+    const tempOrigin = origin;
+    const tempOriginCoords = originCoords;
+    setOrigin(destination);
+    setOriginCoords(destinationCoords);
+    setDestination(tempOrigin);
+    setDestinationCoords(tempOriginCoords);
+    if (tempOrigin && destination) {
+      setRoutes([]);
+    }
+  };
+
+  /* ─── Auto-Fill & Route when query is "Delhi to Jaipur" ─── */
+  const handleSelectRoutePair = async ({ from, to }) => {
+    toast.info(`🛣️ Routing: ${from} ➔ ${to}`, { autoClose: 2000 });
+    setLoading(true);
+    try {
+      const [fromGeo, toGeo] = await Promise.all([
+        geocodeLocation(from),
+        geocodeLocation(to),
+      ]);
+
+      const finalOriginName = fromGeo?.label || from;
+      const finalDestName = toGeo?.label || to;
+
+      setOrigin(finalOriginName);
+      setOriginCoords({
+        lat: fromGeo?.lat || 28.6139,
+        lon: fromGeo?.lon || 77.2090,
+        name: fromGeo?.name || from,
+      });
+
+      setDestination(finalDestName);
+      setDestinationCoords({
+        lat: toGeo?.lat || 26.9124,
+        lon: toGeo?.lon || 75.7873,
+        name: toGeo?.name || to,
+      });
+
+      setTriggerSearchOnce(finalDestName);
+    } catch (err) {
+      console.error("Failed to parse route pair:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
     if (triggerSearchOnce && destination === triggerSearchOnce) {
@@ -185,7 +212,10 @@ const Routes = () => {
     const level = high.aqi >= 200 ? "SEVERE" : "HIGH";
     if (lastAlertRef.current === level) return;
     lastAlertRef.current = level;
-    const message = level === "SEVERE" ? "Severe pollution ahead. Close windows." : "High pollution detected ahead. Wear a mask.";
+    const message =
+      level === "SEVERE"
+        ? "Severe pollution ahead. Close windows."
+        : "High pollution detected ahead. Wear a mask.";
     toast.warn(message, { position: "top-center", autoClose: 5000 });
     if (voiceEnabledRef.current) speak(message);
   }, [routes, selectedRoute]);
@@ -193,7 +223,7 @@ const Routes = () => {
   const handleSearch = async () => {
     unlockSpeech();
     if (!origin || !destination) {
-      toast.error("Please enter both an origin and destination.");
+      toast.error("Please enter both a starting location and destination.");
       return;
     }
     setRoutes([]);
@@ -201,7 +231,6 @@ const Routes = () => {
     setLoading(true);
     try {
       const prefs = { isPregnancyMode, preferWellLit, season, travelMode };
-      // Use the plain city name (not "City, State" label) for geocoding
       const originCity = originCoords?.name || origin.split(",")[0].trim();
       const destinationCity = destinationCoords?.name || destination.split(",")[0].trim();
       const cached = getCachedRoute(originCity, destinationCity, prefs);
@@ -217,7 +246,7 @@ const Routes = () => {
         originCity,
         destinationCity,
         preferences: prefs,
-        ...(originCoords?.fromGPS && { originCoords })
+        ...(originCoords?.fromGPS && { originCoords }),
       });
       if (fastRes.data.success) {
         setRoutes(fastRes.data.routes);
@@ -229,7 +258,7 @@ const Routes = () => {
         originCity,
         destinationCity,
         preferences: prefs,
-        ...(originCoords?.fromGPS && { originCoords })
+        ...(originCoords?.fromGPS && { originCoords }),
       });
       if (eliteRes.data.success) {
         setCachedRoute(originCity, destinationCity, eliteRes.data, prefs);
@@ -245,156 +274,348 @@ const Routes = () => {
     }
   };
 
+  const handleStartNavigation = () => {
+    if (isNavigating) {
+      setIsNavigating(false);
+      return;
+    }
+
+    if (!originCoords || !destinationCoords) {
+      toast.error("Please search for a route first.");
+      return;
+    }
+
+    const ua = navigator.userAgent || "";
+    const isAndroid = /android/i.test(ua);
+    const isIOS = /iphone|ipad|ipod/i.test(ua);
+    const isMobile = isAndroid || isIOS;
+
+    const destLat = destinationCoords.lat;
+    const destLon = destinationCoords.lon;
+    const origLat = originCoords.lat;
+    const origLon = originCoords.lon;
+
+    let gmTravelMode = "driving";
+    if (travelMode === "cycling" || travelMode === "bike") gmTravelMode = "bicycling";
+    else if (travelMode === "foot") gmTravelMode = "walking";
+    else if (travelMode === "bus") gmTravelMode = "transit";
+
+    if (isMobile) {
+      const webFallbackUrl =
+        `https://www.google.com/maps/dir/?api=1` +
+        `&origin=${encodeURIComponent(`${origLat},${origLon}`)}` +
+        `&destination=${encodeURIComponent(`${destLat},${destLon}`)}` +
+        `&travelmode=${gmTravelMode}`;
+
+      if (isAndroid) {
+        let androidMode = "d";
+        if (travelMode === "cycling" || travelMode === "bike") androidMode = "b";
+        else if (travelMode === "foot") androidMode = "w";
+        else if (travelMode === "bus") androidMode = "r";
+
+        const intentUrl =
+          `intent://maps.google.com/maps?saddr=${origLat},${origLon}` +
+          `&daddr=${destLat},${destLon}` +
+          `&directionsmode=${gmTravelMode}` +
+          `#Intent;scheme=https;package=com.google.android.apps.maps;` +
+          `S.browser_fallback_url=${encodeURIComponent(webFallbackUrl)};end`;
+
+        const navIntent = `google.navigation:q=${destLat},${destLon}&mode=${androidMode}`;
+        let appLaunched = false;
+        const onHide = () => {
+          appLaunched = true;
+        };
+        document.addEventListener("visibilitychange", onHide, { once: true });
+
+        const a = document.createElement("a");
+        a.href = navIntent;
+        a.style.display = "none";
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+
+        setTimeout(() => {
+          document.removeEventListener("visibilitychange", onHide);
+          if (!appLaunched) {
+            const w = window.open(intentUrl, "_blank", "noopener,noreferrer");
+            if (!w) window.location.href = webFallbackUrl;
+          }
+        }, 1500);
+      } else {
+        const iosNavUrl =
+          `comgooglemaps://?saddr=${origLat},${origLon}` +
+          `&daddr=${destLat},${destLon}` +
+          `&directionsmode=${
+            gmTravelMode === "bicycling"
+              ? "bicycling"
+              : gmTravelMode === "walking"
+              ? "walking"
+              : gmTravelMode === "transit"
+              ? "transit"
+              : "driving"
+          }`;
+
+        let appLaunched = false;
+        const onHide = () => {
+          appLaunched = true;
+        };
+        document.addEventListener("visibilitychange", onHide, { once: true });
+        window.location.href = iosNavUrl;
+
+        setTimeout(() => {
+          document.removeEventListener("visibilitychange", onHide);
+          if (!appLaunched) {
+            const w = window.open(webFallbackUrl, "_blank", "noopener,noreferrer");
+            if (!w) window.location.href = webFallbackUrl;
+          }
+        }, 1500);
+      }
+
+      setIsNavigating(true);
+    } else {
+      const activeRoute = routes.find((r) => r.id === selectedRoute) || routes[0];
+      setIsNavigating(true);
+      navigate("/navigation", {
+        state: {
+          route: activeRoute,
+          origin: origin,
+          destination: destination,
+          originCoords: originCoords,
+          destinationCoords: destinationCoords,
+          travelMode: travelMode,
+        },
+      });
+    }
+  };
+
+  const activeRoute = routes.find((r) => r.id === selectedRoute) || routes[0];
+
   return (
-    <div className="min-h-screen bg-[#f0faf5] pb-24">
+    <div className="h-screen w-screen overflow-hidden bg-[#f0faf5] flex flex-col pt-20">
       <Navbar />
 
-      <main className="container mx-auto px-6 pt-32 pb-12">
-        {/* HERO SECTION */}
-        <div className="text-center mb-16 relative overflow-hidden">
-          <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[300px] bg-emerald-100/30 blur-[120px] rounded-full -z-10"></div>
-          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-emerald-500/10 border border-emerald-500/20 mb-6">
-            <Sparkles className="w-4 h-4 text-emerald-600" />
-            <span className="text-sm font-semibold text-emerald-600 tracking-wide uppercase">AI Optimized Nav</span>
-          </div>
-          <h1 className="text-4xl md:text-5xl font-extrabold text-gray-900 tracking-tight leading-none mb-6">
-            Smart Path, <span className="text-emerald-500">Pure Air.</span>
-          </h1>
-          <p className="text-gray-500 text-base font-medium max-w-xl mx-auto leading-relaxed">
-            Personalized routes that prioritize your respiratory health by avoiding high-AQI zones in real-time.
-          </p>
-        </div>
+      {/* TWO-COLUMN GOOGLE MAPS-STYLE ROUTE INTERFACE */}
+      <div className="flex-1 flex flex-col lg:flex-row w-full h-[calc(100vh-5rem)] overflow-hidden">
+        
+        {/* ─── 1. LEFT SIDEBAR (APPROX 30% DESKTOP, 35% TABLET, 100% MOBILE) ─── */}
+        <aside className="w-full lg:w-[32%] xl:w-[28%] h-full flex flex-col bg-white border-r border-emerald-100 shadow-xl z-20 overflow-y-auto shrink-0">
+          <div className="p-4 sm:p-5 space-y-4">
+            
+            {/* Sidebar Branding & Status */}
+            <div className="flex items-center justify-between pb-2 border-b border-gray-100">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center">
+                  <Sparkles className="w-4 h-4 text-emerald-600" />
+                </div>
+                <div>
+                  <h2 className="text-sm font-black text-gray-900 leading-tight">EcoSense Directions</h2>
+                  <p className="text-[10px] text-gray-400 font-bold">AI Clean-Air Route Planner</p>
+                </div>
+              </div>
+              {routes.length > 0 && (
+                <span className="px-2.5 py-1 bg-emerald-50 border border-emerald-200 rounded-full text-[10px] font-black text-emerald-700 uppercase tracking-wider">
+                  {routes.length} Paths Ready
+                </span>
+              )}
+            </div>
 
-        <div className="grid lg:grid-cols-12 gap-8 items-start">
-          {/* SEARCH & MAP COLUMN */}
-          <div className="lg:col-span-8 space-y-8">
-            {/* Search Input Card */}
-            <Card className="border-none bg-white rounded-[2rem] shadow-lg shadow-emerald-900/5 p-6 md:p-8">
-              <div className="flex flex-col md:flex-row gap-4">
-                {/* ── ORIGIN ── */}
+            {/* ─── 2. SOURCE & DESTINATION STACKED INPUTS ─── */}
+            <div className="relative bg-gray-50/90 rounded-2xl p-3.5 border border-gray-200/70 shadow-sm space-y-2">
+              
+              {/* Origin / Starting Location */}
+              <div className="relative">
+                <div className="flex items-center gap-1 mb-1">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" />
+                  <span className="text-[10px] font-black text-gray-500 uppercase tracking-wider">From (Starting Point)</span>
+                </div>
                 <LocationAutocomplete
                   value={origin}
-                  onChange={(v) => { setOrigin(v); if (!v) setOriginCoords(null); }}
+                  onChange={(v) => {
+                    setOrigin(v);
+                    if (!v) setOriginCoords(null);
+                  }}
                   onSelect={(s) => {
-                    if (!s) { setOriginCoords(null); return; }
+                    if (!s) {
+                      setOriginCoords(null);
+                      return;
+                    }
                     setOrigin(s.label);
                     setOriginCoords({ lat: s.lat, lon: s.lon, name: s.name, fromGPS: false });
                   }}
-                  placeholder="Origin city..."
-                  iconBg="bg-emerald-50 border-emerald-100"
-                  iconColor="text-emerald-500"
+                  onRouteQuerySelect={handleSelectRoutePair}
+                  placeholder="Starting location or 'Delhi to Jaipur'..."
+                  iconBg="bg-emerald-100 border-emerald-200 text-emerald-600"
+                  icon={<MapPin className="w-4 h-4 text-emerald-600" />}
                   extraDropdownTop={
                     <button
                       type="button"
                       onMouseDown={(e) => e.preventDefault()}
                       onClick={() => handleUseMyLocation()}
-                      className="w-full flex items-center gap-3 px-4 py-3.5 hover:bg-sky-50 transition-colors border-b border-gray-50 group"
+                      className="w-full flex items-center gap-3 px-4 py-3 hover:bg-emerald-50 transition-colors border-b border-gray-100 group text-left"
                     >
-                      <div className="w-10 h-10 rounded-full bg-sky-100 flex items-center justify-center shrink-0 group-hover:bg-sky-200 transition-colors">
-                        {locatingUser
-                          ? <Loader2 className="w-5 h-5 text-sky-600 animate-spin" />
-                          : <Navigation className="w-5 h-5 text-sky-600" />}
+                      <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center shrink-0 group-hover:bg-emerald-200 transition-colors">
+                        {locatingUser ? (
+                          <Loader2 className="w-4 h-4 text-emerald-600 animate-spin" />
+                        ) : (
+                          <Navigation className="w-4 h-4 text-emerald-600" />
+                        )}
                       </div>
-                      <span className="text-sm font-black text-gray-800">
-                        {locatingUser ? "Detecting your location…" : "Your location"}
-                      </span>
+                      <div>
+                        <span className="text-xs font-black text-gray-800 block">
+                          {locatingUser ? "Detecting location…" : "Your current location"}
+                        </span>
+                        <span className="text-[10px] text-gray-400 font-medium">Use GPS position</span>
+                      </div>
                     </button>
                   }
                 />
+              </div>
 
-                {/* ── DESTINATION ── */}
+              {/* Swap Locations Button */}
+              <div className="flex justify-end -my-1 pr-3 z-10">
+                <button
+                  type="button"
+                  onClick={handleSwapLocations}
+                  title="Swap starting location and destination"
+                  className="w-7 h-7 rounded-full bg-white border border-gray-200 hover:border-emerald-400 text-gray-500 hover:text-emerald-600 flex items-center justify-center shadow-sm hover:shadow transition-all duration-200 hover:rotate-180 active:scale-95"
+                >
+                  <ArrowUpDown className="w-3.5 h-3.5" />
+                </button>
+              </div>
+
+              {/* Destination */}
+              <div className="relative">
+                <div className="flex items-center gap-1 mb-1">
+                  <span className="w-2 h-2 rounded-full bg-red-500 inline-block" />
+                  <span className="text-[10px] font-black text-gray-500 uppercase tracking-wider">To (Destination)</span>
+                </div>
                 <LocationAutocomplete
                   value={destination}
-                  onChange={(v) => { setDestination(v); if (!v) setDestinationCoords(null); }}
+                  onChange={(v) => {
+                    setDestination(v);
+                    if (!v) setDestinationCoords(null);
+                  }}
                   onSelect={(s) => {
-                    if (!s) { setDestinationCoords(null); return; }
+                    if (!s) {
+                      setDestinationCoords(null);
+                      return;
+                    }
                     setDestination(s.label);
                     setDestinationCoords({ lat: s.lat, lon: s.lon, name: s.name });
                   }}
-                  placeholder="Destination city..."
-                  iconBg="bg-red-50 border-red-100"
-                  iconColor="text-red-500"
+                  onRouteQuerySelect={handleSelectRoutePair}
+                  placeholder="Destination or 'Delhi to Jaipur'..."
+                  iconBg="bg-red-100 border-red-200 text-red-600"
                   icon={<Navigation className="w-4 h-4 text-red-500" />}
                 />
-                <Button
-                  onClick={handleSearch}
-                  disabled={loading}
-                  className="h-14 px-8 bg-emerald-500 hover:bg-emerald-600 text-white font-bold rounded-2xl shadow-lg shadow-emerald-200 text-base active:scale-95 transition-all flex items-center gap-2"
-                >
-                  {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : (
-                    <>
-                      <Search className="w-5 h-5" /> Find Routes
-                    </>
-                  )}
-                </Button>
               </div>
+            </div>
 
-              {/* Travel Mode Selector */}
-              <div className="mt-5 pt-5 border-t border-gray-100">
-                <span className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-3">Travel Mode</span>
-                <div className="flex gap-2 flex-wrap">
-                  {[
-                    { id: "driving",  emoji: "🚗", label: "Car"     },
-                    { id: "cycling",  emoji: "🚲", label: "Bicycle" },
-                    { id: "foot",     emoji: "🚶", label: "Walk"    },
-                    { id: "bike",     emoji: "🛵", label: "Bike"    },
-                    { id: "bus",      emoji: "🚌", label: "Bus"     },
-                  ].map((mode) => (
+            {/* Quick Popular Routes (1-Click Auto-Fill) */}
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
+              <span className="text-[9px] font-black text-gray-400 uppercase shrink-0">Popular:</span>
+              {[
+                { from: "Delhi", to: "Jaipur", label: "Delhi ➔ Jaipur" },
+                { from: "Mumbai", to: "Pune", label: "Mumbai ➔ Pune" },
+                { from: "Bengaluru", to: "Mysuru", label: "BLR ➔ Mysuru" },
+                { from: "Delhi", to: "Agra", label: "Delhi ➔ Agra" },
+              ].map((pair, idx) => (
+                <button
+                  key={idx}
+                  type="button"
+                  onClick={() => handleSelectRoutePair(pair)}
+                  className="px-2.5 py-1 bg-white hover:bg-emerald-50 border border-gray-200/80 hover:border-emerald-300 rounded-full text-[10px] font-bold text-gray-700 hover:text-emerald-700 transition-all shrink-0 shadow-xs"
+                >
+                  {pair.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Travel Mode Selector */}
+            <div className="space-y-1.5">
+              <span className="block text-[10px] font-black text-gray-400 uppercase tracking-widest">Travel Mode</span>
+              <div className="flex items-center justify-between gap-1 p-1 bg-gray-100/80 rounded-2xl border border-gray-200/50">
+                {TRANSPORT_MODES.map((mode) => {
+                  const isActive = travelMode === mode.id;
+                  return (
                     <button
                       key={mode.id}
                       type="button"
-                      onClick={() => { setTravelMode(mode.id); setRoutes([]); }}
-                      className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl border text-xs font-black transition-all duration-200 ${
-                        travelMode === mode.id
-                          ? "bg-emerald-500 text-white border-emerald-500 shadow-lg shadow-emerald-200"
-                          : "bg-gray-50 text-gray-600 border-gray-100 hover:border-emerald-200 hover:bg-emerald-50/50"
+                      onClick={() => {
+                        setTravelMode(mode.id);
+                        setRoutes([]);
+                      }}
+                      className={`flex-1 flex flex-col items-center justify-center py-2 px-1 rounded-xl text-xs font-black transition-all duration-200 ${
+                        isActive
+                          ? "bg-white text-emerald-600 shadow-sm border border-emerald-200/70 scale-[1.02]"
+                          : "text-gray-500 hover:text-gray-800 hover:bg-white/50"
                       }`}
                     >
-                      <span className="text-base leading-none">{mode.emoji}</span>
-                      {mode.label}
+                      <span className="text-base leading-none mb-0.5">{mode.emoji}</span>
+                      <span className="text-[9px] uppercase tracking-wider font-extrabold">{mode.label}</span>
                     </button>
-                  ))}
-                </div>
+                  );
+                })}
               </div>
+            </div>
 
-              {/* Preferences Selection */}
-              <div className="mt-6 pt-6 border-t border-gray-100 grid grid-cols-1 sm:grid-cols-3 gap-4">
-                {/* Pregnancy / Elderly Switch */}
-                <label className="flex items-center gap-3 cursor-pointer p-3 bg-gray-50 hover:bg-emerald-50/50 rounded-2xl border border-gray-100 transition-colors">
-                  <input
-                    type="checkbox"
-                    checked={isPregnancyMode}
-                    onChange={(e) => setIsPregnancyMode(e.target.checked)}
-                    className="w-5 h-5 rounded-lg text-emerald-500 border-gray-300 focus:ring-emerald-400 accent-emerald-500"
-                  />
-                  <div>
-                    <span className="block text-xs font-black text-gray-800">Pregnancy & Elder Mode</span>
-                    <span className="block text-[10px] text-gray-400 font-bold">Pothole-free & smooth ride</span>
-                  </div>
-                </label>
+            {/* Collapsible Route Preferences */}
+            <div className="border border-gray-200/70 rounded-2xl overflow-hidden bg-white shadow-sm">
+              <button
+                type="button"
+                onClick={() => setShowPreferences((v) => !v)}
+                className="w-full flex items-center justify-between px-3.5 py-2.5 bg-gray-50/80 hover:bg-gray-100/60 text-left transition-colors"
+              >
+                <div className="flex items-center gap-2">
+                  <SlidersHorizontal className="w-3.5 h-3.5 text-emerald-600" />
+                  <span className="text-[11px] font-black text-gray-700 uppercase tracking-wider">Route Preferences</span>
+                  {(isPregnancyMode || preferWellLit || season !== "none") && (
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                  )}
+                </div>
+                {showPreferences ? (
+                  <ChevronUp className="w-4 h-4 text-gray-400" />
+                ) : (
+                  <ChevronDown className="w-4 h-4 text-gray-400" />
+                )}
+              </button>
 
-                {/* Well-Lit Switch */}
-                <label className="flex items-center gap-3 cursor-pointer p-3 bg-gray-50 hover:bg-emerald-50/50 rounded-2xl border border-gray-100 transition-colors">
-                  <input
-                    type="checkbox"
-                    checked={preferWellLit}
-                    onChange={(e) => setPreferWellLit(e.target.checked)}
-                    className="w-5 h-5 rounded-lg text-emerald-500 border-gray-300 focus:ring-emerald-400 accent-emerald-500"
-                  />
-                  <div>
-                    <span className="block text-xs font-black text-gray-800">Well-Lit Roads</span>
-                    <span className="block text-[10px] text-gray-400 font-bold">Prioritize street lights</span>
-                  </div>
-                </label>
+              {showPreferences && (
+                <div className="p-3 space-y-2 bg-white border-t border-gray-100 animate-in fade-in duration-200">
+                  <label className="flex items-center gap-2.5 cursor-pointer p-2 rounded-xl hover:bg-emerald-50/50 transition-colors">
+                    <input
+                      type="checkbox"
+                      checked={isPregnancyMode}
+                      onChange={(e) => setIsPregnancyMode(e.target.checked)}
+                      className="w-4 h-4 rounded text-emerald-500 border-gray-300 focus:ring-emerald-400 accent-emerald-500"
+                    />
+                    <div className="text-left">
+                      <span className="block text-xs font-black text-gray-800">Pregnancy & Elder Mode</span>
+                      <span className="block text-[10px] text-gray-400">Pothole-free & smooth ride</span>
+                    </div>
+                  </label>
 
-                {/* Seasonal Dropdown */}
-                <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-2xl border border-gray-100">
-                  <div className="flex-1">
-                    <span className="block text-xs font-black text-gray-800">Seasonal Conditions</span>
+                  <label className="flex items-center gap-2.5 cursor-pointer p-2 rounded-xl hover:bg-emerald-50/50 transition-colors">
+                    <input
+                      type="checkbox"
+                      checked={preferWellLit}
+                      onChange={(e) => setPreferWellLit(e.target.checked)}
+                      className="w-4 h-4 rounded text-emerald-500 border-gray-300 focus:ring-emerald-400 accent-emerald-500"
+                    />
+                    <div className="text-left">
+                      <span className="block text-xs font-black text-gray-800">Well-Lit Roads</span>
+                      <span className="block text-[10px] text-gray-400">Prioritize street lights</span>
+                    </div>
+                  </label>
+
+                  <div className="p-2 bg-gray-50 rounded-xl">
+                    <span className="block text-[10px] font-black text-gray-600 uppercase tracking-wider mb-1">
+                      Seasonal Conditions
+                    </span>
                     <select
                       value={season}
                       onChange={(e) => setSeason(e.target.value)}
-                      className="mt-1 w-full bg-transparent text-[10px] font-bold text-gray-500 border-none p-0 focus:ring-0 cursor-pointer outline-none"
+                      className="w-full bg-white text-xs font-bold text-gray-700 border border-gray-200 rounded-lg px-2.5 py-1.5 focus:border-emerald-400 focus:outline-none cursor-pointer"
                     >
                       <option value="none">Standard Routing</option>
                       <option value="winter">Winter (Smog-Avoidance)</option>
@@ -402,329 +623,327 @@ const Routes = () => {
                     </select>
                   </div>
                 </div>
-              </div>
-            </Card>
-
-            {/* Map Viewer Card */}
-            <Card className="border-none bg-white rounded-[2rem] shadow-xl shadow-emerald-900/10 overflow-hidden relative">
-              <CardContent className={`p-0 relative overflow-hidden transition-all duration-500 ${isNavigating ? 'h-[80vh] md:h-[720px]' : 'h-[60vh] md:h-[600px]'}`}>
-                <RouteMap
-                  routes={routes}
-                  selectedRouteId={selectedRoute}
-                  origin={originCoords}
-                  destination={destinationCoords}
-                  onSelectRoute={setSelectedRoute}
-                  isNavigating={isNavigating}
-                  onExitNav={() => setIsNavigating(false)}
-                  transportMode={transportMode}
-                  onSelectDestination={(destName) => {
-                    setDestination(destName);
-                    setTriggerSearchOnce(destName);
-                  }}
-                />
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* SUGGESTED ROUTES COLUMN */}
-          <div className="lg:col-span-4 space-y-6">
-            <div className="flex items-center justify-between mb-2">
-                <h2 className="text-2xl font-black text-gray-900 tracking-tight flex items-center gap-2">
-                    <Zap className="w-6 h-6 text-emerald-500" />
-                    Routes
-                </h2>
-                {routes.length > 0 && <span className="px-3 py-1 bg-white border border-emerald-100 rounded-full text-[10px] font-black text-emerald-600 uppercase italic">Smart Choice Ready</span>}
+              )}
             </div>
 
-            {loading && routes.length === 0 ? (
-                [1,2,3].map(i => (
-                    <Card key={i} className="bg-white/50 border-none rounded-3xl h-24 animate-pulse mb-4"></Card>
-                ))
-            ) : routes.length > 0 ? (
-                <div className="space-y-4">
-                    {routes.map((route) => (
+            {/* ─── 3. FIND ROUTES BUTTON ─── */}
+            <Button
+              onClick={handleSearch}
+              disabled={loading}
+              className="w-full h-12 bg-emerald-500 hover:bg-emerald-600 text-white font-bold rounded-2xl shadow-lg shadow-emerald-500/25 text-sm active:scale-[0.98] transition-all flex items-center justify-center gap-2"
+            >
+              {loading ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>Calculating Clean Routes...</span>
+                </>
+              ) : (
+                <>
+                  <Search className="w-4 h-4" />
+                  <span>Find Routes</span>
+                </>
+              )}
+            </Button>
+
+            {/* ─── 4. ROUTE INFORMATION CARD & RESULTS (IN LEFT SIDEBAR) ─── */}
+            <div className="pt-2 border-t border-gray-100 space-y-3">
+              {loading && routes.length === 0 ? (
+                <div className="space-y-3">
+                  {[1, 2].map((i) => (
+                    <div key={i} className="bg-gray-100/70 border border-gray-200 rounded-2xl p-4 h-28 animate-pulse" />
+                  ))}
+                </div>
+              ) : routes.length > 0 ? (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
+                      Suggested Routes
+                    </span>
+                    <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-100">
+                      {routes.length} Available
+                    </span>
+                  </div>
+
+                  {routes.map((route) => {
+                    const isSelected = selectedRoute === route.id;
+                    return (
                       <Card
                         key={route.id}
                         onClick={() => setSelectedRoute(route.id)}
-                        className={`cursor-pointer transition-all duration-500 border-2 rounded-[1.5rem] p-6 relative overflow-hidden ${
-                          selectedRoute === route.id
-                            ? "border-emerald-500 bg-white shadow-2xl shadow-emerald-900/10 -translate-y-1"
-                            : "border-transparent bg-white/60 hover:border-emerald-100 hover:bg-white"
+                        className={`cursor-pointer transition-all duration-300 border-2 rounded-2xl p-4 relative overflow-hidden ${
+                          isSelected
+                            ? "border-emerald-500 bg-white shadow-lg shadow-emerald-900/10"
+                            : "border-gray-100 bg-gray-50/70 hover:border-emerald-200 hover:bg-white"
                         }`}
                       >
-                         {selectedRoute === route.id && <div className="absolute top-0 right-0 p-4"><div className="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></div></div>}
-                        <CardContent className="p-0">
-                          <div className="flex justify-between items-start mb-4">
-                            <div>
-                                <h3 className={`text-lg font-extrabold tracking-tighter leading-none ${selectedRoute === route.id ? 'text-emerald-600' : 'text-gray-800'}`}>
-                                    {route.name}
-                                </h3>
-                                <div className="flex gap-2 mt-2">
-                                    {route.avgAQI < 60 && <span className="bg-emerald-50 text-emerald-600 text-[9px] px-2 py-0.5 rounded-lg border border-emerald-100 uppercase font-black tracking-widest">Elite Air</span>}
-                                    {route.name.includes("Swift") && <span className="bg-orange-50 text-orange-600 text-[9px] px-2 py-0.5 rounded-lg border border-orange-100 uppercase font-black tracking-widest">Nitro</span>}
-                                    {route.evStations?.length > 0 && <span className="bg-blue-50 text-blue-600 text-[9px] px-2 py-0.5 rounded-lg border border-blue-100 uppercase font-black tracking-widest">🔋 {route.evStations.length} EV Stations</span>}
-                                </div>
+                        {isSelected && (
+                          <div className="absolute top-2 right-2 flex items-center gap-1 bg-emerald-50 text-emerald-600 px-2 py-0.5 rounded-full border border-emerald-200 text-[9px] font-black uppercase">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping" />
+                            Selected
+                          </div>
+                        )}
+
+                        <CardContent className="p-0 space-y-3">
+                          {/* Route Name & Badges */}
+                          <div className="pr-16">
+                            <h3 className={`text-base font-extrabold leading-tight ${isSelected ? "text-emerald-700" : "text-gray-800"}`}>
+                              {route.name}
+                            </h3>
+                            <div className="flex flex-wrap gap-1.5 mt-1.5">
+                              {route.avgAQI < 60 && (
+                                <span className="bg-emerald-50 text-emerald-700 text-[9px] px-2 py-0.5 rounded-md border border-emerald-200 uppercase font-black tracking-wider">
+                                  🌿 Elite Air
+                                </span>
+                              )}
+                              {route.name?.includes("Swift") && (
+                                <span className="bg-orange-50 text-orange-700 text-[9px] px-2 py-0.5 rounded-md border border-orange-200 uppercase font-black tracking-wider">
+                                  ⚡ Swift
+                                </span>
+                              )}
+                              {route.evStations?.length > 0 && (
+                                <span className="bg-blue-50 text-blue-700 text-[9px] px-2 py-0.5 rounded-md border border-blue-200 uppercase font-black tracking-wider">
+                                  🔋 {route.evStations.length} EV
+                                </span>
+                              )}
                             </div>
-                            <AQIBadge value={route.avgAQI} size="lg" />
                           </div>
 
-                          <div className="flex gap-4 text-gray-500 text-sm font-bold bg-gray-50/50 p-4 rounded-2xl border border-gray-100/50 mb-6">
-                            <span className="flex items-center gap-2">
-                              <Clock className="w-5 h-5 text-orange-400" />
-                              {route.duration}
-                            </span>
-                            <div className="w-px h-5 bg-gray-200"></div>
-                            <span className="flex items-center gap-2">
-                              <RouteIcon className="w-5 h-5 text-emerald-400" />
-                              {route.distance}
-                            </span>
+                          {/* Metrics Bar */}
+                          <div className="flex items-center justify-between gap-2 bg-gray-50/90 p-3 rounded-xl border border-gray-100">
+                            <div className="flex items-center gap-3 text-xs font-bold text-gray-700">
+                              <span className="flex items-center gap-1.5">
+                                <Clock className="w-4 h-4 text-orange-500" />
+                                {route.duration}
+                              </span>
+                              <div className="w-px h-4 bg-gray-200" />
+                              <span className="flex items-center gap-1.5">
+                                <RouteIcon className="w-4 h-4 text-emerald-500" />
+                                {route.distance}
+                              </span>
+                            </div>
+                            <div className="text-right">
+                              <AQIBadge value={route.avgAQI} size="sm" />
+                            </div>
                           </div>
 
-                          {/* Human Health Insight */}
-                          {selectedRoute === route.id && (
-                             <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-500">
-                                <div className="h-1.5 w-full bg-gray-100 rounded-full overflow-hidden flex gap-0.5">
-                                    {route.pollutionSegments?.slice(0, 10).map((s, i) => (
-                                        <div key={i} className="h-full flex-1" style={{ backgroundColor: getAQIColor(s.aqi), opacity: s.aqi ? 1 : 0.1 }}></div>
-                                    ))}
+                          {/* Selected Route Detailed Summary */}
+                          {isSelected && (
+                            <div className="space-y-3 pt-2 border-t border-gray-100 animate-in fade-in duration-300">
+                              
+                              {/* Pollution Gradient Progress */}
+                              <div className="space-y-1">
+                                <div className="flex justify-between text-[9px] font-black text-gray-400 uppercase tracking-wider">
+                                  <span>Route Pollution Profile</span>
+                                  <span>Avg AQI: {route.avgAQI}</span>
                                 </div>
-                                <div className="p-5 bg-emerald-50 border border-emerald-100 rounded-[1.2rem]">
-                                    <p className="text-gray-900 font-black text-sm mb-1 uppercase tracking-tight flex items-center gap-2">
-                                        <Leaf className="w-4 h-4 text-emerald-500" /> Wellness Intel
-                                    </p>
-                                    <p className="text-gray-600 font-medium text-xs leading-relaxed italic mb-2">"{route.healthAdvice}"</p>
-                                    {route.travelTip && (
-                                      <p className="text-emerald-800 font-bold text-[10px] uppercase tracking-wider mt-2">
-                                        💡 {route.travelTip}
-                                      </p>
+                                <div className="h-2 w-full bg-gray-100 rounded-full overflow-hidden flex gap-0.5">
+                                  {route.pollutionSegments?.slice(0, 15).map((s, i) => (
+                                    <div
+                                      key={i}
+                                      className="h-full flex-1"
+                                      style={{
+                                        backgroundColor: getAQIColor(s.aqi),
+                                        opacity: s.aqi ? 1 : 0.2,
+                                      }}
+                                    />
+                                  ))}
+                                </div>
+                              </div>
+
+                              {/* Wellness Intel */}
+                              <div className="p-3.5 bg-emerald-50/80 border border-emerald-100 rounded-xl space-y-1.5">
+                                <p className="text-emerald-900 font-black text-xs uppercase tracking-tight flex items-center gap-1.5">
+                                  <Leaf className="w-3.5 h-3.5 text-emerald-600" /> Wellness Intel
+                                </p>
+                                <p className="text-gray-600 font-medium text-xs leading-relaxed italic">
+                                  "{route.healthAdvice}"
+                                </p>
+                                {route.travelTip && (
+                                  <p className="text-emerald-800 font-bold text-[10px] uppercase tracking-wider pt-1 border-t border-emerald-100/60">
+                                    💡 {route.travelTip}
+                                  </p>
+                                )}
+                              </div>
+
+                              {/* Route Insights Accordion */}
+                              <RouteInsights
+                                route={route}
+                                originCoords={originCoords}
+                                destinationCoords={destinationCoords}
+                              />
+
+                              {/* EV Stations Summary (Collapsible if present) */}
+                              {route.evStations?.length > 0 && (
+                                <div className="border border-blue-100 rounded-xl overflow-hidden bg-blue-50/30">
+                                  <button
+                                    type="button"
+                                    onClick={() => setShowEVList((v) => !v)}
+                                    className="w-full flex items-center justify-between px-3 py-2 text-left hover:bg-blue-50 transition-colors"
+                                  >
+                                    <div className="flex items-center gap-2">
+                                      <BatteryCharging className="w-3.5 h-3.5 text-blue-600" />
+                                      <span className="text-xs font-black text-blue-900">
+                                        EV Stations ({route.evStations.length})
+                                      </span>
+                                    </div>
+                                    {showEVList ? (
+                                      <ChevronUp className="w-3.5 h-3.5 text-blue-400" />
+                                    ) : (
+                                      <ChevronDown className="w-3.5 h-3.5 text-blue-400" />
                                     )}
-                                </div>
+                                  </button>
 
-                                {/* ── Route Insights (expandable) ── */}
-                                <RouteInsights
-                                  route={route}
-                                  originCoords={originCoords}
-                                  destinationCoords={destinationCoords}
-                                />
-                             </div>
+                                  {showEVList && (
+                                    <div className="p-2.5 space-y-2 bg-white border-t border-blue-100 text-xs">
+                                      {route.evStations.map((ev) => (
+                                        <div key={ev.id} className="p-2 bg-gray-50 rounded-lg border border-gray-100">
+                                          <p className="font-bold text-gray-800 truncate">{ev.name}</p>
+                                          <p className="text-[10px] text-gray-500">Operator: {ev.operator}</p>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+
+                              {/* Pollution Segments Breakdown (Collapsible) */}
+                              {route.pollutionSegments?.length > 0 && (
+                                <div className="border border-gray-200 rounded-xl overflow-hidden bg-gray-50/50">
+                                  <button
+                                    type="button"
+                                    onClick={() => setShowSegmentsList((v) => !v)}
+                                    className="w-full flex items-center justify-between px-3 py-2 text-left hover:bg-gray-100/60 transition-colors"
+                                  >
+                                    <div className="flex items-center gap-2">
+                                      <Info className="w-3.5 h-3.5 text-gray-600" />
+                                      <span className="text-xs font-black text-gray-800">
+                                        Segment Checkpoints ({route.pollutionSegments.length})
+                                      </span>
+                                    </div>
+                                    {showSegmentsList ? (
+                                      <ChevronUp className="w-3.5 h-3.5 text-gray-400" />
+                                    ) : (
+                                      <ChevronDown className="w-3.5 h-3.5 text-gray-400" />
+                                    )}
+                                  </button>
+
+                                  {showSegmentsList && (
+                                    <div className="p-2 space-y-1.5 bg-white border-t border-gray-100 max-h-48 overflow-y-auto">
+                                      {route.pollutionSegments.map((seg, idx) => (
+                                        <div
+                                          key={idx}
+                                          className="flex items-center justify-between p-1.5 rounded-lg bg-gray-50 text-[11px]"
+                                        >
+                                          <span className="font-bold text-gray-700 truncate max-w-[150px]">
+                                            {seg.area || `Checkpoint ${idx + 1}`}
+                                          </span>
+                                          <span
+                                            className="font-black px-2 py-0.5 rounded text-[10px]"
+                                            style={{
+                                              color: getAQIColor(seg.aqi),
+                                              backgroundColor: `${getAQIColor(seg.aqi)}15`,
+                                            }}
+                                          >
+                                            AQI {seg.aqi ?? "N/A"}
+                                          </span>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+
+                              {/* Start Navigation Action in Sidebar */}
+                              <Button
+                                onClick={handleStartNavigation}
+                                className="w-full h-11 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl shadow-md flex items-center justify-center gap-2 text-xs uppercase tracking-wider"
+                              >
+                                <Navigation className="w-4 h-4" />
+                                Start Navigation
+                              </Button>
+                            </div>
                           )}
                         </CardContent>
                       </Card>
-                    ))}
+                    );
+                  })}
                 </div>
-            ) : (
-                <div className="p-12 text-center bg-white/40 border border-emerald-100 rounded-[2.5rem] border-dashed">
-                    <RouteIcon className="w-12 h-12 text-emerald-200 mx-auto mb-4" />
-                    <p className="text-emerald-900 font-black text-lg">Path Not Found</p>
-                    <p className="text-emerald-600/60 text-xs font-medium mt-1">Start your journey by entering a destination city above.</p>
+              ) : (
+                /* Empty / Initial State */
+                <div className="p-6 text-center bg-gray-50/80 border border-emerald-100/80 rounded-2xl border-dashed space-y-2">
+                  <div className="w-10 h-10 rounded-full bg-emerald-100/70 text-emerald-600 flex items-center justify-center mx-auto">
+                    <RouteIcon className="w-5 h-5" />
+                  </div>
+                  <h4 className="text-sm font-black text-gray-800">Plan a Clean Journey</h4>
+                  <p className="text-xs text-gray-500 leading-relaxed">
+                    Enter your starting point and destination above, then click <strong className="text-emerald-700">Find Routes</strong> to compare real-time air quality along each path.
+                  </p>
                 </div>
-            )}
+              )}
+            </div>
+
           </div>
-        </div>
+        </aside>
 
-        {/* EV STATIONS SECTION */}
-        {routes.find((r) => r.id === selectedRoute)?.evStations?.length > 0 && (
-            <div className="mt-16 animate-in fade-in duration-1000">
-                <div className="flex items-center gap-4 mb-10">
-                    <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center border border-blue-100 shadow-sm">
-                        <Zap className="w-6 h-6 text-blue-500" />
-                    </div>
-                    <div>
-                        <h3 className="text-2xl font-extrabold text-gray-900 tracking-tight">Charging Infrastructure</h3>
-                        <p className="text-gray-500 font-medium">Available EV charging stations along your route.</p>
-                    </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {routes.find((r) => r.id === selectedRoute).evStations.map((ev, i) => (
-                        <div key={ev.id} className="p-6 bg-white rounded-[1.5rem] border border-blue-50 shadow-sm hover:shadow-xl transition-all duration-500 relative group overflow-hidden">
-                             <div className="absolute top-0 right-0 w-32 h-32 bg-gray-50/50 rounded-full blur-3xl -z-10 group-hover:bg-blue-50 transition-colors"></div>
-                            <div className="flex items-start justify-between mb-6">
-                                <div className="w-10 h-10 rounded-full bg-blue-50 flex items-center justify-center border border-blue-100">
-                                    <Zap className="w-5 h-5 text-blue-500" />
-                                </div>
-                                <div className="text-right">
-                                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-[.2em] mb-1">Type</p>
-                                    <p className="font-black uppercase text-sm text-blue-500">Fast Charge</p>
-                                </div>
-                            </div>
-                            <h4 className="text-lg font-extrabold text-gray-800 tracking-tight mb-2 truncate">{ev.name}</h4>
-                            <p className="text-xs font-bold text-gray-400 mb-6">{ev.lat?.toFixed(3)}°N, {ev.lon?.toFixed(3)}°E</p>
-                            
-                            <div className="flex items-center gap-4 p-4 bg-gray-50 rounded-2xl">
-                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest leading-tight">Operator<br/>Network</p>
-                                <div className="w-px h-6 bg-gray-200 mx-2"></div>
-                                <p className="text-sm font-extrabold tracking-tighter text-gray-700 uppercase">{ev.operator}</p>
-                            </div>
-                        </div>
-                    ))}
-                </div>
-            </div>
-        )}
-
-        {/* BOTTOM SECTION - AIR QUALITY LOG */}
-        {routes.find((r) => r.id === selectedRoute)?.pollutionSegments?.length > 0 && (
-            <div className="mt-16 animate-in fade-in duration-1000">
-                <div className="flex items-center gap-4 mb-10">
-                    <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center border border-emerald-100 shadow-sm">
-                        <Zap className="w-6 h-6 text-emerald-500" />
-                    </div>
-                    <div>
-                        <h3 className="text-2xl font-extrabold text-gray-900 tracking-tight">Segment Analysis</h3>
-                        <p className="text-gray-500 font-medium">Deep-dive into air quality data across your selected journey.</p>
-                    </div>
-                </div>
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {routes.find((r) => r.id === selectedRoute)?.pollutionSegments.slice(0, 6).map((s, i) => (
-                        <div key={i} className="p-6 bg-white rounded-[1.5rem] border border-emerald-50 shadow-sm hover:shadow-xl transition-all duration-500 relative group overflow-hidden">
-                             <div className="absolute top-0 right-0 w-32 h-32 bg-gray-50/50 rounded-full blur-3xl -z-10 group-hover:bg-emerald-50 transition-colors"></div>
-                            <div className="flex items-start justify-between mb-6">
-                                <div className="w-8 h-8 rounded-lg bg-gray-50 flex items-center justify-center font-black text-gray-300 border border-gray-100">
-                                    {i + 1}
-                                </div>
-                                <div className="text-right">
-                                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-[.2em] mb-1">Status</p>
-                                    <p className={`font-black uppercase text-sm ${s.zone === "High" ? 'text-red-500' : s.zone === "Medium" ? 'text-orange-500' : 'text-emerald-500'}`}>{s.zone || "SAFE"}</p>
-                                </div>
-                            </div>
-                            <h4 className="text-lg font-extrabold text-gray-800 tracking-tight mb-2 truncate uppercase">{s.area || "Checkpoint"}</h4>
-                            <p className="text-xs font-bold text-gray-400 mb-6">{s.lat?.toFixed(3)}°N, {s.lon?.toFixed(3)}°E</p>
-                            
-                            <div className="flex items-center gap-4 p-4 bg-gray-50 rounded-2xl">
-                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest leading-tight">Air Quality<br/>Index</p>
-                                <div className="w-px h-6 bg-gray-200 mx-2"></div>
-                                <p className="text-2xl font-extrabold tracking-tighter" style={{ color: getAQIColor(s.aqi) }}>{s.aqi ?? "N/A"}</p>
-                            </div>
-                        </div>
-                    ))}
-                </div>
-            </div>
-        )}
-      </main>
-
-      {routes.length > 0 && (
-        <div className="fixed bottom-10 right-10 z-[100] animate-bounce-slow">
-          <Button
-            onClick={() => {
-              if (isNavigating) {
-                // Already in nav state — just reset (user navigated back from /navigation)
-                setIsNavigating(false);
-                return;
-              }
-
-              if (!originCoords || !destinationCoords) {
-                toast.error("Please search for a route first.");
-                return;
-              }
-
-              const ua = navigator.userAgent || '';
-              const isAndroid = /android/i.test(ua);
-              const isIOS = /iphone|ipad|ipod/i.test(ua);
-              const isMobile = isAndroid || isIOS;
-
-              const destLat = destinationCoords.lat;
-              const destLon = destinationCoords.lon;
-              const origLat = originCoords.lat;
-              const origLon = originCoords.lon;
-
-              // Map travelMode → Google Maps web param
-              let gmTravelMode = 'driving';
-              if (travelMode === 'cycling' || travelMode === 'bike') gmTravelMode = 'bicycling';
-              else if (travelMode === 'foot') gmTravelMode = 'walking';
-              else if (travelMode === 'bus') gmTravelMode = 'transit';
-
-              if (isMobile) {
-                // ── Mobile: launch Google Maps native app ──────────────
-                const webFallbackUrl =
-                  `https://www.google.com/maps/dir/?api=1` +
-                  `&origin=${encodeURIComponent(`${origLat},${origLon}`)}` +
-                  `&destination=${encodeURIComponent(`${destLat},${destLon}`)}` +
-                  `&travelmode=${gmTravelMode}`;
-
-                if (isAndroid) {
-                  // Android navigation intent mode: d/w/b/r
-                  let androidMode = 'd';
-                  if (travelMode === 'cycling' || travelMode === 'bike') androidMode = 'b';
-                  else if (travelMode === 'foot') androidMode = 'w';
-                  else if (travelMode === 'bus') androidMode = 'r';
-
-                  const intentUrl =
-                    `intent://maps.google.com/maps?saddr=${origLat},${origLon}` +
-                    `&daddr=${destLat},${destLon}` +
-                    `&directionsmode=${gmTravelMode}` +
-                    `#Intent;scheme=https;package=com.google.android.apps.maps;` +
-                    `S.browser_fallback_url=${encodeURIComponent(webFallbackUrl)};end`;
-
-                  const navIntent = `google.navigation:q=${destLat},${destLon}&mode=${androidMode}`;
-                  let appLaunched = false;
-                  const onHide = () => { appLaunched = true; };
-                  document.addEventListener('visibilitychange', onHide, { once: true });
-
-                  const a = document.createElement('a');
-                  a.href = navIntent;
-                  a.style.display = 'none';
-                  document.body.appendChild(a);
-                  a.click();
-                  document.body.removeChild(a);
-
-                  setTimeout(() => {
-                    document.removeEventListener('visibilitychange', onHide);
-                    if (!appLaunched) {
-                      const w = window.open(intentUrl, '_blank', 'noopener,noreferrer');
-                      if (!w) window.location.href = webFallbackUrl;
-                    }
-                  }, 1500);
-
-                } else {
-                  // iOS: comgooglemaps:// scheme
-                  const iosNavUrl =
-                    `comgooglemaps://?saddr=${origLat},${origLon}` +
-                    `&daddr=${destLat},${destLon}` +
-                    `&directionsmode=${gmTravelMode === 'bicycling' ? 'bicycling' : gmTravelMode === 'walking' ? 'walking' : gmTravelMode === 'transit' ? 'transit' : 'driving'}`;
-
-                  let appLaunched = false;
-                  const onHide = () => { appLaunched = true; };
-                  document.addEventListener('visibilitychange', onHide, { once: true });
-                  window.location.href = iosNavUrl;
-
-                  setTimeout(() => {
-                    document.removeEventListener('visibilitychange', onHide);
-                    if (!appLaunched) {
-                      const w = window.open(webFallbackUrl, '_blank', 'noopener,noreferrer');
-                      if (!w) window.location.href = webFallbackUrl;
-                    }
-                  }, 1500);
-                }
-
-                // Mobile: mark navigating so button flips to EXIT
-                setIsNavigating(true);
-
-              } else {
-                // ── Desktop: open in-app EcoSense NavigationScreen ─────
-                const activeRoute = routes.find((r) => r.id === selectedRoute) || routes[0];
-                setIsNavigating(true);
-                navigate('/navigation', {
-                  state: {
-                    route:             activeRoute,
-                    origin:            origin,
-                    destination:       destination,
-                    originCoords:      originCoords,
-                    destinationCoords: destinationCoords,
-                    travelMode:        travelMode,
-                  },
-                });
-              }
+        {/* ─── 5. RIGHT MAP CONTAINER (APPROX 70% DESKTOP, 65% TABLET, 100% MOBILE) ─── */}
+        <main className="w-full lg:w-[68%] xl:w-[72%] h-full relative overflow-hidden bg-white flex-1">
+          <RouteMap
+            routes={routes}
+            selectedRouteId={selectedRoute}
+            origin={originCoords}
+            destination={destinationCoords}
+            onSelectRoute={setSelectedRoute}
+            isNavigating={isNavigating}
+            onExitNav={() => setIsNavigating(false)}
+            transportMode={travelMode}
+            onSelectDestination={(destName) => {
+              setDestination(destName);
+              setTriggerSearchOnce(destName);
             }}
-            className={`${isNavigating ? 'bg-red-500 hover:bg-red-600 shadow-red-400/30' : 'bg-emerald-500 hover:bg-emerald-600 shadow-emerald-400/30'} h-14 px-8 shadow-xl text-white font-bold text-base flex items-center gap-3 rounded-full group transition-all`}
-          >
-            <Navigation className="w-5 h-5 group-hover:rotate-12 transition-transform" />
-            {isNavigating ? "EXIT NAVIGATION" : "START NAVIGATION"}
-          </Button>
-        </div>
-      )}
-      
-      <Footer />
+          />
+
+          {/* Floating Navigation Button on Map (Bottom-Right) */}
+          {routes.length > 0 && (
+            <div className="absolute bottom-6 right-6 z-[400] animate-in fade-in slide-in-from-bottom-3 duration-300">
+              <Button
+                onClick={handleStartNavigation}
+                className={`${
+                  isNavigating
+                    ? "bg-red-500 hover:bg-red-600 shadow-red-500/30"
+                    : "bg-emerald-500 hover:bg-emerald-600 shadow-emerald-500/30"
+                } h-13 px-6 shadow-2xl text-white font-black text-sm flex items-center gap-2.5 rounded-full group transition-all transform hover:scale-105 active:scale-95`}
+              >
+                <Navigation className="w-4 h-4 group-hover:rotate-12 transition-transform" />
+                <span>{isNavigating ? "EXIT NAVIGATION" : "START NAVIGATION"}</span>
+                {activeRoute && (
+                  <span className="ml-1 pl-2 border-l border-white/30 text-xs font-semibold opacity-90">
+                    {activeRoute.duration}
+                  </span>
+                )}
+              </Button>
+            </div>
+          )}
+
+          {/* Floating Route Quick Info Pill (Top-Right of Map) */}
+          {activeRoute && (
+            <div className="absolute top-4 right-4 z-[400] bg-white/95 backdrop-blur-md px-3.5 py-2 rounded-2xl shadow-lg border border-gray-100 flex items-center gap-3">
+              <div className="flex items-center gap-1.5">
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
+                <span className="text-xs font-black text-gray-800">{activeRoute.name}</span>
+              </div>
+              <div className="w-px h-3.5 bg-gray-200" />
+              <div className="flex items-center gap-2 text-xs font-bold text-gray-600">
+                <span>{activeRoute.distance}</span>
+                <span>•</span>
+                <span>{activeRoute.duration}</span>
+              </div>
+              <div className="w-px h-3.5 bg-gray-200" />
+              <AQIBadge value={activeRoute.avgAQI} size="sm" />
+            </div>
+          )}
+        </main>
+
+      </div>
     </div>
   );
 };
