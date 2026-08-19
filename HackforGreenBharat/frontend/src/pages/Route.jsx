@@ -419,6 +419,34 @@ const Routes = () => {
               )}
             </div>
 
+            {/* ─── GOOGLE MAPS UNIFIED ROUTE SEARCH BAR (AUTO-FILLS FROM & TO) ─── */}
+            <div className="relative bg-white rounded-2xl p-2.5 border border-emerald-200/80 shadow-sm space-y-1.5">
+              <div className="flex items-center justify-between px-1">
+                <span className="text-[10px] font-black text-gray-600 uppercase tracking-wider flex items-center gap-1.5">
+                  <Search className="w-3 h-3 text-emerald-600" />
+                  <span>Route Search</span>
+                </span>
+                <span className="text-[9px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200/60">
+                  Auto-fills below
+                </span>
+              </div>
+              <LocationAutocomplete
+                value=""
+                onChange={() => {}}
+                onSelect={async (s) => {
+                  if (s) {
+                    setDestination(s.label);
+                    setDestinationCoords({ lat: s.lat, lon: s.lon, name: s.name });
+                    setTriggerSearchOnce(s.label);
+                  }
+                }}
+                onRouteQuerySelect={handleSelectRoutePair}
+                placeholder="Search route (e.g. 'Delhi to Jaipur')..."
+                iconBg="bg-emerald-500 text-white border-emerald-600 shadow-sm"
+                icon={<Search className="w-4 h-4 text-white" />}
+              />
+            </div>
+
             {/* ─── 2. SOURCE & DESTINATION STACKED INPUTS ─── */}
             <div className="relative bg-gray-50/90 rounded-2xl p-3.5 border border-gray-200/70 shadow-sm space-y-2">
               
@@ -509,26 +537,6 @@ const Routes = () => {
                   icon={<Navigation className="w-4 h-4 text-red-500" />}
                 />
               </div>
-            </div>
-
-            {/* Quick Popular Routes (1-Click Auto-Fill) */}
-            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
-              <span className="text-[9px] font-black text-gray-400 uppercase shrink-0">Popular:</span>
-              {[
-                { from: "Delhi", to: "Jaipur", label: "Delhi ➔ Jaipur" },
-                { from: "Mumbai", to: "Pune", label: "Mumbai ➔ Pune" },
-                { from: "Bengaluru", to: "Mysuru", label: "BLR ➔ Mysuru" },
-                { from: "Delhi", to: "Agra", label: "Delhi ➔ Agra" },
-              ].map((pair, idx) => (
-                <button
-                  key={idx}
-                  type="button"
-                  onClick={() => handleSelectRoutePair(pair)}
-                  className="px-2.5 py-1 bg-white hover:bg-emerald-50 border border-gray-200/80 hover:border-emerald-300 rounded-full text-[10px] font-bold text-gray-700 hover:text-emerald-700 transition-all shrink-0 shadow-xs"
-                >
-                  {pair.label}
-                </button>
-              ))}
             </div>
 
             {/* Travel Mode Selector */}
