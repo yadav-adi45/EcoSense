@@ -38,6 +38,7 @@ import { serverUrl } from "@/main";
 import { getCachedRoute, setCachedRoute } from "@/utils/routeCache";
 import { toast } from "react-toastify";
 import RouteInsights from "@/components/RouteInsights";
+import AnimalDangerZoneCard from "@/components/AnimalDangerZoneCard";
 
 /* Transport mode config */
 const TRANSPORT_MODES = [
@@ -796,95 +797,24 @@ const Routes = () => {
                                 </div>
                               </div>
 
-                              {/* 🐾 Wildlife & Animal Accident Danger Zone Card */}
-                              {(route.animalRisk?.maxRisk > 30 || route.maxAnimalRisk > 30 || route.animalWarning || route.animalRiskLevel === "High" || route.animalRiskLevel === "Severe") && (
-                                <div className="relative overflow-hidden rounded-2xl border-2 border-amber-500/50 bg-gradient-to-br from-[#1c120c] via-[#2a1708] to-[#120804] text-white shadow-xl shadow-amber-950/30 animate-in fade-in duration-300">
-                                  {/* Hazard Barricade Striping on Top */}
-                                  <div className="h-1.5 w-full bg-[repeating-linear-gradient(45deg,#f59e0b,#f59e0b_10px,#000_10px,#000_20px)] opacity-90"></div>
-
-                                  <div className="p-3.5 relative z-10 space-y-3">
-                                    {/* Header Row */}
-                                    <div className="flex items-center justify-between gap-2 border-b border-amber-500/20 pb-2">
-                                      <div className="flex items-center gap-2">
-                                        <div className="w-7 h-7 rounded-lg bg-amber-500/20 border border-amber-400/40 flex items-center justify-center text-amber-400">
-                                          <AlertTriangle className="w-3.5 h-3.5 animate-pulse text-amber-400" />
-                                        </div>
-                                        <div>
-                                          <div className="flex items-center gap-1.5">
-                                            <span className="text-[8.5px] font-black tracking-[0.18em] text-red-400 uppercase">
-                                              FOREST DANGER ZONE
-                                            </span>
-                                            <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-ping"></span>
-                                          </div>
-                                          <h4 className="text-xs font-black text-amber-200 tracking-tight">
-                                            🐾 Wildlife Collision Corridor
-                                          </h4>
-                                        </div>
-                                      </div>
-
-                                      <span className="px-2 py-0.5 rounded-md bg-red-500/20 border border-red-500/50 text-[9px] font-black uppercase text-red-300">
-                                        {route.animalRisk?.riskLevel || route.animalRiskLevel || 'High'} Hazard
-                                      </span>
-                                    </div>
-
-                                    {/* Main Alert Message */}
-                                    <div className="bg-black/40 border border-amber-500/30 p-2.5 rounded-xl">
-                                      <p className="text-[11px] font-bold text-amber-100/90 leading-relaxed">
-                                        {route.animalWarning || (
-                                          `⚠️ Dense wildlife movement recorded in adjacent forest corridors. Proceed with caution.`
-                                        )}
-                                      </p>
-                                    </div>
-
-                                    {/* Tactical Driver Directives */}
-                                    <div className="grid grid-cols-2 gap-2 text-[10px]">
-                                      <div className="flex items-center gap-1.5 p-2 rounded-xl bg-amber-950/40 border border-amber-500/20 text-amber-200/90">
-                                        <ShieldAlert className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                                        <span className="font-bold">Speed: &lt; 40 km/h</span>
-                                      </div>
-                                      <div className="flex items-center gap-1.5 p-2 rounded-xl bg-red-950/40 border border-red-500/20 text-red-200/90">
-                                        <Eye className="w-3.5 h-3.5 text-red-400 shrink-0" />
-                                        <span className="font-bold">Scan Shoulders</span>
-                                      </div>
-                                    </div>
-
-                                    {/* Species Detection Breakdown */}
-                                    {((route.animalRisk?.commonAnimals && route.animalRisk.commonAnimals.length > 0) || (route.animalRisk?.animals && route.animalRisk.animals.length > 0)) && (
-                                      <div className="pt-2 border-t border-white/10">
-                                        <div className="flex items-center justify-between mb-1.5">
-                                          <span className="text-[8.5px] font-black uppercase tracking-wider text-amber-400/80">
-                                            Threat Species Nearby:
-                                          </span>
-                                          <span className="text-[8px] text-gray-400 font-bold uppercase">Roadkill Data</span>
-                                        </div>
-                                        <div className="flex flex-wrap gap-1">
-                                          {(route.animalRisk?.commonAnimals || route.animalRisk?.animals || []).slice(0, 4).map((animal, idx) => (
-                                            <span
-                                              key={idx}
-                                              className="inline-flex items-center gap-1 px-2 py-0.5 bg-black/60 rounded-md text-[9px] font-bold text-amber-200 border border-amber-500/30"
-                                            >
-                                              <span>
-                                                {animal.category === 'mammal'
-                                                  ? '🦝'
-                                                  : animal.category === 'bird'
-                                                  ? '🦅'
-                                                  : animal.category === 'reptile' || animal.category === 'other'
-                                                  ? '🐍'
-                                                  : '🐾'}
-                                              </span>
-                                              <span>{animal.name}</span>
-                                              {animal.count && (
-                                                <span className="px-1 rounded bg-amber-500/20 text-[8px] text-amber-300 font-mono">
-                                                  ×{animal.count}
-                                                </span>
-                                              )}
-                                            </span>
-                                          ))}
-                                        </div>
-                                      </div>
-                                    )}
-                                  </div>
-                                </div>
+                              {/* 🐾 Premium Animal Danger Zone Dashboard Card */}
+                              {(route.animalRisk?.maxRisk > 25 || route.maxAnimalRisk > 25 || route.animalWarning || route.animalRiskLevel === "High" || route.animalRiskLevel === "Severe" || route.animalRisk > 25) && (
+                                <AnimalDangerZoneCard
+                                  route={route}
+                                  onChooseSaferRoute={() => {
+                                    const saferRoute = routes.find(
+                                      (r) => r.id !== route.id && (r.animalRisk < route.animalRisk || r.maxAnimalRisk < (route.maxAnimalRisk || 100))
+                                    );
+                                    if (saferRoute) {
+                                      setSelectedRoute(saferRoute.id);
+                                      toast.success(`Switched to safer corridor: ${saferRoute.name}`);
+                                    } else {
+                                      setAvoidAnimalRisk(true);
+                                      toast.info("Enabled Wildlife Corridor Avoidance mode! Recalculating route...");
+                                      setTimeout(() => handleSearch(), 200);
+                                    }
+                                  }}
+                                />
                               )}
 
                               {/* Wellness Intel */}
