@@ -78,7 +78,6 @@ app.use(express.static(frontendDist));
 app.get(/^(?!\/api).*/, (req, res) => {
   res.sendFile(path.join(frontendDist, "index.html"));
 });
-
 app.listen(PORT, () => {
   console.log(`✅ Server running on port ${PORT}`);
   console.log(`   Frontend: http://localhost:${PORT}`);
