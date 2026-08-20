@@ -138,13 +138,8 @@ export const routeController = async (req, res) => {
       : travelMode === "bus" ? 2.0   // bus ~2x slower (stops, traffic)
       : 1.0;
 
-<<<<<<< HEAD
     /* ✅ Route-level cache key includes travel mode and animal risk preference */
     const routeCacheKey = `route_v19:${originCity.toLowerCase()}:${destinationCity.toLowerCase()}:${isPregnancyMode}:${preferWellLit}:${avoidAnimalRisk}:${season}:${travelMode}:${currentHour}`;
-=======
-    /* ✅ Route-level cache key includes travel mode */
-    const routeCacheKey = `route_v19:${originCity.toLowerCase()}:${destinationCity.toLowerCase()}:${isPregnancyMode}:${preferWellLit}:${season}:${travelMode}`;
->>>>>>> origin/main
     const cached = aqiCache.get(routeCacheKey);
     if (cached) {
       console.log(`[CACHE HIT] ${routeCacheKey}`);
