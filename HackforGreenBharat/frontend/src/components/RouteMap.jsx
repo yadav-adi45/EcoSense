@@ -535,7 +535,7 @@ const RouteMap = ({ routes = [], selectedRouteId = 0, origin, destination, onSel
               <div className="relative w-full flex-1 flex items-center justify-center overflow-hidden">
                 
                 {/* SVG India Map — Natural Size */}
-                <div className="w-full h-full flex items-center justify-center">
+                <div className="w-full h-full flex items-center justify-center lg:pr-[300px] pb-[320px] lg:pb-0">
                   <svg
                     viewBox="0 0 600 700"
                     preserveAspectRatio="xMidYMid meet"
