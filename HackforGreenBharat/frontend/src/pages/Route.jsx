@@ -96,6 +96,7 @@ const Routes = () => {
   const [isPregnancyMode, setIsPregnancyMode] = useState(false);
   const [preferWellLit, setPreferWellLit] = useState(false);
   const [season, setSeason] = useState("none");
+  const [avoidAnimalRisk, setAvoidAnimalRisk] = useState(false);
   const [travelMode, setTravelMode] = useState("driving");
   const [showPreferences, setShowPreferences] = useState(false);
   const [showEVList, setShowEVList] = useState(false);
@@ -232,7 +233,7 @@ const Routes = () => {
     setSelectedRoute(0);
     setLoading(true);
     try {
-      const prefs = { isPregnancyMode, preferWellLit, season, travelMode };
+      const prefs = { isPregnancyMode, preferWellLit, season, travelMode, avoidAnimalRisk };
       const originCity = originCoords?.name || origin.split(",")[0].trim();
       const destinationCity = destinationCoords?.name || destination.split(",")[0].trim();
       const cached = getCachedRoute(originCity, destinationCity, prefs);
@@ -576,7 +577,7 @@ const Routes = () => {
                   <SlidersHorizontal className="w-4 h-4 text-emerald-600" />
                   <span>Route Preferences</span>
                 </span>
-                {(isPregnancyMode || preferWellLit || season !== "none") && (
+                {(isPregnancyMode || preferWellLit || season !== "none" || avoidAnimalRisk) && (
                   <span className="text-[9px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200/60">
                     Active
                   </span>
@@ -636,6 +637,33 @@ const Routes = () => {
                     Summer (Shaded Canopy)
                   </span>
                 </label>
+
+                {/* Full Width: 3. Wildlife Corridor Avoidance */}
+                <div className="col-span-2 pt-1 border-t border-gray-100">
+                  <label className="flex items-center justify-between cursor-pointer p-2 rounded-xl bg-amber-50/60 hover:bg-amber-50 border border-amber-200/60 transition-colors">
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={avoidAnimalRisk}
+                        onChange={(e) => setAvoidAnimalRisk(e.target.checked)}
+                        className="w-4 h-4 rounded text-amber-600 border-amber-300 focus:ring-amber-400 accent-amber-500 shrink-0"
+                      />
+                      <div>
+                        <span className="text-xs font-bold text-amber-950 flex items-center gap-1.5">
+                          🐾 Wildlife Corridor Avoidance
+                        </span>
+                        <span className="text-[10px] text-amber-800/80 block leading-tight">
+                          Re-route away from animal collision hotspots and protected forest buffers
+                        </span>
+                      </div>
+                    </div>
+                    {avoidAnimalRisk && (
+                      <span className="text-[9px] font-black uppercase tracking-wider bg-amber-500 text-white px-2 py-0.5 rounded-full shadow-sm shrink-0">
+                        Safe Mode
+                      </span>
+                    )}
+                  </label>
+                </div>
               </div>
             </div>
 

@@ -149,6 +149,7 @@ const RouteMap = ({ routes = [], selectedRouteId = 0, origin, destination, onSel
 
   // Map style state (Google Maps: roadmap, satellite, terrain)
   const [mapStyle, setMapStyle] = useState("roadmap");
+  const [showWildlifeLayer, setShowWildlifeLayer] = useState(true);
 
   // Determine active view: If routes exist, show "map" by default. Otherwise show "heatmap".
   const hasRoutes = routes && routes.length > 0;
@@ -313,7 +314,7 @@ const RouteMap = ({ routes = [], selectedRouteId = 0, origin, destination, onSel
         });
 
         // Add Animal / Wildlife Hazard markers
-        if (activeRoute.animalRisk?.maxRisk > 30 || activeRoute.maxAnimalRisk > 30 || activeRoute.animalRiskLevel === "High" || activeRoute.animalRiskLevel === "Severe") {
+        if (showWildlifeLayer && (activeRoute.animalRisk?.maxRisk > 25 || activeRoute.maxAnimalRisk > 25 || activeRoute.animalRiskLevel === "High" || activeRoute.animalRiskLevel === "Severe" || activeRoute.animalRisk > 25)) {
           (activeRoute.pollutionSegments || [])
             .filter((seg) => seg && seg.lat && seg.lon)
             .slice(0, 3)
@@ -415,7 +416,7 @@ const RouteMap = ({ routes = [], selectedRouteId = 0, origin, destination, onSel
     } else if (leafletOrigin?.lat && leafletOrigin?.lon) {
       map.setView([leafletOrigin.lat, leafletOrigin.lon], 9);
     }
-  }, [routes, selectedRouteId, origin, destination, onSelectRoute]);
+  }, [routes, selectedRouteId, origin, destination, onSelectRoute, showWildlifeLayer]);
 
   // Invalidate map size when view switches to "map"
   useEffect(() => {
@@ -494,6 +495,20 @@ const RouteMap = ({ routes = [], selectedRouteId = 0, origin, destination, onSel
                 }`}
               >
                 Terrain
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setShowWildlifeLayer((v) => !v)}
+                className={`flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-black transition-all border ${
+                  showWildlifeLayer
+                    ? "bg-amber-500 text-white border-amber-600 shadow-sm"
+                    : "bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100"
+                }`}
+                title="Toggle Wildlife Hazard Overlay"
+              >
+                <span>🐾</span>
+                <span>Wildlife</span>
               </button>
             </div>
           )}
