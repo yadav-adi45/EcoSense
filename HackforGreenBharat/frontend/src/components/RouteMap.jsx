@@ -455,40 +455,40 @@ const RouteMap = ({ routes = [], selectedRouteId = 0, origin, destination, onSel
                   </svg>
                 </div>
 
-                {/* State Hover Info Card (Floating in South-East / Sri Lanka ocean area) */}
-                <div className="absolute bottom-3 right-3 sm:bottom-5 sm:right-7 z-30 w-80 sm:w-[340px] pointer-events-auto">
-                  <div className="w-full bg-white/95 backdrop-blur-md shadow-2xl shadow-emerald-950/20 border border-emerald-100/90 rounded-[2.2rem] p-5 sm:p-6 transition-all">
+                {/* State Hover Info Card (Floating in South-East / Bottom-Right Corner) */}
+                <div className="absolute bottom-3 right-3 sm:bottom-4 sm:right-4 z-30 w-72 sm:w-[280px] pointer-events-auto">
+                  <div className="w-full bg-white/95 backdrop-blur-md shadow-2xl shadow-emerald-950/20 border border-emerald-100/90 rounded-[1.6rem] p-3.5 sm:p-4 transition-all">
                     {hoveredState && hoveredState.data ? (
-                      <div className="space-y-3">
-                        <div className="flex items-center gap-3">
-                          <div className="w-9 h-9 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center shrink-0">
-                            <Activity className="w-4.5 h-4.5 text-emerald-600 animate-pulse" />
+                      <div className="space-y-2.5">
+                        <div className="flex items-center gap-2.5">
+                          <div className="w-8 h-8 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center shrink-0">
+                            <Activity className="w-4 h-4 text-emerald-600 animate-pulse" />
                           </div>
-                          <div>
-                            <h4 className="text-base font-black text-emerald-950 uppercase tracking-wider leading-none">
+                          <div className="min-w-0">
+                            <h4 className="text-sm sm:text-base font-black text-emerald-950 uppercase tracking-wider leading-none truncate">
                               {hoveredState.name}
                             </h4>
-                            <span className="text-[10px] text-gray-400 font-bold mt-1 block">
+                            <span className="text-[9px] text-gray-400 font-bold mt-0.5 block">
                               State Level Metrics
                             </span>
                           </div>
                         </div>
 
                         {/* State Avg AQI */}
-                        <div className="border-t border-b border-gray-100/80 py-3 flex items-center justify-between">
+                        <div className="border-t border-b border-gray-100/80 py-2 flex items-center justify-between">
                           <div>
-                            <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">
+                            <p className="text-[9px] text-gray-400 font-bold uppercase tracking-wider">
                               State Avg AQI
                             </p>
                             <p
-                              className="text-3xl sm:text-4xl font-black tracking-tight mt-0.5"
+                              className="text-2xl sm:text-3xl font-black tracking-tight mt-0.5"
                               style={{ color: getAQIColor(hoveredState.data.aqi) }}
                             >
                               {hoveredState.data.aqi}
                             </p>
                           </div>
                           <span
-                            className="px-3 py-1.5 rounded-xl text-[11px] font-black uppercase tracking-wider border shadow-sm"
+                            className="px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider border shadow-sm"
                             style={{
                               color: getAQIColor(hoveredState.data.aqi),
                               borderColor: `${getAQIColor(hoveredState.data.aqi)}40`,
@@ -500,55 +500,55 @@ const RouteMap = ({ routes = [], selectedRouteId = 0, origin, destination, onSel
                         </div>
 
                         {/* Metrics Grid */}
-                        <div className="grid grid-cols-2 gap-2.5">
-                          <div className="bg-gray-50/90 p-3 rounded-2xl border border-gray-100/80">
-                            <div className="flex items-center gap-1.5 mb-1">
-                              <CloudSun className="w-4 h-4 text-orange-400" />
-                              <span className="text-[9px] text-gray-400 font-bold uppercase">Temp</span>
+                        <div className="grid grid-cols-2 gap-2">
+                          <div className="bg-gray-50/90 p-2.5 rounded-xl border border-gray-100/80">
+                            <div className="flex items-center gap-1 mb-0.5">
+                              <CloudSun className="w-3.5 h-3.5 text-orange-400" />
+                              <span className="text-[8px] text-gray-400 font-bold uppercase">Temp</span>
                             </div>
-                            <p className="text-sm font-black text-gray-800">{hoveredState.data.temp}°C</p>
+                            <p className="text-xs sm:text-sm font-black text-gray-800">{hoveredState.data.temp}°C</p>
                           </div>
-                          <div className="bg-gray-50/90 p-3 rounded-2xl border border-gray-100/80">
-                            <div className="flex items-center gap-1.5 mb-1">
-                              <Compass className="w-4 h-4 text-emerald-500" />
-                              <span className="text-[9px] text-gray-400 font-bold uppercase">Roads</span>
+                          <div className="bg-gray-50/90 p-2.5 rounded-xl border border-gray-100/80">
+                            <div className="flex items-center gap-1 mb-0.5">
+                              <Compass className="w-3.5 h-3.5 text-emerald-500" />
+                              <span className="text-[8px] text-gray-400 font-bold uppercase">Roads</span>
                             </div>
-                            <p className="text-xs font-black text-gray-800 leading-tight">
+                            <p className="text-[11px] font-black text-gray-800 leading-tight">
                               {hoveredState.data.roadQuality}
                             </p>
                           </div>
                         </div>
 
-                        <div className="bg-gray-50/90 p-3 rounded-2xl border border-gray-100/80 flex items-center gap-2.5">
-                          <Trees className="w-4.5 h-4.5 text-emerald-600 shrink-0" />
+                        <div className="bg-gray-50/90 p-2.5 rounded-xl border border-gray-100/80 flex items-center gap-2">
+                          <Trees className="w-4 h-4 text-emerald-600 shrink-0" />
                           <div>
-                            <span className="text-[9px] text-gray-400 font-bold uppercase block">Green Canopy</span>
-                            <p className="text-xs font-black text-emerald-900 mt-0.5">{hoveredState.data.greenery}</p>
+                            <span className="text-[8px] text-gray-400 font-bold uppercase block">Green Canopy</span>
+                            <p className="text-[11px] font-black text-emerald-900 mt-0.5">{hoveredState.data.greenery}</p>
                           </div>
                         </div>
 
                         {/* Eco Travel Advice */}
-                        <div className="bg-emerald-50/80 p-3.5 rounded-2xl border border-emerald-100/80 flex items-start gap-2.5">
-                          <Info className="w-4.5 h-4.5 text-emerald-600 shrink-0 mt-0.5" />
+                        <div className="bg-emerald-50/80 p-2.5 rounded-xl border border-emerald-100/80 flex items-start gap-2">
+                          <Info className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
                           <div>
-                            <span className="text-[10px] font-black text-emerald-950 uppercase tracking-wider block leading-none mb-1">
+                            <span className="text-[9px] font-black text-emerald-950 uppercase tracking-wider block leading-none mb-0.5">
                               Eco Travel Advice
                             </span>
-                            <p className="text-[11px] text-gray-600 font-medium leading-relaxed">
+                            <p className="text-[10px] text-gray-600 font-medium leading-relaxed">
                               {hoveredState.data.advice}
                             </p>
                           </div>
                         </div>
                       </div>
                     ) : (
-                      <div className="flex flex-col items-center justify-center py-12 text-center">
-                        <div className="w-12 h-12 rounded-2xl bg-emerald-50 border border-emerald-100 flex items-center justify-center mb-3">
-                          <Activity className="w-6 h-6 text-emerald-500 animate-pulse" />
+                      <div className="flex flex-col items-center justify-center py-6 sm:py-8 text-center">
+                        <div className="w-10 h-10 rounded-xl bg-emerald-50 border border-emerald-100 flex items-center justify-center mb-2">
+                          <Activity className="w-5 h-5 text-emerald-500 animate-pulse" />
                         </div>
-                        <p className="text-xs font-black text-gray-700 uppercase tracking-wider">
+                        <p className="text-[11px] font-black text-gray-700 uppercase tracking-wider">
                           Hover over any state
                         </p>
-                        <p className="text-[10px] text-gray-400 mt-1 max-w-[200px] leading-relaxed">
+                        <p className="text-[9px] text-gray-400 mt-0.5 max-w-[190px] leading-relaxed">
                           to view real-time state air quality, road index & canopy metrics
                         </p>
                       </div>

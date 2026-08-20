@@ -397,8 +397,8 @@ const Routes = () => {
       {/* TWO-COLUMN GOOGLE MAPS-STYLE ROUTE INTERFACE */}
       <div className="flex-1 flex flex-col lg:flex-row w-full h-[calc(100vh-5rem)] overflow-hidden">
         
-        {/* ─── 1. LEFT SIDEBAR (APPROX 30% DESKTOP, 35% TABLET, 100% MOBILE) ─── */}
-        <aside className="w-full lg:w-[32%] xl:w-[28%] h-full flex flex-col bg-white border-r border-emerald-100 shadow-xl z-20 overflow-y-auto shrink-0">
+        {/* ─── 1. LEFT SIDEBAR (35% ON DESKTOP, 100% MOBILE) ─── */}
+        <aside className="w-full lg:w-[35%] xl:w-[35%] h-full flex flex-col bg-white border-r border-emerald-100 shadow-xl z-20 overflow-y-auto shrink-0">
           <div className="p-4 sm:p-5 space-y-4">
             
             {/* Sidebar Branding & Status */}
@@ -893,8 +893,8 @@ const Routes = () => {
           </div>
         </aside>
 
-        {/* ─── 5. RIGHT MAP CONTAINER (APPROX 70% DESKTOP, 65% TABLET, 100% MOBILE) ─── */}
-        <main className="w-full lg:w-[68%] xl:w-[72%] h-full relative overflow-hidden bg-white flex-1">
+        {/* ─── 5. RIGHT MAP CONTAINER (65% ON DESKTOP, 100% MOBILE) ─── */}
+        <main className="w-full lg:w-[65%] xl:w-[65%] h-full relative overflow-hidden bg-white flex-1">
           <RouteMap
             routes={routes}
             selectedRouteId={selectedRoute}
