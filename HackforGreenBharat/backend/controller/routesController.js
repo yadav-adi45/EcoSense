@@ -5,6 +5,7 @@ import { getAQIByCoords } from "../utils/getAQI.js";
 import { reverseGeocode } from "../utils/reverseGeocode.js";
 import { getEVStations } from "../utils/getEVStations.js";
 import { getRoadAttributes } from "../utils/overpassService.js";
+import { calculateRouteAnimalRisk } from "../utils/animalRiskScoring.js";
 
 /* ============ CONSTANTS ============ */
 const osrmCache = new Map();
@@ -13,12 +14,13 @@ const ROUTE_BUDGET_MS = 7000;  // Total AQI budget per route — ensures <10s
 
 /* ============ HELPERS ============ */
 
-/** Pick exactly 5 evenly-spaced points from geometry */
+/** Pick up to 8 evenly-spaced points from geometry */
 const sampleRoutePoints = (geometry) => {
-  if (geometry.length <= 5) return geometry;
-  const step = Math.floor(geometry.length / 4);
+  if (geometry.length <= 8) return geometry;
+  const count = 8;
+  const step = Math.floor(geometry.length / (count - 1));
   const pts = [];
-  for (let i = 0; i < 4; i++) pts.push(geometry[i * step]);
+  for (let i = 0; i < count - 1; i++) pts.push(geometry[i * step]);
   pts.push(geometry[geometry.length - 1]);
   return pts;
 };
@@ -121,8 +123,10 @@ export const routeController = async (req, res) => {
     const prefs = preferences || {};
     const isPregnancyMode = !!prefs.isPregnancyMode;
     const preferWellLit = !!prefs.preferWellLit;
+    const avoidAnimalRisk = !!prefs.avoidAnimalRisk; // NEW: Animal-safe mode
     const season = prefs.season || "none"; // "winter" | "summer" | "none"
     const travelMode = prefs.travelMode || "driving"; // "driving" | "cycling" | "foot" | "bike" | "bus"
+    const currentHour = prefs.currentHour !== undefined ? prefs.currentHour : new Date().getHours(); // Time-aware risk
 
     // Map travel mode to OSRM profile
     const modeConfig = TRAVEL_MODES.find((m) => m.id === travelMode) || TRAVEL_MODES[0];
@@ -134,8 +138,8 @@ export const routeController = async (req, res) => {
       : travelMode === "bus" ? 2.0   // bus ~2x slower (stops, traffic)
       : 1.0;
 
-    /* ✅ Route-level cache key includes travel mode */
-    const routeCacheKey = `route_v18:${originCity.toLowerCase()}:${destinationCity.toLowerCase()}:${isPregnancyMode}:${preferWellLit}:${season}:${travelMode}`;
+    /* ✅ Route-level cache key includes travel mode and animal risk preference */
+    const routeCacheKey = `route_v19:${originCity.toLowerCase()}:${destinationCity.toLowerCase()}:${isPregnancyMode}:${preferWellLit}:${avoidAnimalRisk}:${season}:${travelMode}:${currentHour}`;
     const cached = aqiCache.get(routeCacheKey);
     if (cached) {
       console.log(`[CACHE HIT] ${routeCacheKey}`);
@@ -230,7 +234,15 @@ export const routeController = async (req, res) => {
       /* 🔋 Also kick off EV stations fetch */
       const evStationsPromise = getEVStations(sampledPoints);
 
-      /* Race the entire segment batch (and EV) against a hard budget */
+      /* 🐾 Calculate animal risk for this route */
+      let animalRiskData = { averageRisk: 0, maxRisk: 0, riskLevel: "Low", segments: [] };
+      try {
+        animalRiskData = await calculateRouteAnimalRisk(sampledPoints, currentHour);
+      } catch (err) {
+        console.error(`[animalRisk] Error calculating route ${i} risk:`, err.message);
+      }
+
+      /* Race the segment batch (and EV) against a hard budget */
       const [pollutionSegments, evStations] = await Promise.race([
         Promise.all([Promise.all(segmentPromises), evStationsPromise]),
         new Promise((resolve) =>
@@ -257,10 +269,17 @@ export const routeController = async (req, res) => {
       // Dynamic weighting based on user preferences
       let aqiWeight = 2.0;
       let durationWeight = 0.5;
+      let animalRiskWeight = 0.0; // Default: no animal risk penalty
       let penaltyPoints = 0;
 
       if (season === "winter") {
         aqiWeight = 3.5; // Smog check: heavily penalize poor air quality
+      }
+
+      // 🐾 Animal Risk Mode: heavily penalize routes with high animal activity
+      if (avoidAnimalRisk) {
+        animalRiskWeight = 3.0; // Strong penalty for animal risk
+        penaltyPoints += animalRiskData.averageRisk * animalRiskWeight;
       }
 
       let litCount = 0;
@@ -307,11 +326,15 @@ export const routeController = async (req, res) => {
         distance: `${distanceKm.toFixed(1)} km`,
         duration: `${Math.round(durationMin)} min`,
         avgAQI,
+        animalRisk: animalRiskData.averageRisk, // NEW: Animal risk score
+        maxAnimalRisk: animalRiskData.maxRisk, // NEW: Highest risk segment
+        animalRiskLevel: animalRiskData.riskLevel, // NEW: Risk level
         score,
         traffic,
         avgSpeed: avgSpeed.toFixed(1),
         geometry,
         pollutionSegments,
+        animalSegments: animalRiskData.segments, // NEW: Per-segment animal risk
         evStations,
         steps: r.legs?.[0]?.steps?.map((s) => ({
           instruction: s.maneuver?.type === 'turn' 
@@ -338,7 +361,13 @@ export const routeController = async (req, res) => {
     /* 💬 Humanize */
     const humanizedRoutes = routes.map((route, index) => {
       let name = `Efficient Option ${index + 1} ⚡`;
-      if (isPregnancyMode) {
+      
+      // 🐾 Animal Risk Mode naming
+      if (avoidAnimalRisk) {
+        if (index === 0) name = "Wildlife-Safe Route 🐾";
+        else if (route.maxAnimalRisk > 75) name = "High Animal Activity Route ⚠️";
+        else name = "Standard Route 🚗";
+      } else if (isPregnancyMode) {
         if (index === 0) name = "Pregnancy & Elder Safe Route 🤱";
         else name = "Standard Route (Bumpy) 🚗";
       } else if (preferWellLit) {
@@ -357,8 +386,23 @@ export const routeController = async (req, res) => {
 
       let healthAdvice = "Safe for most travelers.";
       let travelTip = "Keep an eye on the air as you go.";
+      let animalWarning = null;
 
-      if (isPregnancyMode) {
+      // 🐾 Animal risk warnings
+      if (route.maxAnimalRisk > 75) {
+        animalWarning = "⚠️ Very High Animal Activity Zone - Wildlife frequently crosses this road. Consider alternative route.";
+      } else if (route.maxAnimalRisk > 50) {
+        animalWarning = "⚠️ High Animal Activity - Drive carefully, especially during dawn and dusk hours.";
+      } else if (route.animalRisk > 25 && avoidAnimalRisk) {
+        animalWarning = "🐾 Moderate animal activity detected along this route.";
+      }
+
+      if (avoidAnimalRisk) {
+        healthAdvice = "Optimized to avoid wildlife conflict zones and high animal activity areas.";
+        travelTip = route.maxAnimalRisk < 30 
+          ? "This route has minimal wildlife crossing history. Safe travels!" 
+          : "Stay alert for animals, especially during peak activity hours (dawn/dusk).";
+      } else if (isPregnancyMode) {
         healthAdvice = "Optimized for minimal bumps, smooth pavements, and high lighting.";
         travelTip = "Recommended road for pregnant women and elderly family members.";
       } else if (preferWellLit) {
@@ -389,12 +433,12 @@ export const routeController = async (req, res) => {
         }
       }
 
-      return { ...route, name, healthAdvice, travelTip };
+      return { ...route, name, healthAdvice, travelTip, animalWarning };
     });
 
     const response = { success: true, origin, destination, routes: humanizedRoutes };
 
-    console.log(`[v18] ${originCity}→${destinationCity} | ${routes.length} routes | mode:${travelMode} | preferences processed`);
+    console.log(`[v19] ${originCity}→${destinationCity} | ${routes.length} routes | mode:${travelMode} | animalRisk:${avoidAnimalRisk} | preferences processed`);
 
     aqiCache.set(routeCacheKey, response);
     res.json(response);

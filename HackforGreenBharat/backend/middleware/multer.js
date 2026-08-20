@@ -4,3 +4,5 @@ const storage = multer.memoryStorage();
 
 // multer.js
 export const singleUpload = multer({ storage }).single("profilePhoto");
+
+export const upload = multer({ storage });

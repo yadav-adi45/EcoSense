@@ -15,6 +15,11 @@ import {
   Clock,
   Route as RouteIcon,
   AlertTriangle,
+  ShieldAlert,
+  AlertOctagon,
+  Eye,
+  Flame,
+  Gauge,
   Loader2,
   Sparkles,
   Zap,
@@ -116,8 +121,10 @@ const Routes = () => {
   const [preferWellLit, setPreferWellLit] = useState(false);
   const [season, setSeason] = useState("none");
   const [travelMode, setTravelMode] = useState("driving");
+  const [avoidAnimalRisk, setAvoidAnimalRisk] = useState(false);
 
   const [locatingUser, setLocatingUser] = useState(false);
+  const [animalRiskData, setAnimalRiskData] = useState({});
 
   const handleUseMyLocation = () => {
     if (!("geolocation" in navigator)) {
@@ -173,7 +180,7 @@ const Routes = () => {
     if (origin.trim() && destination.trim()) {
       handleSearch();
     }
-  }, [travelMode, isPregnancyMode, preferWellLit, season]);
+  }, [travelMode, isPregnancyMode, preferWellLit, season, avoidAnimalRisk]);
 
   useEffect(() => {
     if (!routes.length) return;
@@ -190,7 +197,70 @@ const Routes = () => {
     if (voiceEnabledRef.current) speak(message);
   }, [routes, selectedRoute]);
 
+  // Function to fetch animal risk for a route
+  const fetchAnimalRiskForRoute = async (pollutionSegments) => {
+    if (!pollutionSegments || pollutionSegments.length === 0) {
+      return { animalRisk: 0, maxRisk: 0, riskLevel: "Low", hasHighRisk: false, commonAnimals: [], animals: [] };
+    }
+
+    const currentHour = new Date().getHours();
+    const riskPromises = [];
+
+    // Sample points along the route
+    const numPoints = Math.min(pollutionSegments.length, 8);
+    const step = Math.max(1, Math.floor(pollutionSegments.length / numPoints));
+    const sampleIndices = [];
+    for (let idx = 0; idx < pollutionSegments.length; idx += step) {
+      sampleIndices.push(idx);
+    }
+    if (sampleIndices[sampleIndices.length - 1] !== pollutionSegments.length - 1) {
+      sampleIndices.push(pollutionSegments.length - 1);
+    }
+
+    for (const index of sampleIndices) {
+      const segment = pollutionSegments[index];
+      if (segment && segment.lat && segment.lon) {
+        riskPromises.push(
+          axios.get(`${serverUrl}/api/v12/animal-risk`, {
+            params: {
+              latitude: segment.lat,
+              longitude: segment.lon,
+              hour: currentHour
+            }
+          }).then(res => res.data).catch(() => ({ animalRisk: 0, riskLevel: "Low", commonAnimals: [] }))
+        );
+      }
+    }
+
+    const riskResults = await Promise.all(riskPromises);
+    const maxRisk = Math.max(...riskResults.map(r => r.animalRisk || 0), 0);
+    const maxRiskData = riskResults.find(r => r.animalRisk === maxRisk) || riskResults[0] || {};
+
+    // Collect all unique animals observed along sampled points
+    const animalsMap = new Map();
+    riskResults.forEach(res => {
+      if (res.commonAnimals && Array.isArray(res.commonAnimals)) {
+        res.commonAnimals.forEach(a => {
+          if (!animalsMap.has(a.name)) {
+            animalsMap.set(a.name, a);
+          }
+        });
+      }
+    });
+    const combinedAnimals = Array.from(animalsMap.values());
+
+    return {
+      animalRisk: maxRisk,
+      maxRisk: maxRisk,
+      riskLevel: maxRiskData.riskLevel || (maxRisk > 75 ? "Very High" : maxRisk > 50 ? "High" : maxRisk > 25 ? "Moderate" : "Low"),
+      hasHighRisk: maxRisk >= 35,
+      commonAnimals: combinedAnimals.length > 0 ? combinedAnimals : (maxRiskData.commonAnimals || []),
+      animals: combinedAnimals.length > 0 ? combinedAnimals : (maxRiskData.commonAnimals || [])
+    };
+  };
+
   const handleSearch = async () => {
+    console.log('🔍 handleSearch called - searching from', origin, 'to', destination);
     unlockSpeech();
     if (!origin || !destination) {
       toast.error("Please enter both an origin and destination.");
@@ -200,12 +270,13 @@ const Routes = () => {
     setSelectedRoute(0);
     setLoading(true);
     try {
-      const prefs = { isPregnancyMode, preferWellLit, season, travelMode };
+      const prefs = { isPregnancyMode, preferWellLit, season, travelMode, avoidAnimalRisk };
       // Use the plain city name (not "City, State" label) for geocoding
       const originCity = originCoords?.name || origin.split(",")[0].trim();
       const destinationCity = destinationCoords?.name || destination.split(",")[0].trim();
       const cached = getCachedRoute(originCity, destinationCity, prefs);
-      if (cached) {
+      if (cached && cached.routes && cached.routes[0]?.animalRisk) {
+        console.log('📦 Using CACHED route with animal risk');
         setRoutes(cached.routes || []);
         setSelectedRoute(0);
         setOriginCoords(cached.origin);
@@ -232,8 +303,23 @@ const Routes = () => {
         ...(originCoords?.fromGPS && { originCoords })
       });
       if (eliteRes.data.success) {
-        setCachedRoute(originCity, destinationCity, eliteRes.data, prefs);
-        setRoutes(eliteRes.data.routes || []);
+        const routesData = eliteRes.data.routes || [];
+        
+        // 🐾 Fetch animal risk for all routes
+        console.log('🐾 Fetching animal risk for', routesData.length, 'routes...');
+        for (let i = 0; i < routesData.length; i++) {
+          try {
+            const route = routesData[i];
+            const riskData = await fetchAnimalRiskForRoute(route.pollutionSegments);
+            route.animalRisk = riskData;
+            console.log(`✅ Route ${i + 1} animal risk:`, riskData);
+          } catch (error) {
+            console.error(`❌ Failed to fetch animal risk for route ${i + 1}:`, error);
+          }
+        }
+        
+        setCachedRoute(originCity, destinationCity, { ...eliteRes.data, routes: routesData }, prefs);
+        setRoutes(routesData);
         setOriginCoords(eliteRes.data.origin);
         setDestinationCoords(eliteRes.data.destination);
       }
@@ -358,7 +444,7 @@ const Routes = () => {
               </div>
 
               {/* Preferences Selection */}
-              <div className="mt-6 pt-6 border-t border-gray-100 grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="mt-6 pt-6 border-t border-gray-100 grid grid-cols-1 sm:grid-cols-4 gap-4">
                 {/* Pregnancy / Elderly Switch */}
                 <label className="flex items-center gap-3 cursor-pointer p-3 bg-gray-50 hover:bg-emerald-50/50 rounded-2xl border border-gray-100 transition-colors">
                   <input
@@ -370,6 +456,20 @@ const Routes = () => {
                   <div>
                     <span className="block text-xs font-black text-gray-800">Pregnancy & Elder Mode</span>
                     <span className="block text-[10px] text-gray-400 font-bold">Pothole-free & smooth ride</span>
+                  </div>
+                </label>
+
+                {/* Avoid Animal Risk Switch */}
+                <label className="flex items-center gap-3 cursor-pointer p-3 bg-gray-50 hover:bg-emerald-50/50 rounded-2xl border border-gray-100 transition-colors">
+                  <input
+                    type="checkbox"
+                    checked={avoidAnimalRisk}
+                    onChange={(e) => setAvoidAnimalRisk(e.target.checked)}
+                    className="w-5 h-5 rounded-lg text-emerald-500 border-gray-300 focus:ring-emerald-400 accent-emerald-500"
+                  />
+                  <div>
+                    <span className="block text-xs font-black text-gray-800">Avoid Animal Risk</span>
+                    <span className="block text-[10px] text-gray-400 font-bold">Avoid roads prone to animal accidents</span>
                   </div>
                 </label>
 
@@ -463,6 +563,17 @@ const Routes = () => {
                                     {route.avgAQI < 60 && <span className="bg-emerald-50 text-emerald-600 text-[9px] px-2 py-0.5 rounded-lg border border-emerald-100 uppercase font-black tracking-widest">Elite Air</span>}
                                     {route.name.includes("Swift") && <span className="bg-orange-50 text-orange-600 text-[9px] px-2 py-0.5 rounded-lg border border-orange-100 uppercase font-black tracking-widest">Nitro</span>}
                                     {route.evStations?.length > 0 && <span className="bg-blue-50 text-blue-600 text-[9px] px-2 py-0.5 rounded-lg border border-blue-100 uppercase font-black tracking-widest">🔋 {route.evStations.length} EV Stations</span>}
+                                    {((route.animalRisk && (route.animalRisk.maxRisk > 25 || route.animalRisk.hasHighRisk)) || (route.maxAnimalRisk > 25)) && (
+                                      <span className={`text-[9px] px-2 py-0.5 rounded-lg border uppercase font-black tracking-widest ${
+                                        (route.animalRisk?.maxRisk > 75 || route.maxAnimalRisk > 75)
+                                          ? 'bg-red-50 text-red-600 border-red-200'
+                                          : (route.animalRisk?.maxRisk > 50 || route.maxAnimalRisk > 50)
+                                          ? 'bg-orange-50 text-orange-600 border-orange-200'
+                                          : 'bg-amber-50 text-amber-700 border-amber-200'
+                                      }`}>
+                                        🐾 {route.animalRisk?.riskLevel || route.animalRiskLevel || 'High'} Wildlife Risk
+                                      </span>
+                                    )}
                                 </div>
                             </div>
                             <AQIBadge value={route.avgAQI} size="lg" />
@@ -500,7 +611,104 @@ const Routes = () => {
                                     )}
                                 </div>
 
-                                {/* ── Route Insights (expandable) ── */}
+                                {/* Forest Danger / Wildlife Hazard Alert Card */}
+                                {((route.animalRisk && (route.animalRisk.hasHighRisk || route.animalRisk.maxRisk > 25)) || route.maxAnimalRisk > 25 || route.animalWarning) && (
+                                  <div className="relative overflow-hidden rounded-[1.4rem] border-2 border-amber-500/50 bg-gradient-to-br from-[#1c1208] via-[#141b12] to-[#260a0a] text-white shadow-2xl shadow-red-950/40 animate-in fade-in zoom-in-95 duration-500">
+                                    {/* Hazard Barricade Striping on Top */}
+                                    <div className="h-2 w-full bg-[repeating-linear-gradient(45deg,#f59e0b,#f59e0b_12px,#000_12px,#000_24px)] opacity-90 shadow-sm"></div>
+
+                                    {/* Ambient Warning Glow Blur */}
+                                    <div className="absolute -top-12 -right-12 w-40 h-40 bg-amber-500/20 rounded-full blur-3xl pointer-events-none"></div>
+                                    <div className="absolute -bottom-10 -left-10 w-40 h-40 bg-red-600/20 rounded-full blur-3xl pointer-events-none"></div>
+
+                                    <div className="p-5 relative z-10 space-y-4">
+                                      {/* Header Row */}
+                                      <div className="flex items-center justify-between gap-3 border-b border-amber-500/20 pb-3">
+                                        <div className="flex items-center gap-2.5">
+                                          <div className="w-9 h-9 rounded-xl bg-amber-500/20 border border-amber-400/40 flex items-center justify-center text-amber-400 shadow-inner">
+                                            <AlertTriangle className="w-5 h-5 animate-pulse text-amber-400" />
+                                          </div>
+                                          <div>
+                                            <div className="flex items-center gap-2">
+                                              <span className="text-[10px] font-black tracking-[0.2em] text-red-400 uppercase">
+                                                FOREST DANGER ZONE
+                                              </span>
+                                              <span className="w-2 h-2 rounded-full bg-red-500 animate-ping"></span>
+                                            </div>
+                                            <h4 className="text-sm font-black text-amber-200 tracking-tight flex items-center gap-1.5">
+                                              🐾 Wildlife Collision Corridor
+                                            </h4>
+                                          </div>
+                                        </div>
+
+                                        <div className="text-right">
+                                          <span className="inline-block px-2.5 py-1 rounded-lg bg-red-500/20 border border-red-500/50 text-[10px] font-black uppercase text-red-300 tracking-wider">
+                                            {route.animalRisk?.riskLevel || route.animalRiskLevel || 'High'} Hazard
+                                          </span>
+                                        </div>
+                                      </div>
+
+                                      {/* Main Alert Message */}
+                                      <div className="bg-black/40 border border-amber-500/30 p-3.5 rounded-xl backdrop-blur-sm">
+                                        <p className="text-xs font-bold text-amber-100/90 leading-relaxed">
+                                          {route.animalWarning || (
+                                            `⚠️ Severe animal accident history along this route. Dense wildlife movement (especially venomous reptiles & wild mammals) recorded in adjacent forest corridors.`
+                                          )}
+                                        </p>
+                                      </div>
+
+                                      {/* Tactical Driver Directives (Forest Signboard Style) */}
+                                      <div className="grid grid-cols-2 gap-2 text-[11px]">
+                                        <div className="flex items-center gap-2 p-2.5 rounded-xl bg-amber-950/40 border border-amber-500/20 text-amber-200/90">
+                                          <ShieldAlert className="w-4 h-4 text-amber-400 shrink-0" />
+                                          <span className="font-bold">Speed Limit: &lt; 40 km/h</span>
+                                        </div>
+                                        <div className="flex items-center gap-2 p-2.5 rounded-xl bg-red-950/40 border border-red-500/20 text-red-200/90">
+                                          <Eye className="w-4 h-4 text-red-400 shrink-0" />
+                                          <span className="font-bold">Scan Road Shoulders</span>
+                                        </div>
+                                      </div>
+
+                                      {/* Species Detection Breakdown */}
+                                      {((route.animalRisk?.commonAnimals && route.animalRisk.commonAnimals.length > 0) || (route.animalRisk?.animals && route.animalRisk.animals.length > 0)) && (
+                                        <div className="pt-2 border-t border-white/10">
+                                          <div className="flex items-center justify-between mb-2">
+                                            <span className="text-[10px] font-black uppercase tracking-wider text-amber-400/80">
+                                              Threat Species Documented Nearby:
+                                            </span>
+                                            <span className="text-[9px] text-gray-400 font-bold uppercase tracking-widest">Roadkill Database</span>
+                                          </div>
+                                          <div className="flex flex-wrap gap-1.5">
+                                            {(route.animalRisk?.commonAnimals || route.animalRisk?.animals || []).slice(0, 5).map((animal, idx) => (
+                                              <span
+                                                key={idx}
+                                                className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-black/60 rounded-lg text-[10px] font-bold text-amber-200 border border-amber-500/30 hover:border-amber-400 transition-colors shadow-sm"
+                                              >
+                                                <span>
+                                                  {animal.category === 'mammal'
+                                                    ? '🦝'
+                                                    : animal.category === 'bird'
+                                                    ? '🦅'
+                                                    : animal.category === 'reptile' || animal.category === 'other'
+                                                    ? '🐍'
+                                                    : '🐾'}
+                                                </span>
+                                                <span>{animal.name}</span>
+                                                {animal.count && (
+                                                  <span className="px-1.5 py-0.2 rounded bg-amber-500/20 text-[9px] text-amber-300 font-mono">
+                                                    ×{animal.count}
+                                                  </span>
+                                                )}
+                                              </span>
+                                            ))}
+                                          </div>
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+                                )}
+
+                                 {/* ── Route Insights (expandable) ── */}
                                 <RouteInsights
                                   route={route}
                                   originCoords={originCoords}

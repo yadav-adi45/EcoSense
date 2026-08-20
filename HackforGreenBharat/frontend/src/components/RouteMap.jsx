@@ -13,24 +13,50 @@ import "leaflet/dist/leaflet.css";
 import StateMap from "./StateMap";
 import { Activity, CloudSun, Compass, Droplets, Info } from "lucide-react";
 
-/* ===== LEAFLET ICONS ===== */
+/* ===== GOOGLE MAPS STYLE ICONS ===== */
 const evIcon = L.divIcon({
   className: "custom-ev-marker",
-  html: `<div style="background-color: #10b981; color: white; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; border: 3px solid white; box-shadow: 0 4px 6px rgba(0,0,0,0.3); font-size: 14px;">⚡</div>`,
-  iconSize: [32, 32],
-  iconAnchor: [16, 16],
+  html: `<div style="background-color: #0f9d58; color: white; width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; border: 2.5px solid white; box-shadow: 0 3px 8px rgba(0,0,0,0.35); font-size: 13px;">⚡</div>`,
+  iconSize: [28, 28],
+  iconAnchor: [14, 14],
 });
 
-const originIcon = new L.Icon({
-  iconUrl: "https://maps.gstatic.com/mapfiles/ms2/micons/red-pushpin.png",
-  iconSize: [32, 32],
-  iconAnchor: [10, 32],
+const originIcon = L.divIcon({
+  className: "google-origin-marker",
+  html: `
+    <div style="position: relative; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center;">
+      <div style="position: absolute; width: 28px; height: 28px; border-radius: 50%; background: rgba(66, 133, 244, 0.3); animation: ping 1.8s cubic-bezier(0, 0, 0.2, 1) infinite;"></div>
+      <div style="width: 18px; height: 18px; border-radius: 50%; background: #1a73e8; border: 3.5px solid white; box-shadow: 0 2px 8px rgba(0,0,0,0.4);"></div>
+    </div>
+  `,
+  iconSize: [28, 28],
+  iconAnchor: [14, 14],
 });
 
-const destIcon = new L.Icon({
-  iconUrl: "https://maps.gstatic.com/mapfiles/ms2/micons/blue-pushpin.png",
-  iconSize: [32, 32],
-  iconAnchor: [10, 32],
+const destIcon = L.divIcon({
+  className: "google-dest-marker",
+  html: `
+    <div style="display: flex; flex-direction: column; align-items: center; filter: drop-shadow(0 4px 6px rgba(0,0,0,0.4));">
+      <svg width="30" height="40" viewBox="0 0 24 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M12 0C5.37258 0 0 5.37258 0 12C0 20.5 12 32 12 32C12 32 24 20.5 24 12C24 5.37258 18.6274 0 12 0Z" fill="#EA4335"/>
+        <circle cx="12" cy="11.5" r="4.5" fill="white"/>
+        <circle cx="12" cy="11.5" r="2.5" fill="#B31412"/>
+      </svg>
+    </div>
+  `,
+  iconSize: [30, 40],
+  iconAnchor: [15, 38],
+});
+
+const animalHazardIcon = L.divIcon({
+  className: "wildlife-hazard-marker",
+  html: `
+    <div style="background: #dc2626; color: white; width: 26px; height: 26px; border-radius: 50%; display: flex; align-items: center; justify-content: center; border: 2px solid #fff; box-shadow: 0 2px 8px rgba(220,38,38,0.5); font-size: 13px; animation: pulse 2s infinite;">
+      🐾
+    </div>
+  `,
+  iconSize: [26, 26],
+  iconAnchor: [13, 13],
 });
 
 /* ===== STATE MAP LOOKUPS ===== */
@@ -232,107 +258,209 @@ const RouteMap = ({ routes, selectedRouteId, origin, destination, onSelectRoute 
     }
   }
 
+  const [mapStyle, setMapStyle] = useState("roadmap");
+
+  const TILE_LAYERS = {
+    roadmap: {
+      url: "https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}",
+      attribution: '&copy; <a href="https://www.google.com/maps">Google Maps</a>',
+    },
+    satellite: {
+      url: "https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}",
+      attribution: '&copy; <a href="https://www.google.com/maps">Google Maps Satellite</a>',
+    },
+    terrain: {
+      url: "https://mt1.google.com/vt/lyrs=p&x={x}&y={y}&z={z}",
+      attribution: '&copy; <a href="https://www.google.com/maps">Google Maps Terrain</a>',
+    },
+  };
+
   return (
-    <div className="relative w-full h-full rounded-[3rem] bg-white" style={{ overflow: "visible" }}>
+    <div className="relative w-full h-full rounded-[3rem] bg-white overflow-hidden" style={{ overflow: "visible" }}>
       
-      {/* 🗺️ LEAFLET MAP VIEW WRAPPER (Always mounted to prevent React unmount/removeChild DOM crashes) */}
+      {/* 🗺️ LEAFLET MAP VIEW WRAPPER */}
       <div 
-        className="absolute inset-0 w-full h-full rounded-[3rem] overflow-hidden bg-emerald-50/10 transition-opacity duration-700 ease-out"
+        className="absolute inset-0 w-full h-full rounded-[3rem] overflow-hidden bg-slate-100 transition-opacity duration-700 ease-out"
         style={{ 
           opacity: mapOpacity, 
           zIndex: showLeafletMap ? 10 : 1,
           pointerEvents: showLeafletMap ? "auto" : "none" 
         }}
       >
+        {/* Google Maps Style Layer Switcher Floating Control */}
+        <div className="absolute top-4 right-4 z-[400] flex bg-white/95 backdrop-blur-md rounded-2xl p-1 shadow-lg shadow-black/10 border border-gray-200/90 text-xs font-bold text-gray-700">
+          <button
+            type="button"
+            onClick={() => setMapStyle("roadmap")}
+            className={`px-3 py-1.5 rounded-xl transition-all ${mapStyle === "roadmap" ? "bg-blue-600 text-white shadow-sm font-black" : "hover:bg-gray-100 text-gray-600 font-bold"}`}
+          >
+            Map
+          </button>
+          <button
+            type="button"
+            onClick={() => setMapStyle("satellite")}
+            className={`px-3 py-1.5 rounded-xl transition-all ${mapStyle === "satellite" ? "bg-blue-600 text-white shadow-sm font-black" : "hover:bg-gray-100 text-gray-600 font-bold"}`}
+          >
+            Satellite
+          </button>
+          <button
+            type="button"
+            onClick={() => setMapStyle("terrain")}
+            className={`px-3 py-1.5 rounded-xl transition-all ${mapStyle === "terrain" ? "bg-blue-600 text-white shadow-sm font-black" : "hover:bg-gray-100 text-gray-600 font-bold"}`}
+          >
+            Terrain
+          </button>
+        </div>
+
         <MapContainer
           center={[22.5, 78.9]}
           zoom={4.2}
           minZoom={3}
-          maxZoom={18}
+          maxZoom={20}
+          zoomSnap={0.5}
+          zoomDelta={0.5}
+          wheelPxPerZoomLevel={100}
           scrollWheelZoom={true}
           dragging={true}
           doubleClickZoom={true}
           zoomControl={true}
-          style={{ height: "100%", width: "100%", filter: "hue-rotate(85deg) saturate(105%) brightness(1.02) contrast(95%)" }}
+          style={{ height: "100%", width: "100%" }}
           className="h-full w-full rounded-[3rem]"
         >
           <TileLayer
-            url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
-            attribution='&copy; <a href="https://carto.com/">CARTO</a>'
+            key={mapStyle}
+            url={TILE_LAYERS[mapStyle]?.url || TILE_LAYERS.roadmap.url}
+            attribution={TILE_LAYERS[mapStyle]?.attribution || TILE_LAYERS.roadmap.attribution}
+            maxNativeZoom={19}
+            maxZoom={20}
+            keepBuffer={8}
+            crossOrigin="anonymous"
           />
 
           <InvalidateSizeHelper isActive={showLeafletMap} />
 
           {destination && <FitBounds origin={leafletOrigin} destination={destination} />}
 
+          {/* Origin & Destination Google-Style Pins */}
           <Marker position={originPos} icon={originIcon}>
-            <Popup><strong>Origin:</strong> {leafletOrigin.name}</Popup>
+            <Popup>
+              <div className="text-xs font-black text-gray-800">
+                <span className="text-blue-600">● START:</span> {leafletOrigin.name}
+              </div>
+            </Popup>
           </Marker>
-          {destPos && <Marker position={destPos} icon={destIcon}>
-            <Popup><strong>Destination:</strong> {destination?.name}</Popup>
-          </Marker>}
 
+          {destPos && (
+            <Marker position={destPos} icon={destIcon}>
+              <Popup>
+                <div className="text-xs font-black text-gray-800">
+                  <span className="text-red-600">📍 DESTINATION:</span> {destination?.name}
+                </div>
+              </Popup>
+            </Marker>
+          )}
+
+          {/* Render Full Curved Road Geometries (Google Maps Navigation Style) */}
           {routes.map((route) => {
             const isSelected = route.id === selectedRouteId;
+            const fullRoadCoords = route.geometry?.map((p) => [p.lat, p.lon]) || [];
 
-            if (isSelected && route.pollutionSegments?.length > 1) {
+            if (isSelected) {
               const evMarkers = (route.evStations || []).map((ev) => (
                 <Marker key={`ev-${ev.id}`} position={[ev.lat, ev.lon]} icon={evIcon}>
                   <Popup>
-                    <div style={{ fontWeight: 700, color: "#10b981", textTransform: "uppercase" }}>{ev.name}</div>
-                    <div style={{ fontSize: "11px", color: "#666" }}>Operator: {ev.operator}</div>
+                    <div style={{ fontWeight: 800, color: "#0f9d58", textTransform: "uppercase" }}>{ev.name}</div>
+                    <div style={{ fontSize: "11px", color: "#555" }}>EV Fast Charger • {ev.operator}</div>
                   </Popup>
                 </Marker>
               ));
 
-              const routeLines = route.pollutionSegments.map((seg, i) => {
-                if (i === route.pollutionSegments.length - 1) return null;
-                const segColor = getRouteSegmentAQIColor(seg.aqi);
-                const nextSeg = route.pollutionSegments[i + 1];
+              // Wildlife hazard markers along route
+              const hazardMarkers = (route.pollutionSegments || [])
+                .filter((seg) => (route.animalRisk?.maxRisk > 40 || route.maxAnimalRisk > 40) && seg.lat && seg.lon)
+                .slice(0, 2)
+                .map((seg, idx) => (
+                  <Marker key={`hazard-${idx}`} position={[seg.lat, seg.lon]} icon={animalHazardIcon}>
+                    <Popup>
+                      <div className="text-xs font-black text-red-600 uppercase">🐾 Wildlife Danger Zone</div>
+                      <div className="text-[11px] text-gray-600">High animal crossing accident record</div>
+                    </Popup>
+                  </Marker>
+                ));
 
+              // Air Quality Checkpoint badges
+              const aqiMarkers = (route.pollutionSegments || []).map((seg, i) => {
+                if (!labelIndexes.has(i) || !seg.lat || !seg.lon) return null;
+                const segColor = getRouteSegmentAQIColor(seg.aqi);
                 return (
-                  <Fragment key={`${route.id}-seg-${i}`}>
-                    <Polyline
-                      positions={[[seg.lat, seg.lon], [nextSeg.lat, nextSeg.lon]]}
-                      pathOptions={{ color: segColor, weight: 8, opacity: 0.85, lineCap: "round" }}
-                      eventHandlers={{ click: () => onSelectRoute && onSelectRoute(route.id) }}
-                    >
-                      {labelIndexes.has(i) && (
-                        <Tooltip permanent direction="top" opacity={1}>
-                          <div style={{
-                            background: "#fff",
-                            border: `3px solid ${segColor}`,
-                            borderRadius: "10px",
-                            padding: "6px 12px",
-                            boxShadow: "0 2px 12px rgba(0,0,0,0.15)",
-                            fontSize: "13px",
-                            fontWeight: 700,
-                            color: "#111",
-                            minWidth: "100px",
-                            textAlign: "center",
-                          }}>
-                            <div style={{ color: segColor, fontWeight: 800 }}>{seg.zone || "Unknown"}</div>
-                            <div style={{ color: "#555", fontWeight: 600 }}>AQI: {seg.aqi ?? "N/A"}</div>
-                          </div>
-                        </Tooltip>
-                      )}
-                    </Polyline>
-                  </Fragment>
+                  <Marker
+                    key={`aqi-checkpoint-${i}`}
+                    position={[seg.lat, seg.lon]}
+                    icon={L.divIcon({
+                      className: "aqi-pill-marker",
+                      html: `
+                        <div style="background: white; border: 2px solid ${segColor}; border-radius: 20px; padding: 3px 8px; box-shadow: 0 3px 10px rgba(0,0,0,0.25); font-size: 11px; font-weight: 800; color: #1f2937; white-space: nowrap; display: flex; align-items: center; gap: 4px;">
+                          <span style="width: 7px; height: 7px; border-radius: 50%; background: ${segColor};"></span>
+                          <span>AQI ${seg.aqi ?? 'N/A'}</span>
+                        </div>
+                      `,
+                      iconSize: [80, 24],
+                      iconAnchor: [40, 12],
+                    })}
+                  >
+                    <Popup>
+                      <div className="text-xs font-bold text-gray-800">
+                        <div><strong>Area:</strong> {seg.area || 'Checkpoint'}</div>
+                        <div><strong>Air Quality:</strong> {seg.zone} (AQI: {seg.aqi})</div>
+                      </div>
+                    </Popup>
+                  </Marker>
                 );
               });
 
-              return [...evMarkers, ...routeLines];
+              return (
+                <Fragment key={`selected-route-${route.id}`}>
+                  {/* Google Maps Route Casing (Dark Blue Outer Border) */}
+                  <Polyline
+                    positions={fullRoadCoords}
+                    pathOptions={{
+                      color: "#185ABC",
+                      weight: 8,
+                      opacity: 0.95,
+                      lineCap: "round",
+                      lineJoin: "round",
+                    }}
+                  />
+                  {/* Google Maps Route Core (Vibrant Blue Highway) */}
+                  <Polyline
+                    positions={fullRoadCoords}
+                    pathOptions={{
+                      color: "#1A73E8",
+                      weight: 5,
+                      opacity: 1,
+                      lineCap: "round",
+                      lineJoin: "round",
+                    }}
+                  />
+                  {evMarkers}
+                  {hazardMarkers}
+                  {aqiMarkers}
+                </Fragment>
+              );
             }
 
-            const positions = route.geometry?.map((p) => [p.lat, p.lon]) || [];
-            const colors = ["#3b82f6", "#8b5cf6", "#f59e0b"];
-            const routeColor = colors[route.id % colors.length] || "#9CA3AF";
-
+            // Unselected Alternative Routes (Google Maps Grey Route)
             return (
               <Polyline
-                key={route.id}
-                positions={positions}
-                pathOptions={{ color: routeColor, weight: 5, opacity: 0.45, dashArray: "8 4" }}
+                key={`alt-route-${route.id}`}
+                positions={fullRoadCoords}
+                pathOptions={{
+                  color: "#9AA0A6",
+                  weight: 5,
+                  opacity: 0.7,
+                  lineCap: "round",
+                  lineJoin: "round",
+                }}
                 eventHandlers={{ click: () => onSelectRoute && onSelectRoute(route.id) }}
               />
             );

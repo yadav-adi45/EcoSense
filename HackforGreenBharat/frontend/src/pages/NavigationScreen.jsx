@@ -95,43 +95,151 @@ const refreshUserDistances = (items, userLat, userLon) =>
     .map((item) => ({ ...item, userDist: haversine(userLat, userLon, item.lat, item.lon) }))
     .sort((a, b) => a.userDist - b.userDist);
 
-/* ─── Leaflet icons for hospital & police ────────────────── */
-const hospitalIcon = L.divIcon({
-  className: "",
-  html: `<div style="
-    width:30px;height:30px;border-radius:50%;
-    background:#ef4444;border:3px solid white;
-    box-shadow:0 2px 8px rgba(0,0,0,0.35);
-    display:flex;align-items:center;justify-content:center;
-    font-size:14px;line-height:1;">🏥</div>`,
-  iconSize: [30, 30],
-  iconAnchor: [15, 15],
+/* ─── Leaflet Map Helpers ──────────────────────────────────── */
+function FitRouteBounds({ geometry, originCoords, destinationCoords }) {
+  const map = useMap();
+  useEffect(() => {
+    map.invalidateSize();
+    if (geometry && geometry.length > 1) {
+      const bounds = L.latLngBounds(geometry.map((p) => [p.lat, p.lon]));
+      map.fitBounds(bounds, { padding: [60, 60], maxZoom: 15 });
+    } else if (originCoords && destinationCoords) {
+      const bounds = L.latLngBounds([
+        [originCoords.lat, originCoords.lon],
+        [destinationCoords.lat, destinationCoords.lon],
+      ]);
+      map.fitBounds(bounds, { padding: [60, 60], maxZoom: 15 });
+    }
+  }, [map, geometry, originCoords, destinationCoords]);
+  return null;
+}
+
+function InvalidateSizeHelper() {
+  const map = useMap();
+  useEffect(() => {
+    map.invalidateSize();
+    const t1 = setTimeout(() => map.invalidateSize(), 200);
+    const t2 = setTimeout(() => map.invalidateSize(), 600);
+    return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+    };
+  }, [map]);
+  return null;
+}
+
+/* ─── Leaflet icons for origin / destination in Uber Style ────── */
+const createUberOriginIcon = (cityName) =>
+  L.divIcon({
+    className: "uber-origin-marker",
+    html: `
+      <div style="position: relative; display: flex; flex-direction: column; align-items: center; filter: drop-shadow(0 4px 12px rgba(0,0,0,0.18)); cursor: pointer;">
+        <div style="background: #ffffff; border-radius: 8px; padding: 6px 14px; font-size: 13px; font-weight: 800; color: #111111; display: flex; align-items: center; gap: 6px; white-space: nowrap; margin-bottom: 6px; border: 1px solid rgba(0,0,0,0.08); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+          <span>From ${cityName || "Origin"}</span>
+          <span style="font-size: 14px; font-weight: 900; opacity: 0.6;">›</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 4px;">
+          <div style="width: 22px; height: 22px; border-radius: 50%; background: #000000; border: 3.5px solid white; box-shadow: 0 2px 8px rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: center;">
+            <div style="width: 6px; height: 6px; border-radius: 50%; background: white;"></div>
+          </div>
+        </div>
+      </div>
+    `,
+    iconSize: [160, 60],
+    iconAnchor: [80, 50],
+  });
+
+const createUberDestIcon = (cityName) =>
+  L.divIcon({
+    className: "uber-dest-marker",
+    html: `
+      <div style="position: relative; display: flex; flex-direction: column; align-items: center; filter: drop-shadow(0 4px 12px rgba(0,0,0,0.18)); cursor: pointer;">
+        <div style="background: #ffffff; border-radius: 8px; padding: 6px 14px; font-size: 13px; font-weight: 800; color: #111111; display: flex; align-items: center; gap: 6px; white-space: nowrap; margin-bottom: 6px; border: 1px solid rgba(0,0,0,0.08); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+          <span>To ${cityName || "Destination"}</span>
+          <span style="font-size: 14px; font-weight: 900; opacity: 0.6;">›</span>
+        </div>
+        <div style="width: 20px; height: 20px; background: #000000; border: 3.5px solid white; box-shadow: 0 2px 8px rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: center;">
+          <div style="width: 6px; height: 6px; background: white;"></div>
+        </div>
+      </div>
+    `,
+    iconSize: [160, 60],
+    iconAnchor: [80, 50],
+  });
+
+const uberVehicleIcon = L.divIcon({
+  className: "uber-car-marker",
+  html: `
+    <div style="position: relative; width: 38px; height: 38px; display: flex; align-items: center; justify-content: center;">
+      <div style="position: absolute; width: 38px; height: 38px; border-radius: 50%; background: rgba(0, 0, 0, 0.15); animation: ping 2s cubic-bezier(0, 0, 0.2, 1) infinite;"></div>
+      <div style="width: 30px; height: 30px; border-radius: 50%; background: #000000; border: 2.5px solid white; box-shadow: 0 3px 10px rgba(0,0,0,0.45); display: flex; align-items: center; justify-content: center; font-size: 14px;">
+        🚗
+      </div>
+    </div>
+  `,
+  iconSize: [38, 38],
+  iconAnchor: [19, 19],
 });
 
-const policeIcon = L.divIcon({
-  className: "",
-  html: `<div style="
-    width:30px;height:30px;border-radius:50%;
-    background:#2563eb;border:3px solid white;
-    box-shadow:0 2px 8px rgba(0,0,0,0.35);
-    display:flex;align-items:center;justify-content:center;
-    font-size:14px;line-height:1;">🚔</div>`,
-  iconSize: [30, 30],
-  iconAnchor: [15, 15],
+const wildlifeHazardIcon = L.divIcon({
+  className: "uber-hazard-marker",
+  html: `
+    <div style="background: #dc2626; color: white; width: 26px; height: 26px; border-radius: 50%; display: flex; align-items: center; justify-content: center; border: 2px solid #fff; box-shadow: 0 2px 8px rgba(220,38,38,0.5); font-size: 13px; animation: pulse 2s infinite;">
+      🐾
+    </div>
+  `,
+  iconSize: [26, 26],
+  iconAnchor: [13, 13],
 });
+
+const hospitalMarkerIcon = L.divIcon({
+  className: "hospital-pin",
+  html: `
+    <div style="background: #ef4444; color: white; width: 26px; height: 26px; border-radius: 50%; display: flex; align-items: center; justify-content: center; border: 2px solid white; box-shadow: 0 2px 8px rgba(239,68,68,0.45); font-size: 13px;">
+      🏥
+    </div>
+  `,
+  iconSize: [26, 26],
+  iconAnchor: [13, 13],
+});
+
+const policeMarkerIcon = L.divIcon({
+  className: "police-pin",
+  html: `
+    <div style="background: #2563eb; color: white; width: 26px; height: 26px; border-radius: 50%; display: flex; align-items: center; justify-content: center; border: 2px solid white; box-shadow: 0 2px 8px rgba(37,99,235,0.45); font-size: 13px;">
+      🚔
+    </div>
+  `,
+  iconSize: [26, 26],
+  iconAnchor: [13, 13],
+});
+
+const roadColonyMarkerIcon = (name) =>
+  L.divIcon({
+    className: "colony-road-badge",
+    html: `
+      <div style="background: #ffffff; color: #0f172a; border: 1.5px solid #059669; border-radius: 12px; padding: 2px 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.18); font-size: 11px; font-weight: 800; white-space: nowrap; display: flex; align-items: center; gap: 4px; font-family: sans-serif;">
+        <span style="width: 6px; height: 6px; border-radius: 50%; background: #059669;"></span>
+        <span>${name}</span>
+      </div>
+    `,
+    iconSize: [110, 22],
+    iconAnchor: [55, 11],
+  });
 
 /* ─── AQI helpers ─────────────────────────────────────────── */
 const getAQIColor = (aqi) => {
   if (!aqi) return "#9CA3AF";
-  if (aqi <= 50)  return "#16a34a";
+  if (aqi <= 50) return "#16a34a";
   if (aqi <= 100) return "#ca8a04";
   if (aqi <= 150) return "#ea580c";
   if (aqi <= 200) return "#dc2626";
   return "#7c3aed";
 };
+
 const getAQILabel = (aqi) => {
-  if (!aqi)       return "Unknown";
-  if (aqi <= 50)  return "Good";
+  if (!aqi) return "Unknown";
+  if (aqi <= 50) return "Good";
   if (aqi <= 100) return "Moderate";
   if (aqi <= 150) return "Unhealthy";
   if (aqi <= 200) return "Very Unhealthy";
@@ -656,89 +764,287 @@ const NavigationScreen = () => {
     return { label: route.name || "Navigation", color: "bg-gray-100 text-gray-700 border-gray-200", icon: "🗺️" };
   })();
 
-  /* ── "Remaining" portion of geometry (from closest point onward) ── */
-  const remainingGeometry = (() => {
-    if (routeGeometry.length < 2) return routeGeometry;
-    const [lat, lon] = realPos;
-    const idx = closestPointIndex(routeGeometry, lat, lon);
-    return routeGeometry.slice(idx);
+  /* ── Extract actual road and highway names from OSRM steps ── */
+  const majorRoads = (() => {
+    const roadSet = new Set();
+    if (route.summary) roadSet.add(route.summary);
+    if (route.via) roadSet.add(route.via);
+    (steps || []).forEach((s) => {
+      if (s.name && s.name !== "unnamed road" && s.name.length > 2) {
+        roadSet.add(s.name);
+      }
+    });
+    const list = Array.from(roadSet);
+    return list.length > 0 ? list : [`${origin} - ${destination} Corridor`];
   })();
 
-  /* ── Completed portion of geometry ── */
-  const completedGeometry = (() => {
-    if (routeGeometry.length < 2) return [];
-    const [lat, lon] = realPos;
-    const idx = closestPointIndex(routeGeometry, lat, lon);
-    return routeGeometry.slice(0, idx + 1);
-  })();
+  const primaryRoad = majorRoads[0];
+  const connectingRoads = majorRoads.slice(1, 4);
 
   return (
-    <div className="relative w-screen h-screen overflow-hidden bg-gray-900 select-none">
+    <div className="w-screen h-screen overflow-hidden bg-[#f6f6f6] flex flex-col select-none font-sans">
+      
+      {/* ── Top Navbar ── */}
+      <header className="h-16 px-6 md:px-8 bg-white border-b border-gray-100 flex items-center justify-between z-30 shrink-0 shadow-sm">
+        <div className="flex items-center gap-8">
+          <div
+            className="text-2xl font-black tracking-tighter text-gray-900 flex items-center gap-1 cursor-pointer"
+            onClick={() => { window.speechSynthesis?.cancel(); navigate("/routes"); }}
+          >
+            <span>Eco</span>
+            <span className="text-emerald-600">Sense</span>
+            <span className="text-[10px] bg-emerald-100 text-emerald-800 font-black px-2 py-0.5 rounded-full ml-1 uppercase tracking-wider">
+              Road Guidance
+            </span>
+          </div>
+          <nav className="flex items-center gap-6">
+            <div className="flex items-center gap-2 pb-1 border-b-2 border-emerald-600 font-extrabold text-emerald-800 text-sm cursor-pointer">
+              <span className="text-base">🛣️</span> Selected Road: {primaryRoad}
+            </div>
+            <div
+              onClick={() => { window.speechSynthesis?.cancel(); navigate("/routes"); }}
+              className="text-gray-500 hover:text-emerald-700 font-bold text-sm cursor-pointer transition"
+            >
+              Alternative Routes
+            </div>
+          </nav>
+        </div>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => { window.speechSynthesis?.cancel(); navigate("/routes"); }}
+            className="px-3.5 py-1.5 rounded-full hover:bg-red-50 hover:text-red-600 hover:border-red-200 text-gray-600 font-bold text-xs border border-gray-200 flex items-center gap-1.5 transition"
+          >
+            <X className="w-3.5 h-3.5" /> Exit
+          </button>
+          <div className="w-8 h-8 rounded-full bg-emerald-100 text-emerald-800 flex items-center justify-center font-black text-xs shadow-sm">
+            🌱
+          </div>
+        </div>
+      </header>
 
-      {/* ══ FULL-SCREEN MAP ══════════════════════════════════════ */}
-      <MapContainer
-        center={displayPos}
-        zoom={15}
-        minZoom={5}
-        maxZoom={18}
-        zoomControl={false}
-        scrollWheelZoom={true}
-        style={{ height: "100%", width: "100%", position: "absolute", inset: 0 }}
-      >
-        <TileLayer
-          url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
-          attribution="&copy; CARTO"
-        />
-        <ZoomControls />
-        <RecenterMap position={displayPos} follow={followUser} zoom={15} />
-        <DragWatcher onDrag={() => setFollowUser(false)} />
+      {/* ── Main 2-Column Content ── */}
+      <div className="flex-1 w-full max-w-[1550px] mx-auto p-4 md:p-6 flex flex-col md:flex-row gap-6 min-h-0 overflow-hidden">
+        
+        {/* ════════════════════════════════════════════════════════════════
+            LEFT PANEL (~460px): ROAD & HIGHWAY ROUTE ANALYSIS
+            ════════════════════════════════════════════════════════════════ */}
+        <div className="w-full md:w-[460px] lg:w-[490px] h-full flex flex-col bg-white rounded-3xl p-6 shadow-xl shadow-emerald-950/5 border border-emerald-100/80 overflow-y-auto shrink-0">
+          
+          <div className="flex items-center justify-between mb-4">
+            <h1 className="text-2xl font-black text-gray-900 tracking-tight">Selected Road Route</h1>
+            <span className="text-[11px] font-black uppercase tracking-wider px-3 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+              ● Active Road
+            </span>
+          </div>
 
-        {/* Completed route — dimmed grey */}
-        {completedGeometry.length > 1 && (
-          <Polyline
-            positions={completedGeometry.map((p) => [p.lat, p.lon])}
-            pathOptions={{ color: "#94a3b8", weight: 6, opacity: 0.4, lineCap: "round", lineJoin: "round" }}
-          />
-        )}
+          {/* Location & Highway Summary Capsule */}
+          <div className="bg-gradient-to-br from-emerald-50/80 to-teal-50/60 border border-emerald-200/80 rounded-2xl p-4 mb-4 shadow-sm">
+            <div className="flex items-center justify-between mb-1">
+              <h2 className="text-base font-extrabold text-gray-900">{origin} → {destination}</h2>
+              <span className="text-xs font-black text-emerald-700 bg-emerald-100/80 px-2 py-0.5 rounded-md">
+                Via {primaryRoad}
+              </span>
+            </div>
+            <p className="text-xs text-emerald-700 font-bold mb-2">Highway Navigation Active</p>
+            <div className="bg-white/80 backdrop-blur-sm text-emerald-900 border border-emerald-200/80 text-[11px] font-extrabold px-3 py-1.5 rounded-xl flex items-center gap-1.5 shadow-sm">
+              <span>🍃</span>
+              <span>100% Eco-Optimized. ~{(parseFloat(route.distance || 0) * 0.12).toFixed(1)} kg CO₂ saved.</span>
+            </div>
+          </div>
 
-        {/* Outer Casing / Deep Emerald Glow Path */}
-        {remainingGeometry.length > 1 && (
-          <Polyline
-            positions={remainingGeometry.map((p) => [p.lat, p.lon])}
-            pathOptions={{
-              color: "#064e3b",
-              weight: 14,
-              opacity: 0.65,
-              lineCap: "round",
-              lineJoin: "round",
-            }}
-          />
-        )}
+          {/* Turn-by-Turn Road Guidance Card */}
+          <div className="bg-gradient-to-r from-emerald-700 via-teal-700 to-emerald-800 text-white rounded-2xl p-4 mb-4 shadow-lg shadow-emerald-600/20">
+            <div className="flex items-start gap-3.5">
+              <div className="w-11 h-11 rounded-xl bg-white/15 backdrop-blur-md text-white border border-white/20 flex items-center justify-center text-xl font-black shrink-0 shadow-md">
+                {currentStep?.icon || "⬆"}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-[10px] font-black text-emerald-200 uppercase tracking-wider">
+                  {currentStep?.dist ? `In ${currentStep.dist}` : "Next road transition"}
+                </p>
+                <p className="text-sm font-extrabold leading-tight text-white mt-0.5">
+                  {currentStep?.text || `Continue on ${primaryRoad}`}
+                </p>
+              </div>
+            </div>
+            {nextStep && (
+              <div className="mt-2.5 pt-2 border-t border-white/15 text-[11px] text-emerald-100 flex items-center gap-1 truncate font-medium">
+                <ChevronRight className="w-3 h-3 text-emerald-200 shrink-0" />
+                <span className="truncate">Then: {nextStep.text}</span>
+              </div>
+            )}
+          </div>
 
-        {/* Primary Core Route Path — AQI coloured or solid Eco-Emerald */}
-        {segments.length > 1
-          ? segments.map((seg, i) => {
-              if (i === segments.length - 1) return null;
-              const next = segments[i + 1];
-              return (
-                <Polyline
-                  key={i}
-                  positions={[[seg.lat, seg.lon], [next.lat, next.lon]]}
-                  pathOptions={{
-                    color: getAQIColor(seg.aqi),
-                    weight: 8,
-                    opacity: 0.95,
-                    lineCap: "round",
-                    lineJoin: "round",
-                  }}
-                />
-              );
-            })
-          : remainingGeometry.length > 1 && (
+          <h2 className="text-sm font-extrabold text-gray-800 uppercase tracking-wider mb-2.5">Selected Road Characteristics</h2>
+
+          {/* Primary Selected Road Card */}
+          <div className="border-2 border-emerald-500 bg-emerald-50/40 rounded-2xl p-4 flex items-center justify-between mb-3 shadow-sm transition">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 bg-white rounded-xl flex items-center justify-center text-2xl shrink-0 shadow-sm border border-emerald-100 p-2">
+                🛣️
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="text-sm font-black text-gray-900">{primaryRoad}</h3>
+                </div>
+                <p className="text-xs text-gray-500 font-semibold">{remainingDist} • {remainingMins} mins total</p>
+                <span className="inline-block bg-emerald-600 text-white text-[9px] font-black uppercase px-2 py-0.5 rounded-full mt-1">
+                  Selected Highway
+                </span>
+              </div>
+            </div>
+            <div className="text-right">
+              <p className="text-base font-black text-emerald-700">AQI: {liveAQI ?? 67}</p>
+              <p className="text-[10px] text-gray-500 font-bold">{getAQILabel(liveAQI)} Air</p>
+            </div>
+          </div>
+
+          {/* Connecting Road Stretches List */}
+          {connectingRoads.length > 0 && (
+            <div className="border border-gray-200 rounded-2xl p-3.5 mb-3 bg-white space-y-2">
+              <p className="text-[10px] font-black text-gray-400 uppercase tracking-wider">Connecting Road Corridors</p>
+              {connectingRoads.map((roadName, idx) => (
+                <div key={idx} className="flex items-center justify-between text-xs py-1 border-b border-gray-50 last:border-0">
+                  <div className="flex items-center gap-2">
+                    <span className="text-emerald-600 font-black">↳</span>
+                    <span className="font-bold text-gray-800">{roadName}</span>
+                  </div>
+                  <span className="text-[10px] text-gray-400 font-semibold">Highway Segment</span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Animal Hazard / Wildlife Corridor Warning */}
+          {((route.animalRisk && (route.animalRisk.hasHighRisk || route.animalRisk.maxRisk > 25)) || route.maxAnimalRisk > 25 || route.animalWarning) && (
+            <div className="bg-amber-50/90 border border-amber-200 rounded-2xl p-3 mb-3 text-xs shadow-sm">
+              <div className="flex items-center gap-1.5 font-black text-amber-900 mb-1">
+                <span>🐾</span>
+                <span>Wildlife Corridor Alert</span>
+              </div>
+              <p className="text-amber-800 text-[11px] font-medium leading-tight">
+                {route.animalWarning || "High animal crossing record on this segment. Recommended speed limit < 45 km/h."}
+              </p>
+            </div>
+          )}
+
+          {/* Emergency Services & Nearby Hospitals/Police Collapsible List */}
+          <div className="border border-gray-200 rounded-2xl overflow-hidden mb-3 bg-white shadow-sm">
+            <button
+              onClick={() => setShowEmergency((v) => !v)}
+              className="w-full flex items-center justify-between p-3.5 bg-gray-50/80 hover:bg-gray-100/80 transition text-xs font-black text-gray-800"
+            >
+              <span className="flex items-center gap-2">
+                🚨 Nearby Emergency ({allHospitals.length} Hosp / {allPolice.length} Police)
+              </span>
+              <span className="text-gray-400 font-black">{showEmergency ? "▲" : "▼"}</span>
+            </button>
+            {showEmergency && (
+              <div className="p-3 bg-white space-y-2 max-h-48 overflow-y-auto border-t border-gray-100">
+                {allHospitals.slice(0, 4).map((h, i) => (
+                  <div key={`hosp-hud-${i}`} className="flex items-center justify-between p-2 rounded-xl bg-red-50/60 border border-red-100 text-xs">
+                    <div className="flex items-center gap-2 truncate">
+                      <Hospital className="w-3.5 h-3.5 text-red-600 shrink-0" />
+                      <span className="font-bold text-gray-800 truncate">{h.name}</span>
+                    </div>
+                    <span className="text-[10px] font-black text-red-600 shrink-0">
+                      {h.userDist != null ? `${h.userDist.toFixed(1)} km` : "Nearby"}
+                    </span>
+                  </div>
+                ))}
+                {allPolice.slice(0, 4).map((p, i) => (
+                  <div key={`pol-hud-${i}`} className="flex items-center justify-between p-2 rounded-xl bg-blue-50/60 border border-blue-100 text-xs">
+                    <div className="flex items-center gap-2 truncate">
+                      <ShieldCheck className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                      <span className="font-bold text-gray-800 truncate">{p.name}</span>
+                    </div>
+                    <span className="text-[10px] font-black text-blue-600 shrink-0">
+                      {p.userDist != null ? `${p.userDist.toFixed(1)} km` : "Nearby"}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Bottom Controls & End Navigation */}
+          <div className="mt-auto pt-4 space-y-3 border-t border-gray-100">
+            <div className="flex items-center justify-between text-xs text-gray-700 font-extrabold px-1">
+              <div className="flex items-center gap-1.5 text-emerald-800 font-bold">
+                <span>🌿</span> Eco-Speed Active (~{speed != null && speed > 0 && speed < 140 ? Math.round(speed) : 52} km/h)
+              </div>
+              <div className="flex items-center gap-2">
+                <button onClick={toggleVoice} className="p-2.5 rounded-xl bg-gray-100 hover:bg-emerald-50 hover:text-emerald-700 text-gray-700 transition" title="Toggle Voice">
+                  {voiceEnabled ? <Volume2 className="w-4 h-4 text-emerald-600" /> : <VolumeX className="w-4 h-4 text-gray-400" />}
+                </button>
+                <button onClick={() => setFollowUser(true)} className="p-2.5 rounded-xl bg-gray-100 hover:bg-emerald-50 hover:text-emerald-700 text-gray-700 transition" title="Recenter">
+                  <RotateCcw className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+
+            <button
+              onClick={() => { window.speechSynthesis?.cancel(); navigate("/routes"); }}
+              className="w-full bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 hover:from-emerald-700 hover:to-teal-800 text-white font-extrabold py-3.5 rounded-2xl shadow-lg shadow-emerald-600/25 transition text-sm tracking-wide text-center"
+            >
+              End Navigation
+            </button>
+          </div>
+        </div>
+
+        {/* ════════════════════════════════════════════════════════════════
+            RIGHT PANEL (~60%-62% width): HIGHWAY ROAD MAP
+            ════════════════════════════════════════════════════════════════ */}
+        <div className="flex-1 h-full min-h-[500px] bg-white rounded-3xl border border-gray-200 shadow-sm overflow-hidden relative">
+          
+          {/* Floating Selected Road Badge on Map */}
+          <div className="absolute top-4 left-4 z-[400] bg-white/95 backdrop-blur-md border border-gray-200/90 rounded-2xl px-4 py-2 shadow-lg flex items-center gap-2.5">
+            <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+            <div>
+              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest leading-none">Selected Road</p>
+              <p className="text-xs font-black text-gray-900 leading-tight mt-0.5">{primaryRoad}</p>
+            </div>
+            <span className="ml-2 text-xs font-black text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-lg">
+              {remainingDist}
+            </span>
+          </div>
+
+          <MapContainer
+            center={displayPos}
+            zoom={12}
+            minZoom={3}
+            maxZoom={20}
+            zoomSnap={0.5}
+            zoomDelta={0.5}
+            wheelPxPerZoomLevel={100}
+            zoomControl={true}
+            scrollWheelZoom={true}
+            style={{ height: "100%", width: "100%" }}
+          >
+            {/* Google Maps Clean Street Tile Layer with maxNativeZoom & keepBuffer */}
+            <TileLayer
+              url="https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}"
+              attribution='&copy; <a href="https://www.google.com/maps">Google Maps</a>'
+              maxNativeZoom={19}
+              maxZoom={20}
+              keepBuffer={8}
+              crossOrigin="anonymous"
+            />
+
+            <InvalidateSizeHelper />
+            <FitRouteBounds
+              geometry={routeGeometry}
+              originCoords={originCoords}
+              destinationCoords={destinationCoords}
+            />
+            <DragWatcher onDrag={() => setFollowUser(false)} />
+
+            {/* Selected Road Casing (Dark Slate Outer Outline) */}
+            {routeGeometry.length > 1 && (
               <Polyline
-                positions={remainingGeometry.map((p) => [p.lat, p.lon])}
+                positions={routeGeometry.map((p) => [p.lat, p.lon])}
                 pathOptions={{
-                  color: "#10b981", // Vibrant Emerald Green matching EcoSense theme!
+                  color: "#0f172a",
                   weight: 8,
                   opacity: 0.95,
                   lineCap: "round",
@@ -747,536 +1053,133 @@ const NavigationScreen = () => {
               />
             )}
 
-        {/* Live position — animated blue marker + accuracy ring */}
-        {displayPos && (
-          <>
-            <Circle
-              center={displayPos}
-              radius={60}
-              pathOptions={{ color: "#2563eb", fillColor: "#2563eb", fillOpacity: 0.1, weight: 1 }}
-            />
-            <Marker position={displayPos} icon={navIcon}>
-              <Popup>📍 You</Popup>
-            </Marker>
-          </>
-        )}
-
-        {/* Destination pin */}
-        <Marker position={[destinationCoords.lat, destinationCoords.lon]} icon={destIcon}>
-          <Popup>🏁 {destination}</Popup>
-        </Marker>
-
-        {/* EV stations */}
-        {route.evStations?.map((ev) => (
-          <Marker key={ev.id} position={[ev.lat, ev.lon]}>
-            <Popup><strong style={{ color: "#10b981" }}>{ev.name}</strong><br /><small>{ev.operator}</small></Popup>
-          </Marker>
-        ))}
-
-        {/* Nearby Hospitals */}
-        {allHospitals.map((h, i) => (
-          <Marker key={`hosp-${h.id ?? i}`} position={[h.lat, h.lon]} icon={hospitalIcon}>
-            <Popup>
-              <strong style={{ color: "#ef4444" }}>🏥 {h.name}</strong><br />
-              <small>{h.userDist != null ? (h.userDist < 1 ? `${Math.round(h.userDist * 1000)} m from you` : `${h.userDist.toFixed(1)} km from you`) : ""}</small>
-            </Popup>
-          </Marker>
-        ))}
-
-        {/* Nearby Police Stations */}
-        {allPolice.map((p, i) => (
-          <Marker key={`police-${p.id ?? i}`} position={[p.lat, p.lon]} icon={policeIcon}>
-            <Popup>
-              <strong style={{ color: "#2563eb" }}>🚔 {p.name}</strong><br />
-              <small>{p.userDist != null ? (p.userDist < 1 ? `${Math.round(p.userDist * 1000)} m from you` : `${p.userDist.toFixed(1)} km from you`) : ""}</small>
-            </Popup>
-          </Marker>
-        ))}
-      </MapContainer>
-
-      {/* ══ FIXED LEFT — EMERGENCY SERVICES PANEL ═══════════════ */}
-      <div
-        className="fixed left-3 z-[600] pointer-events-auto"
-        style={{
-          top: "186px",
-          bottom: "212px",
-          width: "224px",
-        }}
-      >
-        <div
-          className="flex flex-col bg-white/95 backdrop-blur-md rounded-2xl shadow-2xl shadow-black/20 border border-white/70 overflow-hidden"
-          style={{ height: "100%", maxHeight: "100%" }}
-        >
-
-          {/* ── Panel header ── */}
-          <button
-            onClick={() => setShowEmergency((v) => !v)}
-            className="flex items-center justify-between px-3 py-2.5 bg-gray-900/90 text-white rounded-t-2xl shrink-0 hover:bg-gray-800/90 transition-colors"
-          >
-            <span className="text-[11px] font-black uppercase tracking-widest">🚨 Emergency Services</span>
-            <span className="text-[10px] font-black opacity-60">{showEmergency ? "◀" : "▶"}</span>
-          </button>
-
-          {/* ── Expanded: two independent sections ── */}
-          {showEmergency && (
-            <div className="flex flex-col overflow-hidden" style={{ flex: "1 1 0", minHeight: 0 }}>
-
-              {/* Loading state */}
-              {emergencyLoading && (
-                <div className="flex items-center justify-center gap-2 py-4 shrink-0">
-                  <div className="w-4 h-4 border-2 border-red-400 border-t-transparent rounded-full animate-spin" />
-                  <span className="text-[10px] text-gray-400 font-bold">Scanning route…</span>
-                </div>
-              )}
-
-              {/* ════ HOSPITALS SECTION ════ */}
-              {/* Takes exactly half the available height, has its own scroll */}
-              <div
-                className="flex flex-col border-b border-gray-200"
-                style={{ flex: "1 1 0", minHeight: 0, overflow: "hidden" }}
-              >
-
-                {/* Section header — fixed, never scrolls */}
-                <div className="shrink-0 px-2.5 pt-2 pb-1">
-                  <div className="flex items-center justify-between mb-1">
-                    <div className="flex items-center gap-1.5">
-                      <div className="w-5 h-5 rounded-md bg-red-100 flex items-center justify-center shrink-0">
-                        <Hospital className="w-3 h-3 text-red-600" />
-                      </div>
-                      <span className="text-[10px] font-black text-gray-700 uppercase tracking-wider">Hospitals</span>
-                    </div>
-                    <span className="text-[10px] font-black text-red-600 bg-red-50 border border-red-100 px-1.5 py-0.5 rounded-full leading-none">
-                      {allHospitals.length}
-                    </span>
-                  </div>
-
-                  {/* Nearest hospital — always visible, updates live */}
-                  {allHospitals[0] ? (
-                    <div className="px-2 py-1.5 bg-red-50 border border-red-100 rounded-xl mb-1">
-                      <p className="text-[8px] font-black text-red-400 uppercase tracking-widest leading-none mb-0.5">Nearest</p>
-                      <p className="text-[10px] font-black text-gray-800 leading-tight truncate">{allHospitals[0].name}</p>
-                      <p className="text-[9px] font-bold text-red-500 leading-none mt-0.5">
-                        {allHospitals[0].userDist != null
-                          ? allHospitals[0].userDist < 1
-                            ? `${Math.round(allHospitals[0].userDist * 1000)} m away`
-                            : `${allHospitals[0].userDist.toFixed(1)} km away`
-                          : "—"}
-                      </p>
-                    </div>
-                  ) : (
-                    !emergencyLoading && (
-                      <p className="text-[9px] text-gray-400 italic px-1 mb-1">None found along route.</p>
-                    )
-                  )}
-                </div>
-
-                {/* Hospital scrollable list — independent scroll */}
-                {allHospitals.length > 0 && (
-                  <div
-                    className="px-2.5 pb-2 space-y-1"
-                    style={{ flex: "1 1 0", minHeight: 0, overflowY: "auto" }}
-                  >
-                    {allHospitals.map((h, i) => (
-                      <div
-                        key={h.id ?? i}
-                        className="flex items-start justify-between gap-1 py-1 px-2 rounded-lg bg-red-50/50 border border-red-100/60"
-                      >
-                        <div className="flex items-start gap-1 min-w-0">
-                          <span className="text-[8px] font-black text-red-300 mt-0.5 shrink-0">{i + 1}.</span>
-                          <span className="text-[10px] font-bold text-gray-700 leading-tight">{h.name}</span>
-                        </div>
-                        <div className="flex flex-col items-end shrink-0 ml-1 gap-0.5">
-                          <span className="text-[9px] font-black text-red-600 whitespace-nowrap">
-                            {h.userDist != null
-                              ? h.userDist < 1 ? `${Math.round(h.userDist * 1000)} m` : `${h.userDist.toFixed(1)} km`
-                              : "—"}
-                          </span>
-                          {h.routeDist != null && (
-                            <span className="text-[8px] text-gray-400 font-bold whitespace-nowrap">
-                              ~{h.routeDist < 1 ? `${Math.round(h.routeDist * 1000)} m` : `${h.routeDist.toFixed(1)} km`} rt
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              {/* ════ POLICE STATIONS SECTION ════ */}
-              {/* Takes the other half, has its own independent scroll */}
-              <div
-                className="flex flex-col"
-                style={{ flex: "1 1 0", minHeight: 0, overflow: "hidden" }}
-              >
-
-                {/* Section header — fixed, never scrolls */}
-                <div className="shrink-0 px-2.5 pt-2 pb-1">
-                  <div className="flex items-center justify-between mb-1">
-                    <div className="flex items-center gap-1.5">
-                      <div className="w-5 h-5 rounded-md bg-blue-100 flex items-center justify-center shrink-0">
-                        <ShieldCheck className="w-3 h-3 text-blue-600" />
-                      </div>
-                      <span className="text-[10px] font-black text-gray-700 uppercase tracking-wider">Police</span>
-                    </div>
-                    <span className="text-[10px] font-black text-blue-600 bg-blue-50 border border-blue-100 px-1.5 py-0.5 rounded-full leading-none">
-                      {allPolice.length}
-                    </span>
-                  </div>
-
-                  {/* Nearest police — always visible, updates live */}
-                  {allPolice[0] ? (
-                    <div className="px-2 py-1.5 bg-blue-50 border border-blue-100 rounded-xl mb-1">
-                      <p className="text-[8px] font-black text-blue-400 uppercase tracking-widest leading-none mb-0.5">Nearest</p>
-                      <p className="text-[10px] font-black text-gray-800 leading-tight truncate">{allPolice[0].name}</p>
-                      <p className="text-[9px] font-bold text-blue-500 leading-none mt-0.5">
-                        {allPolice[0].userDist != null
-                          ? allPolice[0].userDist < 1
-                            ? `${Math.round(allPolice[0].userDist * 1000)} m away`
-                            : `${allPolice[0].userDist.toFixed(1)} km away`
-                          : "—"}
-                      </p>
-                    </div>
-                  ) : (
-                    !emergencyLoading && (
-                      <p className="text-[9px] text-gray-400 italic px-1 mb-1">None found along route.</p>
-                    )
-                  )}
-                </div>
-
-                {/* Police scrollable list — independent scroll */}
-                {allPolice.length > 0 && (
-                  <div
-                    className="px-2.5 pb-2 space-y-1"
-                    style={{ flex: "1 1 0", minHeight: 0, overflowY: "auto" }}
-                  >
-                    {allPolice.map((p, i) => (
-                      <div
-                        key={p.id ?? i}
-                        className="flex items-start justify-between gap-1 py-1 px-2 rounded-lg bg-blue-50/50 border border-blue-100/60"
-                      >
-                        <div className="flex items-start gap-1 min-w-0">
-                          <span className="text-[8px] font-black text-blue-300 mt-0.5 shrink-0">{i + 1}.</span>
-                          <span className="text-[10px] font-bold text-gray-700 leading-tight">{p.name}</span>
-                        </div>
-                        <div className="flex flex-col items-end shrink-0 ml-1 gap-0.5">
-                          <span className="text-[9px] font-black text-blue-600 whitespace-nowrap">
-                            {p.userDist != null
-                              ? p.userDist < 1 ? `${Math.round(p.userDist * 1000)} m` : `${p.userDist.toFixed(1)} km`
-                              : "—"}
-                          </span>
-                          {p.routeDist != null && (
-                            <span className="text-[8px] text-gray-400 font-bold whitespace-nowrap">
-                              ~{p.routeDist < 1 ? `${Math.round(p.routeDist * 1000)} m` : `${p.routeDist.toFixed(1)} km`} rt
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-            </div>
-          )}
-
-          {/* ── Collapsed state — compact summary pills ── */}
-          {!showEmergency && (
-            <div className="flex flex-col justify-start gap-2 px-2.5 py-2">
-              <div className="flex items-center gap-1.5 px-2 py-1.5 rounded-xl bg-red-50 border border-red-100">
-                <Hospital className="w-3 h-3 text-red-500 shrink-0" />
-                <div className="min-w-0">
-                  <p className="text-[9px] font-black text-red-600">{allHospitals.length} Hospitals</p>
-                  {allHospitals[0] && (
-                    <p className="text-[8px] text-gray-500 font-bold truncate">
-                      {allHospitals[0].userDist != null
-                        ? allHospitals[0].userDist < 1
-                          ? `Nearest: ${Math.round(allHospitals[0].userDist * 1000)} m`
-                          : `Nearest: ${allHospitals[0].userDist.toFixed(1)} km`
-                        : ""}
-                    </p>
-                  )}
-                </div>
-              </div>
-              <div className="flex items-center gap-1.5 px-2 py-1.5 rounded-xl bg-blue-50 border border-blue-100">
-                <ShieldCheck className="w-3 h-3 text-blue-500 shrink-0" />
-                <div className="min-w-0">
-                  <p className="text-[9px] font-black text-blue-600">{allPolice.length} Police Stns</p>
-                  {allPolice[0] && (
-                    <p className="text-[8px] text-gray-500 font-bold truncate">
-                      {allPolice[0].userDist != null
-                        ? allPolice[0].userDist < 1
-                          ? `Nearest: ${Math.round(allPolice[0].userDist * 1000)} m`
-                          : `Nearest: ${allPolice[0].userDist.toFixed(1)} km`
-                        : ""}
-                    </p>
-                  )}
-                </div>
-              </div>
-            </div>
-          )}
-
-        </div>
-      </div>
-
-      {/* ══ TOP — STEP INSTRUCTION BANNER ═══════════════════════ */}
-      <div className="absolute top-0 left-0 right-0 z-[600] px-4 pt-4 pb-2 pointer-events-none">
-        <div className="max-w-2xl mx-auto space-y-2">
-
-          {/* Route badge */}
-          <div className="flex justify-center">
-            <span className={`text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full border ${routeBadge.color}`}>
-              {routeBadge.icon} {routeBadge.label}
-            </span>
-          </div>
-
-          {/* Recalculating alert */}
-          {recalculating && (
-            <div className="flex items-center justify-center gap-2 px-4 py-2 bg-amber-400 rounded-2xl shadow-lg pointer-events-none">
-              <RefreshCw className="w-4 h-4 text-white animate-spin" />
-              <span className="text-white font-black text-sm">Recalculating route…</span>
-            </div>
-          )}
-
-          {/* Step card */}
-          <div className="bg-white/95 backdrop-blur-md rounded-[1.5rem] shadow-2xl shadow-black/20 px-5 py-4 border border-white/60 pointer-events-auto">
-            {loadingSteps ? (
-              <div className="flex items-center gap-3">
-                <div className="w-14 h-14 rounded-2xl bg-blue-100 flex items-center justify-center animate-pulse shrink-0">
-                  <Navigation className="w-6 h-6 text-blue-400" />
-                </div>
-                <p className="text-gray-400 font-bold text-sm">Calculating route steps…</p>
-              </div>
-            ) : (
-              <div className="flex items-center gap-4">
-                <div className="w-14 h-14 rounded-2xl bg-emerald-500 text-white flex items-center justify-center text-2xl shadow-lg shadow-emerald-500/30 shrink-0">
-                  {currentStep?.icon || "⬆"}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-gray-900 font-black text-base leading-tight">{currentStep?.text}</p>
-                  {currentStep?.dist && (
-                    <p className="text-[10px] text-gray-400 font-bold mt-0.5">in {currentStep.dist}</p>
-                  )}
-                </div>
-                <div className="text-right shrink-0">
-                  <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Step</p>
-                  <p className="text-sm font-black text-emerald-600">{currentStepIdx + 1}/{steps.length}</p>
-                </div>
-              </div>
-            )}
-            {nextStep && (
-              <div className="mt-3 pt-3 border-t border-gray-100 flex items-center gap-2 text-gray-400">
-                <ChevronRight className="w-3.5 h-3.5 shrink-0" />
-                <p className="text-xs font-bold truncate">Then: {nextStep.text}</p>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* ══ PROGRESS BAR ═════════════════════════════════════════ */}
-      <div className="absolute top-[160px] left-0 right-0 z-[590] px-4 pointer-events-none">
-        <div className="max-w-2xl mx-auto">
-          <div className="flex items-center gap-2">
-            <div className="flex-1 h-2 bg-white/30 rounded-full overflow-hidden backdrop-blur-sm">
-              <div
-                className="h-full rounded-full transition-all duration-700 ease-out"
-                style={{
-                  width: `${progressPct}%`,
-                  background: "linear-gradient(90deg, #10b981, #059669)",
+            {/* Selected Road Core Highway (Vibrant Emerald Navigation) */}
+            {routeGeometry.length > 1 && (
+              <Polyline
+                positions={routeGeometry.map((p) => [p.lat, p.lon])}
+                pathOptions={{
+                  color: "#059669",
+                  weight: 5,
+                  opacity: 1,
+                  lineCap: "round",
+                  lineJoin: "round",
                 }}
               />
-            </div>
-            <span className="text-white font-black text-xs bg-black/30 backdrop-blur-sm px-2 py-0.5 rounded-full shrink-0">
-              {progressPct}%
-            </span>
-          </div>
+            )}
+
+            {/* Origin Marker with floating 'From <City> ›' pill */}
+            {originCoords && (
+              <Marker position={[originCoords.lat, originCoords.lon]} icon={createUberOriginIcon(origin)}>
+                <Popup>
+                  <div className="text-xs font-black text-gray-800">
+                    <span>Start: {origin}</span>
+                  </div>
+                </Popup>
+              </Marker>
+            )}
+
+            {/* Destination Marker with floating 'To <City> ›' pill */}
+            {destinationCoords && (
+              <Marker position={[destinationCoords.lat, destinationCoords.lon]} icon={createUberDestIcon(destination)}>
+                <Popup>
+                  <div className="text-xs font-black text-gray-800">
+                    <span>Destination: {destination}</span>
+                  </div>
+                </Popup>
+              </Marker>
+            )}
+
+            {/* Road Colonies & Key Waypoints */}
+            {steps
+              .filter((st) => st.name && st.name !== "unnamed road" && st.lat && st.lon)
+              .slice(0, 5)
+              .map((st, i) => (
+                <Marker key={`colony-${i}`} position={[st.lat, st.lon]} icon={roadColonyMarkerIcon(st.name)}>
+                  <Popup>
+                    <div className="text-xs font-bold text-gray-800">
+                      <div>📍 <strong>Colony / Sector:</strong> {st.name}</div>
+                      <div className="text-[10px] text-gray-500">{st.dist ? `In ${st.dist}` : 'En route'}</div>
+                    </div>
+                  </Popup>
+                </Marker>
+              ))}
+
+            {/* Nearby Hospital Markers */}
+            {allHospitals.slice(0, 6).map((h, i) => (
+              <Marker key={`hosp-map-${h.id ?? i}`} position={[h.lat, h.lon]} icon={hospitalMarkerIcon}>
+                <Popup>
+                  <div className="text-xs font-black text-red-600">🏥 {h.name}</div>
+                  <div className="text-[10px] text-gray-600">
+                    {h.userDist != null ? `${h.userDist.toFixed(1)} km from your location` : "Emergency Hospital"}
+                  </div>
+                </Popup>
+              </Marker>
+            ))}
+
+            {/* Nearby Police Station Markers */}
+            {allPolice.slice(0, 6).map((p, i) => (
+              <Marker key={`pol-map-${p.id ?? i}`} position={[p.lat, p.lon]} icon={policeMarkerIcon}>
+                <Popup>
+                  <div className="text-xs font-black text-blue-600">🚔 {p.name}</div>
+                  <div className="text-[10px] text-gray-600">
+                    {p.userDist != null ? `${p.userDist.toFixed(1)} km from your location` : "Police Station"}
+                  </div>
+                </Popup>
+              </Marker>
+            ))}
+
+            {/* Wildlife Hazard Checkpoints */}
+            {(route.pollutionSegments || [])
+              .filter((seg) => (route.animalRisk?.maxRisk > 40 || route.maxAnimalRisk > 40) && seg.lat && seg.lon)
+              .slice(0, 3)
+              .map((seg, idx) => (
+                <Marker key={`hazard-${idx}`} position={[seg.lat, seg.lon]} icon={wildlifeHazardIcon}>
+                  <Popup>
+                    <div className="text-xs font-black text-red-600">🐾 Wildlife Danger Zone</div>
+                    <div className="text-[10px] text-gray-600">High animal accident risk recorded</div>
+                  </Popup>
+                </Marker>
+              ))}
+
+            {/* EV Charging Stations */}
+            {route.evStations?.map((ev) => (
+              <Marker key={ev.id} position={[ev.lat, ev.lon]}>
+                <Popup>
+                  <strong style={{ color: "#0f9d58" }}>⚡ {ev.name}</strong><br />
+                  <small>{ev.operator}</small>
+                </Popup>
+              </Marker>
+            ))}
+          </MapContainer>
         </div>
       </div>
-
-      {/* ══ RIGHT SIDE CONTROLS ═══════════════════════════════════ */}
-      <div className="absolute right-4 bottom-60 z-[600] flex flex-col gap-3">
-        {/* Voice toggle */}
-        <button
-          onClick={toggleVoice}
-          className={`w-12 h-12 rounded-2xl shadow-xl flex items-center justify-center transition border ${
-            voiceEnabled
-              ? "bg-blue-600 text-white border-blue-700"
-              : "bg-white text-gray-500 border-gray-200"
-          }`}
-          title={voiceEnabled ? "Mute voice" : "Enable voice"}
-        >
-          {voiceEnabled ? <Volume2 className="w-5 h-5" /> : <VolumeX className="w-5 h-5" />}
-        </button>
-
-        {/* Re-center / re-enable auto-follow */}
-        <button
-          onClick={() => setFollowUser(true)}
-          className={`w-12 h-12 rounded-2xl shadow-xl flex items-center justify-center transition border ${
-            followUser
-              ? "bg-blue-600 text-white border-blue-700"
-              : "bg-white text-gray-500 border-gray-200"
-          }`}
-          title="Re-center on my location"
-        >
-          <RotateCcw className="w-5 h-5" />
-        </button>
-
-        {/* Exit navigation */}
-        <button
-          onClick={() => { window.speechSynthesis?.cancel(); navigate("/routes"); }}
-          className="w-12 h-12 rounded-2xl bg-red-500 text-white shadow-xl flex items-center justify-center hover:bg-red-600 transition border border-red-600"
-          title="Exit navigation"
-        >
-          <X className="w-5 h-5" />
-        </button>
-      </div>
-
-      {/* ══ BOTTOM INFO PANEL ════════════════════════════════════ */}
-      <div className="absolute bottom-0 left-0 right-0 z-[600]">
-        <div className="mx-4 mb-4 space-y-2">
-
-          {/* AQI + Weather row */}
-          <div className="bg-white/90 backdrop-blur-md rounded-2xl shadow-xl shadow-black/10 px-4 py-3 border border-white/60">
-            <div className="flex items-center gap-3 flex-wrap">
-              {/* AQI */}
-              <div
-                className="flex items-center gap-2 px-3 py-1.5 rounded-xl border text-sm font-black"
-                style={{
-                  color: getAQIColor(liveAQI),
-                  backgroundColor: `${getAQIColor(liveAQI)}15`,
-                  borderColor: `${getAQIColor(liveAQI)}30`,
-                }}
-              >
-                <Wind className="w-4 h-4" />
-                AQI {liveAQI ?? "—"} · {getAQILabel(liveAQI)}
-              </div>
-
-              {/* Weather */}
-              {weather && (
-                <>
-                  <div className="flex items-center gap-1.5 text-sm font-bold text-gray-700">
-                    <Thermometer className="w-4 h-4 text-orange-400" />
-                    {weather.temp}°C
-                  </div>
-                  <div className="flex items-center gap-1.5 text-sm font-bold text-gray-700">
-                    <Droplets className="w-4 h-4 text-blue-400" />
-                    {weather.humidity}%
-                  </div>
-                  <div className="flex items-center gap-1.5 text-sm font-bold text-gray-700">
-                    <Gauge className="w-4 h-4 text-gray-400" />
-                    {weather.wind} km/h
-                  </div>
-                  <div className="text-sm font-bold text-gray-600 ml-auto">
-                    {weatherEmoji(weather.code)}
-                  </div>
-                </>
-              )}
-            </div>
-          </div>
-
-          {/* Main metrics panel */}
-          <div className="bg-white/95 backdrop-blur-md rounded-[1.5rem] shadow-2xl shadow-black/20 px-5 py-4 border border-white/60">
-            {/* Metrics grid */}
-            <div className="grid grid-cols-4 gap-3 mb-3">
-              <div className="text-center">
-                <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-0.5">ETA</p>
-                <p className="text-base font-black text-gray-900 leading-none transition-all duration-500">
-                  {fmtETA(remainingMins)}
-                </p>
-              </div>
-              <div className="text-center border-l border-gray-100">
-                <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-0.5">Left</p>
-                <p className="text-base font-black text-gray-900 leading-none transition-all duration-500">
-                  {remainingDist}
-                </p>
-              </div>
-              <div className="text-center border-l border-gray-100">
-                <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-0.5">Time</p>
-                <p className="text-base font-black text-gray-900 leading-none transition-all duration-500">
-                  {remainingMins} min
-                </p>
-              </div>
-              <div className="text-center border-l border-gray-100">
-                <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-0.5">Speed</p>
-                <p className="text-base font-black text-gray-900 leading-none transition-all duration-500">
-                  {speed != null ? `${speed} km/h` : "—"}
-                </p>
-              </div>
-            </div>
-
-            {/* Destination + health advice */}
-            <div className="flex items-center gap-3 pt-3 border-t border-gray-100">
-              <div className="w-8 h-8 rounded-xl bg-blue-50 flex items-center justify-center border border-blue-100 shrink-0">
-                <MapPin className="w-4 h-4 text-blue-600" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Origin → Destination</p>
-                <p className="text-sm font-extrabold text-gray-900 truncate">
-                  {origin} → {destination}
-                </p>
-              </div>
-              {route.healthAdvice && (
-                <div className="flex items-center gap-1.5 bg-emerald-50 border border-emerald-100 px-2.5 py-1 rounded-xl shrink-0 max-w-[42%]">
-                  <Leaf className="w-3 h-3 text-emerald-500 shrink-0" />
-                  <p className="text-[9px] font-black text-emerald-700 truncate">{route.healthAdvice}</p>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* ══ AUTO-FOLLOW DISABLED TOAST ════════════════════════════ */}
-      {!followUser && (
-        <div className="absolute bottom-[340px] left-1/2 -translate-x-1/2 z-[650] pointer-events-none">
-          <div className="flex items-center gap-2 bg-black/70 backdrop-blur-sm text-white text-xs font-black px-4 py-2 rounded-full shadow-xl">
-            <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
-            Auto-follow paused — tap <RotateCcw className="w-3 h-3 inline mx-1" /> to re-enable
-          </div>
-        </div>
-      )}
 
       {/* ══ ARRIVAL OVERLAY ════════════════════════════════════ */}
       {arrived && (
-        <div className="absolute inset-0 z-[700] flex items-center justify-center bg-black/40 backdrop-blur-sm">
+        <div className="absolute inset-0 z-[700] flex items-center justify-center bg-black/50 backdrop-blur-sm">
           <div className="bg-white rounded-[2rem] p-8 mx-6 text-center shadow-2xl max-w-sm w-full">
-            <div className="w-20 h-20 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-4 border-4 border-emerald-200">
-              <span className="text-4xl">🏁</span>
+            <div className="w-20 h-20 bg-emerald-600 rounded-full flex items-center justify-center mx-auto mb-4 border-4 border-emerald-200 text-white text-4xl shadow-xl">
+              🏁
             </div>
-            <h2 className="text-2xl font-black text-gray-900 mb-2">You've Arrived!</h2>
+            <h2 className="text-2xl font-black text-gray-900 mb-2">Trip Completed!</h2>
             <p className="text-gray-500 font-medium text-sm mb-4">
-              You've reached <span className="text-emerald-600 font-black">{destination}</span>
+              You've arrived at <span className="text-emerald-700 font-black">{destination}</span>
             </p>
-            {/* Final trip summary */}
             <div className="grid grid-cols-2 gap-3 mb-6">
-              <div className="bg-gray-50 rounded-2xl p-3">
+              <div className="bg-gray-50 rounded-2xl p-3 border border-gray-100">
                 <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Distance</p>
                 <p className="text-lg font-black text-gray-900">{route.distance}</p>
               </div>
-              <div className="bg-gray-50 rounded-2xl p-3">
-                <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">AQI</p>
+              <div className="bg-gray-50 rounded-2xl p-3 border border-gray-100">
+                <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Air Quality</p>
                 <p className="text-lg font-black" style={{ color: getAQIColor(liveAQI) }}>
                   {liveAQI ?? "—"}
                 </p>
               </div>
             </div>
-            {liveAQI && (
-              <div
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-2xl text-sm font-black mb-6"
-                style={{
-                  color: getAQIColor(liveAQI),
-                  backgroundColor: `${getAQIColor(liveAQI)}15`,
-                  border: `1px solid ${getAQIColor(liveAQI)}30`,
-                }}
-              >
-                <Wind className="w-4 h-4" />
-                AQI: {liveAQI} · {getAQILabel(liveAQI)}
-              </div>
-            )}
             <button
               onClick={() => navigate("/routes")}
-              className="w-full py-4 bg-emerald-500 hover:bg-emerald-600 text-white font-black rounded-2xl shadow-lg shadow-emerald-200 transition text-base"
+              className="w-full py-4 bg-emerald-600 hover:bg-emerald-700 text-white font-black rounded-2xl shadow-xl transition text-base"
             >
               Back to Routes
             </button>

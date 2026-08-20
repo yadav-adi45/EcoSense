@@ -1,0 +1,543 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🐾 Animal Risk Feature Test</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 20px;
+            min-height: 100vh;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        h1 {
+            color: white;
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 2.5em;
+        }
+        
+        .card {
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            margin-bottom: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+        
+        .card h2 {
+            color: #667eea;
+            margin-bottom: 20px;
+            font-size: 1.5em;
+        }
+        
+        .input-group {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        
+        .input-field {
+            display: flex;
+            flex-direction: column;
+        }
+        
+        label {
+            font-weight: 600;
+            margin-bottom: 5px;
+            color: #333;
+        }
+        
+        input, select {
+            padding: 10px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: border-color 0.3s;
+        }
+        
+        input:focus, select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+        
+        button:hover {
+            transform: translateY(-2px);
+        }
+        
+        button:active {
+            transform: translateY(0);
+        }
+        
+        .result {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 20px;
+            margin-top: 20px;
+            display: none;
+        }
+        
+        .result.show {
+            display: block;
+        }
+        
+        .risk-score {
+            text-align: center;
+            padding: 30px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+        
+        .risk-low { background: #d4edda; color: #155724; }
+        .risk-moderate { background: #fff3cd; color: #856404; }
+        .risk-high { background: #f8d7da; color: #721c24; }
+        .risk-very-high { background: #f5c6cb; color: #721c24; }
+        
+        .risk-number {
+            font-size: 4em;
+            font-weight: bold;
+            margin: 10px 0;
+        }
+        
+        .risk-label {
+            font-size: 1.5em;
+            font-weight: 600;
+        }
+        
+        .breakdown {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+        }
+        
+        .breakdown-item {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+        }
+        
+        .breakdown-item .value {
+            font-size: 2em;
+            font-weight: bold;
+            color: #667eea;
+        }
+        
+        .breakdown-item .label {
+            font-size: 0.9em;
+            color: #666;
+            margin-top: 5px;
+        }
+        
+        .animals-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+        }
+        
+        .animal-card {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            border-left: 4px solid #667eea;
+        }
+        
+        .animal-name {
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 5px;
+        }
+        
+        .animal-details {
+            font-size: 0.9em;
+            color: #666;
+        }
+        
+        .warning {
+            background: #fff3cd;
+            border: 2px solid #ffc107;
+            border-radius: 8px;
+            padding: 15px;
+            margin: 15px 0;
+            text-align: center;
+            font-weight: 600;
+            color: #856404;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 20px;
+            color: #667eea;
+        }
+        
+        .error {
+            background: #f8d7da;
+            border: 2px solid #dc3545;
+            border-radius: 8px;
+            padding: 15px;
+            margin: 15px 0;
+            color: #721c24;
+        }
+
+        .quick-locations {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-top: 10px;
+        }
+
+        .quick-btn {
+            background: #e0e0e0;
+            color: #333;
+            padding: 8px 15px;
+            border-radius: 20px;
+            font-size: 14px;
+            border: none;
+            cursor: pointer;
+        }
+
+        .quick-btn:hover {
+            background: #667eea;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🐾 Animal Risk Feature Test</h1>
+        
+        <!-- Test 1: Get Animal Risk -->
+        <div class="card">
+            <h2>🎯 Test 1: Get Animal Risk for Location</h2>
+            <div class="input-group">
+                <div class="input-field">
+                    <label>Latitude</label>
+                    <input type="number" id="lat1" value="20.87" step="0.01">
+                </div>
+                <div class="input-field">
+                    <label>Longitude</label>
+                    <input type="number" id="lng1" value="77.92" step="0.01">
+                </div>
+                <div class="input-field">
+                    <label>Time of Day (Hour)</label>
+                    <select id="hour1">
+                        <option value="6">6 AM (Dawn)</option>
+                        <option value="12">12 PM (Noon)</option>
+                        <option value="19" selected>7 PM (Dusk)</option>
+                        <option value="23">11 PM (Night)</option>
+                    </select>
+                </div>
+            </div>
+            
+            <div class="quick-locations">
+                <strong>Quick Test Locations:</strong>
+                <button class="quick-btn" onclick="setLocation1(20.87, 77.92)">Location 1 (High Risk)</button>
+                <button class="quick-btn" onclick="setLocation1(19.99, 76.52)">Location 2 (Mongoose Area)</button>
+                <button class="quick-btn" onclick="setLocation1(22.83, 69.33)">Location 3 (Multiple Species)</button>
+            </div>
+            
+            <button onclick="testAnimalRisk()" style="margin-top: 15px;">🔍 Test Animal Risk</button>
+            
+            <div id="result1" class="result"></div>
+        </div>
+        
+        <!-- Test 2: Get Animal Hotspots -->
+        <div class="card">
+            <h2>📍 Test 2: Get Animal Hotspots</h2>
+            <div class="input-group">
+                <div class="input-field">
+                    <label>Latitude</label>
+                    <input type="number" id="lat2" value="20.87" step="0.01">
+                </div>
+                <div class="input-field">
+                    <label>Longitude</label>
+                    <input type="number" id="lng2" value="77.92" step="0.01">
+                </div>
+                <div class="input-field">
+                    <label>Search Radius (km)</label>
+                    <input type="number" id="radius2" value="5" min="1" max="50">
+                </div>
+            </div>
+            
+            <button onclick="testHotspots()">🗺️ Find Hotspots</button>
+            
+            <div id="result2" class="result"></div>
+        </div>
+        
+        <!-- Test 3: Animal Stats -->
+        <div class="card">
+            <h2>📊 Test 3: Get Animal Statistics</h2>
+            <div class="input-group">
+                <div class="input-field">
+                    <label>Latitude</label>
+                    <input type="number" id="lat3" value="20.87" step="0.01">
+                </div>
+                <div class="input-field">
+                    <label>Longitude</label>
+                    <input type="number" id="lng3" value="77.92" step="0.01">
+                </div>
+                <div class="input-field">
+                    <label>Radius (km)</label>
+                    <input type="number" id="radius3" value="10" min="1" max="100">
+                </div>
+            </div>
+            
+            <button onclick="testStats()">📈 Get Statistics</button>
+            
+            <div id="result3" class="result"></div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:3000/api/v12';
+
+        function setLocation1(lat, lng) {
+            document.getElementById('lat1').value = lat;
+            document.getElementById('lng1').value = lng;
+        }
+
+        async function testAnimalRisk() {
+            const lat = document.getElementById('lat1').value;
+            const lng = document.getElementById('lng1').value;
+            const hour = document.getElementById('hour1').value;
+            const resultDiv = document.getElementById('result1');
+            
+            resultDiv.innerHTML = '<div class="loading">⏳ Loading animal risk data...</div>';
+            resultDiv.classList.add('show');
+            
+            try {
+                const response = await fetch(`${API_BASE}/animal-risk?latitude=${lat}&longitude=${lng}&hour=${hour}`);
+                const data = await response.json();
+                
+                if (!data.success) {
+                    throw new Error(data.message || 'Failed to get risk data');
+                }
+                
+                const riskClass = data.riskLevel === 'Very High' ? 'risk-very-high' :
+                                 data.riskLevel === 'High' ? 'risk-high' :
+                                 data.riskLevel === 'Moderate' ? 'risk-moderate' : 'risk-low';
+                
+                let html = `
+                    <div class="risk-score ${riskClass}">
+                        <div class="risk-number">${data.animalRisk}</div>
+                        <div class="risk-label">${data.riskLevel} Risk</div>
+                    </div>
+                `;
+                
+                if (data.warning) {
+                    html += `<div class="warning">${data.warning}</div>`;
+                }
+                
+                html += `
+                    <h3>📊 Risk Breakdown</h3>
+                    <div class="breakdown">
+                        <div class="breakdown-item">
+                            <div class="value">${data.breakdown.roadkillFactor}</div>
+                            <div class="label">Roadkill Factor</div>
+                        </div>
+                        <div class="breakdown-item">
+                            <div class="value">${data.breakdown.observationFactor}</div>
+                            <div class="label">Observation Factor</div>
+                        </div>
+                        <div class="breakdown-item">
+                            <div class="value">${data.breakdown.userReportFactor}</div>
+                            <div class="label">User Reports</div>
+                        </div>
+                        <div class="breakdown-item">
+                            <div class="value">${data.breakdown.forestFactor}</div>
+                            <div class="label">Forest Factor</div>
+                        </div>
+                        <div class="breakdown-item">
+                            <div class="value">${data.breakdown.waterFactor}</div>
+                            <div class="label">Water Factor</div>
+                        </div>
+                        <div class="breakdown-item">
+                            <div class="value">${data.breakdown.timeMultiplier}x</div>
+                            <div class="label">Time Multiplier</div>
+                        </div>
+                    </div>
+                    
+                    <h3>📈 Actual Counts</h3>
+                    <div class="breakdown">
+                        <div class="breakdown-item">
+                            <div class="value">${data.factors.roadkillCount}</div>
+                            <div class="label">Roadkill Incidents</div>
+                        </div>
+                        <div class="breakdown-item">
+                            <div class="value">${data.factors.observationCount}</div>
+                            <div class="label">Observations</div>
+                        </div>
+                        <div class="breakdown-item">
+                            <div class="value">${data.factors.userReportCount}</div>
+                            <div class="label">User Reports</div>
+                        </div>
+                    </div>
+                `;
+                
+                if (data.commonAnimals && data.commonAnimals.length > 0) {
+                    html += `
+                        <h3>🐾 Common Animals in Area</h3>
+                        <div class="animals-list">
+                    `;
+                    
+                    data.commonAnimals.forEach(animal => {
+                        const emoji = animal.category === 'mammal' ? '🦝' :
+                                     animal.category === 'bird' ? '🦅' :
+                                     animal.category === 'reptile' ? '🐍' : '🦎';
+                        
+                        html += `
+                            <div class="animal-card">
+                                <div class="animal-name">${emoji} ${animal.name}</div>
+                                <div class="animal-details">
+                                    ${animal.count} observations • ${animal.category}
+                                </div>
+                            </div>
+                        `;
+                    });
+                    
+                    html += '</div>';
+                }
+                
+                resultDiv.innerHTML = html;
+                
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="error">❌ Error: ${error.message}</div>`;
+            }
+        }
+
+        async function testHotspots() {
+            const lat = document.getElementById('lat2').value;
+            const lng = document.getElementById('lng2').value;
+            const radius = document.getElementById('radius2').value;
+            const resultDiv = document.getElementById('result2');
+            
+            resultDiv.innerHTML = '<div class="loading">⏳ Loading hotspots...</div>';
+            resultDiv.classList.add('show');
+            
+            try {
+                const response = await fetch(`${API_BASE}/animal-hotspots?latitude=${lat}&longitude=${lng}&radius=${radius}`);
+                const data = await response.json();
+                
+                if (!data.success) {
+                    throw new Error(data.message || 'Failed to get hotspots');
+                }
+                
+                let html = `<h3>Found ${data.count} Hotspots (${data.searchRadius})</h3>`;
+                
+                if (data.hotspots.length === 0) {
+                    html += '<p style="padding: 20px; text-align: center; color: #666;">No animal hotspots found in this area. This is normal for areas with low animal activity data.</p>';
+                } else {
+                    html += '<div class="animals-list">';
+                    data.hotspots.forEach(hotspot => {
+                        html += `
+                            <div class="animal-card">
+                                <div class="animal-name">📍 ${hotspot.name || 'Hotspot'}</div>
+                                <div class="animal-details">
+                                    Risk: ${hotspot.risk}/100 • ${hotspot.species} species
+                                </div>
+                            </div>
+                        `;
+                    });
+                    html += '</div>';
+                }
+                
+                resultDiv.innerHTML = html;
+                
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="error">❌ Error: ${error.message}</div>`;
+            }
+        }
+
+        async function testStats() {
+            const lat = document.getElementById('lat3').value;
+            const lng = document.getElementById('lng3').value;
+            const radius = document.getElementById('radius3').value;
+            const resultDiv = document.getElementById('result3');
+            
+            resultDiv.innerHTML = '<div class="loading">⏳ Loading statistics...</div>';
+            resultDiv.classList.add('show');
+            
+            try {
+                const response = await fetch(`${API_BASE}/animal-stats?latitude=${lat}&longitude=${lng}&radius=${radius}`);
+                const data = await response.json();
+                
+                if (!data.success) {
+                    throw new Error(data.message || 'Failed to get statistics');
+                }
+                
+                let html = `
+                    <h3>📊 Animal Statistics</h3>
+                    <div class="breakdown">
+                        <div class="breakdown-item">
+                            <div class="value">${data.totalObservations || 0}</div>
+                            <div class="label">Total Observations</div>
+                        </div>
+                        <div class="breakdown-item">
+                            <div class="value">${data.uniqueSpecies || 0}</div>
+                            <div class="label">Unique Species</div>
+                        </div>
+                        <div class="breakdown-item">
+                            <div class="value">${data.roadkillCount || 0}</div>
+                            <div class="label">Roadkill Incidents</div>
+                        </div>
+                        <div class="breakdown-item">
+                            <div class="value">${data.averageRisk || 0}</div>
+                            <div class="label">Average Risk</div>
+                        </div>
+                    </div>
+                `;
+                
+                if (data.speciesDistribution) {
+                    html += '<h3>🐾 Species Distribution</h3><div class="breakdown">';
+                    Object.entries(data.speciesDistribution).forEach(([category, count]) => {
+                        const emoji = category === 'mammal' ? '🦝' :
+                                     category === 'bird' ? '🦅' :
+                                     category === 'reptile' ? '🐍' :
+                                     category === 'amphibian' ? '🐸' : '🦎';
+                        html += `
+                            <div class="breakdown-item">
+                                <div class="value">${emoji} ${count}</div>
+                                <div class="label">${category}s</div>
+                            </div>
+                        `;
+                    });
+                    html += '</div>';
+                }
+                
+                resultDiv.innerHTML = html;
+                
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="error">❌ Error: ${error.message}</div>`;
+            }
+        }
+    </script>
+</body>
+</html>
