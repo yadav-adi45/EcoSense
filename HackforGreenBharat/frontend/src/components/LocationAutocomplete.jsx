@@ -165,6 +165,7 @@ const LocationAutocomplete = ({
   iconBg = "bg-emerald-50 border-emerald-100",
   iconColor = "text-emerald-500",
   extraDropdownTop,
+  size = "md",
 }) => {
   const [query, setQuery] = useState(value || "");
   const [suggestions, setSuggestions] = useState([]);
@@ -266,11 +267,13 @@ const LocationAutocomplete = ({
     onSelect?.(null);
   };
 
+  const isSm = size === "sm";
+
   return (
     <div className="flex-1 relative" ref={containerRef}>
       {/* Icon left */}
-      <div className={`absolute left-3.5 top-1/2 -translate-y-1/2 w-8 h-8 rounded-xl flex items-center justify-center border z-10 ${iconBg}`}>
-        {icon || <MapPin className={`w-4 h-4 ${iconColor}`} />}
+      <div className={`absolute ${isSm ? "left-2.5 w-6 h-6 rounded-lg" : "left-3.5 w-8 h-8 rounded-xl"} top-1/2 -translate-y-1/2 flex items-center justify-center border z-10 ${iconBg}`}>
+        {icon || <MapPin className={`${isSm ? "w-3.5 h-3.5" : "w-4 h-4"} ${iconColor}`} />}
       </div>
 
       {/* Input */}
@@ -282,15 +285,19 @@ const LocationAutocomplete = ({
         onKeyDown={handleKeyDown}
         placeholder={placeholder}
         autoComplete="off"
-        className="w-full pl-14 pr-10 h-12 bg-white border border-gray-200/80 text-sm font-semibold rounded-2xl focus:bg-white focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 focus:outline-none transition-all shadow-sm placeholder:text-gray-400 placeholder:font-normal"
+        className={`w-full ${
+          isSm
+            ? "pl-10 pr-8 h-9.5 text-xs font-semibold rounded-xl"
+            : "pl-14 pr-10 h-12 text-sm font-semibold rounded-2xl"
+        } bg-white border border-gray-200/80 focus:bg-white focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 focus:outline-none transition-all shadow-sm placeholder:text-gray-400 placeholder:font-normal`}
       />
 
       {/* Right: loading or clear */}
-      <div className="absolute right-3.5 top-1/2 -translate-y-1/2">
+      <div className={`absolute ${isSm ? "right-2.5" : "right-3.5"} top-1/2 -translate-y-1/2`}>
         {loading
-          ? <Loader2 className="w-4 h-4 text-emerald-500 animate-spin" />
+          ? <Loader2 className={`${isSm ? "w-3.5 h-3.5" : "w-4 h-4"} text-emerald-500 animate-spin`} />
           : query
-          ? <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={handleClear}><X className="w-4 h-4 text-gray-400 hover:text-gray-600" /></button>
+          ? <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={handleClear}><X className={`${isSm ? "w-3.5 h-3.5" : "w-4 h-4"} text-gray-400 hover:text-gray-600`} /></button>
           : null}
       </div>
 

@@ -403,12 +403,12 @@ const Routes = () => {
             
             {/* Sidebar Branding & Status */}
             <div className="flex items-center justify-between pb-2 border-b border-gray-100">
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2.5">
                 <div className="w-8 h-8 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center">
                   <Sparkles className="w-4 h-4 text-emerald-600" />
                 </div>
                 <div>
-                  <h2 className="text-sm font-black text-gray-900 leading-tight">EcoSense Directions</h2>
+                  <h2 className="text-sm sm:text-base font-black text-gray-900 leading-tight">EcoSense Directions</h2>
                   <p className="text-[10px] text-gray-400 font-bold">AI Clean-Air Route Planner</p>
                 </div>
               </div>
@@ -420,10 +420,10 @@ const Routes = () => {
             </div>
 
             {/* ─── GOOGLE MAPS UNIFIED ROUTE SEARCH BAR (AUTO-FILLS FROM & TO) ─── */}
-            <div className="relative bg-white rounded-2xl p-2.5 border border-emerald-200/80 shadow-sm space-y-1.5">
+            <div className="relative bg-white rounded-2xl p-3 border border-emerald-200/80 shadow-sm space-y-1.5">
               <div className="flex items-center justify-between px-1">
                 <span className="text-[10px] font-black text-gray-600 uppercase tracking-wider flex items-center gap-1.5">
-                  <Search className="w-3 h-3 text-emerald-600" />
+                  <Search className="w-3.5 h-3.5 text-emerald-600" />
                   <span>Route Search</span>
                 </span>
                 <span className="text-[9px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200/60">
@@ -452,7 +452,7 @@ const Routes = () => {
               
               {/* Origin / Starting Location */}
               <div className="relative">
-                <div className="flex items-center gap-1 mb-1">
+                <div className="flex items-center gap-1.5 mb-1">
                   <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" />
                   <span className="text-[10px] font-black text-gray-500 uppercase tracking-wider">From (Starting Point)</span>
                 </div>
@@ -500,7 +500,7 @@ const Routes = () => {
               </div>
 
               {/* Swap Locations Button */}
-              <div className="flex justify-end -my-1 pr-3 z-10">
+              <div className="flex justify-end -my-1.5 pr-3 z-10">
                 <button
                   type="button"
                   onClick={handleSwapLocations}
@@ -513,7 +513,7 @@ const Routes = () => {
 
               {/* Destination */}
               <div className="relative">
-                <div className="flex items-center gap-1 mb-1">
+                <div className="flex items-center gap-1.5 mb-1">
                   <span className="w-2 h-2 rounded-full bg-red-500 inline-block" />
                   <span className="text-[10px] font-black text-gray-500 uppercase tracking-wider">To (Destination)</span>
                 </div>
@@ -542,7 +542,7 @@ const Routes = () => {
             {/* Travel Mode Selector */}
             <div className="space-y-1.5">
               <span className="block text-[10px] font-black text-gray-400 uppercase tracking-widest">Travel Mode</span>
-              <div className="flex items-center justify-between gap-1 p-1 bg-gray-100/80 rounded-2xl border border-gray-200/50">
+              <div className="flex items-center justify-between gap-1.5 p-1.5 bg-gray-100/80 rounded-2xl border border-gray-200/50">
                 {TRANSPORT_MODES.map((mode) => {
                   const isActive = travelMode === mode.id;
                   return (
@@ -553,13 +553,13 @@ const Routes = () => {
                         setTravelMode(mode.id);
                         setRoutes([]);
                       }}
-                      className={`flex-1 flex flex-col items-center justify-center py-2 px-1 rounded-xl text-xs font-black transition-all duration-200 ${
+                      className={`flex-1 flex flex-col items-center justify-center py-2.5 px-1 rounded-xl text-xs font-black transition-all duration-200 ${
                         isActive
                           ? "bg-white text-emerald-600 shadow-sm border border-emerald-200/70 scale-[1.02]"
                           : "text-gray-500 hover:text-gray-800 hover:bg-white/50"
                       }`}
                     >
-                      <span className="text-base leading-none mb-0.5">{mode.emoji}</span>
+                      <span className="text-base leading-none mb-1">{mode.emoji}</span>
                       <span className="text-[9px] uppercase tracking-wider font-extrabold">{mode.label}</span>
                     </button>
                   );
@@ -567,71 +567,74 @@ const Routes = () => {
               </div>
             </div>
 
-            {/* Collapsible Route Preferences */}
-            <div className="border border-gray-200/70 rounded-2xl overflow-hidden bg-white shadow-sm">
-              <button
-                type="button"
-                onClick={() => setShowPreferences((v) => !v)}
-                className="w-full flex items-center justify-between px-3.5 py-2.5 bg-gray-50/80 hover:bg-gray-100/60 text-left transition-colors"
-              >
-                <div className="flex items-center gap-2">
-                  <SlidersHorizontal className="w-3.5 h-3.5 text-emerald-600" />
-                  <span className="text-[11px] font-black text-gray-700 uppercase tracking-wider">Route Preferences</span>
-                  {(isPregnancyMode || preferWellLit || season !== "none") && (
-                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                  )}
-                </div>
-                {showPreferences ? (
-                  <ChevronUp className="w-4 h-4 text-gray-400" />
-                ) : (
-                  <ChevronDown className="w-4 h-4 text-gray-400" />
+            {/* ─── DIRECTLY VISIBLE ROUTE PREFERENCES (2x2 GRID MATCHING PAPER SKETCH) ─── */}
+            <div className="border border-gray-200/80 rounded-2xl p-3.5 bg-white shadow-sm space-y-2.5">
+              <div className="flex items-center justify-between">
+                <span className="text-[10.5px] font-black text-gray-700 uppercase tracking-wider flex items-center gap-2">
+                  <SlidersHorizontal className="w-4 h-4 text-emerald-600" />
+                  <span>Route Preferences</span>
+                </span>
+                {(isPregnancyMode || preferWellLit || season !== "none") && (
+                  <span className="text-[9px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200/60">
+                    Active
+                  </span>
                 )}
-              </button>
+              </div>
 
-              {showPreferences && (
-                <div className="p-3 space-y-2 bg-white border-t border-gray-100 animate-in fade-in duration-200">
-                  <label className="flex items-center gap-2.5 cursor-pointer p-2 rounded-xl hover:bg-emerald-50/50 transition-colors">
-                    <input
-                      type="checkbox"
-                      checked={isPregnancyMode}
-                      onChange={(e) => setIsPregnancyMode(e.target.checked)}
-                      className="w-4 h-4 rounded text-emerald-500 border-gray-300 focus:ring-emerald-400 accent-emerald-500"
-                    />
-                    <div className="text-left">
-                      <span className="block text-xs font-black text-gray-800">Pregnancy & Elder Mode</span>
-                      <span className="block text-[10px] text-gray-400">Pothole-free & smooth ride</span>
-                    </div>
-                  </label>
+              {/* 2-Column Grid as sketched */}
+              <div className="grid grid-cols-2 gap-x-3 gap-y-2 pt-1 border-t border-gray-100">
+                {/* Left Column: 1. Pregnancy & Elder mode */}
+                <label className="flex items-start gap-2 cursor-pointer p-1.5 rounded-xl hover:bg-emerald-50/60 transition-colors">
+                  <input
+                    type="checkbox"
+                    checked={isPregnancyMode}
+                    onChange={(e) => setIsPregnancyMode(e.target.checked)}
+                    className="mt-0.5 w-4 h-4 rounded text-emerald-500 border-gray-300 focus:ring-emerald-400 accent-emerald-500 shrink-0"
+                  />
+                  <span className="text-xs font-bold text-gray-800 leading-snug">
+                    Pregnancy &amp; Elder mode
+                  </span>
+                </label>
 
-                  <label className="flex items-center gap-2.5 cursor-pointer p-2 rounded-xl hover:bg-emerald-50/50 transition-colors">
-                    <input
-                      type="checkbox"
-                      checked={preferWellLit}
-                      onChange={(e) => setPreferWellLit(e.target.checked)}
-                      className="w-4 h-4 rounded text-emerald-500 border-gray-300 focus:ring-emerald-400 accent-emerald-500"
-                    />
-                    <div className="text-left">
-                      <span className="block text-xs font-black text-gray-800">Well-Lit Roads</span>
-                      <span className="block text-[10px] text-gray-400">Prioritize street lights</span>
-                    </div>
-                  </label>
+                {/* Right Column: 1. Winter (Smog-Avoidance) */}
+                <label className="flex items-start gap-2 cursor-pointer p-1.5 rounded-xl hover:bg-emerald-50/60 transition-colors">
+                  <input
+                    type="checkbox"
+                    checked={season === "winter"}
+                    onChange={(e) => setSeason(e.target.checked ? "winter" : "none")}
+                    className="mt-0.5 w-4 h-4 rounded text-emerald-500 border-gray-300 focus:ring-emerald-400 accent-emerald-500 shrink-0"
+                  />
+                  <span className="text-xs font-bold text-gray-800 leading-snug">
+                    Winter (Smog-Avoidance)
+                  </span>
+                </label>
 
-                  <div className="p-2 bg-gray-50 rounded-xl">
-                    <span className="block text-[10px] font-black text-gray-600 uppercase tracking-wider mb-1">
-                      Seasonal Conditions
-                    </span>
-                    <select
-                      value={season}
-                      onChange={(e) => setSeason(e.target.value)}
-                      className="w-full bg-white text-xs font-bold text-gray-700 border border-gray-200 rounded-lg px-2.5 py-1.5 focus:border-emerald-400 focus:outline-none cursor-pointer"
-                    >
-                      <option value="none">Standard Routing</option>
-                      <option value="winter">Winter (Smog-Avoidance)</option>
-                      <option value="summer">Summer (Shaded Canopy)</option>
-                    </select>
-                  </div>
-                </div>
-              )}
+                {/* Left Column: 2. Well-Lit Road */}
+                <label className="flex items-start gap-2 cursor-pointer p-1.5 rounded-xl hover:bg-emerald-50/60 transition-colors">
+                  <input
+                    type="checkbox"
+                    checked={preferWellLit}
+                    onChange={(e) => setPreferWellLit(e.target.checked)}
+                    className="mt-0.5 w-4 h-4 rounded text-emerald-500 border-gray-300 focus:ring-emerald-400 accent-emerald-500 shrink-0"
+                  />
+                  <span className="text-xs font-bold text-gray-800 leading-snug">
+                    Well-Lit Road
+                  </span>
+                </label>
+
+                {/* Right Column: 2. Summer (Shaded Canopy) */}
+                <label className="flex items-start gap-2 cursor-pointer p-1.5 rounded-xl hover:bg-emerald-50/60 transition-colors">
+                  <input
+                    type="checkbox"
+                    checked={season === "summer"}
+                    onChange={(e) => setSeason(e.target.checked ? "summer" : "none")}
+                    className="mt-0.5 w-4 h-4 rounded text-emerald-500 border-gray-300 focus:ring-emerald-400 accent-emerald-500 shrink-0"
+                  />
+                  <span className="text-xs font-bold text-gray-800 leading-snug">
+                    Summer (Shaded Canopy)
+                  </span>
+                </label>
+              </div>
             </div>
 
             {/* ─── 3. FIND ROUTES BUTTON ─── */}
