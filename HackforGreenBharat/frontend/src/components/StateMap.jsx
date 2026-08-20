@@ -16,7 +16,6 @@ export default function StateMap({ stateCode, stateData, stateName, onBack }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [hoveredDistrict, setHoveredDistrict] = useState(null);
-  const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
   const [searchQuery, setSearchQuery] = useState('');
 
   // Load state map data
@@ -112,17 +111,6 @@ export default function StateMap({ stateCode, stateData, stateName, onBack }) {
     );
   }, [mapData, searchQuery]);
 
-  const handleMouseMove = (evt) => {
-    const container = evt.currentTarget.closest('.relative');
-    const rect = container ? container.getBoundingClientRect() : evt.currentTarget.closest('.state-map-wrapper').getBoundingClientRect();
-    setMousePos({
-      x: evt.clientX - rect.left,
-      y: evt.clientY - rect.top,
-      containerWidth: rect.width,
-      containerHeight: rect.height,
-    });
-  };
-
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center h-[500px] text-gray-500 font-bold">
@@ -148,21 +136,21 @@ export default function StateMap({ stateCode, stateData, stateName, onBack }) {
   const districtNames = Object.keys(mapData.districts);
 
   return (
-    <div className="state-map-wrapper w-full relative flex flex-col items-center justify-center p-4">
+    <div className="state-map-wrapper w-full h-full relative flex flex-col p-3 sm:p-4 overflow-hidden">
       
       {/* Header Panel */}
-      <div className="w-full flex items-center justify-between mb-4 border-b border-gray-100 pb-3">
+      <div className="w-full flex items-center justify-between mb-3 border-b border-gray-100 pb-2.5 shrink-0">
         <div className="flex items-center gap-2">
           <button 
             onClick={onBack}
-            className="w-8 h-8 rounded-xl bg-gray-100 hover:bg-emerald-50 text-gray-600 hover:text-emerald-600 font-black flex items-center justify-center transition-all"
+            className="w-8 h-8 rounded-xl bg-gray-100 hover:bg-emerald-50 text-gray-600 hover:text-emerald-600 font-black flex items-center justify-center transition-all shadow-sm"
             title="Back to India Map"
           >
             ←
           </button>
           <div>
-            <h3 className="font-black text-gray-800 text-lg leading-none">📍 {stateName} Districts</h3>
-            <span className="text-[10px] font-bold text-gray-400 mt-1 block">Click "←" to view India map</span>
+            <h3 className="font-black text-gray-800 text-base sm:text-lg leading-none">📍 {stateName} Districts</h3>
+            <span className="text-[10px] font-bold text-gray-400 mt-0.5 block">Click "←" to view India map</span>
           </div>
         </div>
 
@@ -182,10 +170,10 @@ export default function StateMap({ stateCode, stateData, stateName, onBack }) {
       </div>
 
       {/* District Search */}
-      <div className="w-full max-w-md relative mb-4">
+      <div className="w-full max-w-md relative mb-3 shrink-0 mx-auto">
         <input
           type="text"
-          className="w-full h-11 px-4 pr-10 text-xs font-bold bg-gray-50 border border-gray-100 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
+          className="w-full h-10 px-4 pr-10 text-xs font-bold bg-gray-50 border border-gray-100 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all shadow-sm"
           placeholder={`Search ${mapData.districtCount} districts in ${stateName}...`}
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
@@ -193,137 +181,149 @@ export default function StateMap({ stateCode, stateData, stateName, onBack }) {
         {searchQuery && (
           <button
             onClick={() => setSearchQuery('')}
-            className="absolute right-3 top-3.5 text-gray-400 hover:text-gray-600 font-bold text-xs"
+            className="absolute right-3 top-3 text-gray-400 hover:text-gray-600 font-bold text-xs"
           >
             ✕
           </button>
         )}
       </div>
 
-      {/* SVG Viewport */}
-      <div className="relative w-full max-h-[460px] overflow-hidden flex items-center justify-center">
-        <svg
-          viewBox={mapData.viewBox}
-          preserveAspectRatio="xMidYMid meet"
-          className="w-full h-full max-h-[450px]"
-          onMouseMove={handleMouseMove}
-        >
-          {districtNames.map((districtName) => {
-            const isHovered = hoveredDistrict === districtName;
-            const isHighlighted = filteredDistricts && filteredDistricts.includes(districtName);
-            const isDimmed = filteredDistricts && !isHighlighted;
-
-            return (
-              <path
-                key={districtName}
-                d={mapData.districts[districtName]}
-                fill={districtColors[districtName] || getAQIColor(stateData?.aqi || 100)}
-                stroke="rgba(255, 255, 255, 0.4)"
-                strokeWidth={isHovered || isHighlighted ? 1.5 : 0.55}
-                onMouseEnter={() => setHoveredDistrict(districtName)}
-                onMouseLeave={() => setHoveredDistrict(null)}
-                className="cursor-pointer transition-all duration-200"
-                style={{
-                  opacity: isDimmed ? 0.25 : 1,
-                  filter: isHovered ? 'brightness(1.12)' : 'none',
-                }}
-              />
-            );
-          })}
-        </svg>
-
-        {/* 📊 District Floating Tooltip adjacent to cursor */}
-        {hoveredDistrict && hoveredDistrictData && (
-          <div 
-            className="absolute z-[1000] w-56 bg-white/95 backdrop-blur-md shadow-2xl shadow-emerald-950/15 border border-emerald-100/60 rounded-[2rem] p-4 pointer-events-none transition-all duration-75"
-            style={{
-              left: `${mousePos.x}px`,
-              top: `${mousePos.y}px`,
-              transform: `translate(${
-                mousePos.containerWidth
-                  ? mousePos.x > mousePos.containerWidth / 2
-                    ? "-110%"
-                    : "10%"
-                  : mousePos.x > 300
-                  ? "-110%"
-                  : "10%"
-              }, ${
-                mousePos.containerHeight
-                  ? mousePos.y > mousePos.containerHeight / 2
-                    ? "-110%"
-                    : "10%"
-                  : mousePos.y > 280
-                  ? "-110%"
-                  : "10%"
-              })`,
-            }}
+      {/* SVG Viewport & Fixed Info Card */}
+      <div className="relative w-full flex-1 flex items-center justify-center overflow-hidden min-h-0">
+        <div className="w-full h-full flex items-center justify-center pr-2 sm:pr-72 lg:pr-80 pl-2 sm:pl-4">
+          <svg
+            viewBox={mapData.viewBox}
+            preserveAspectRatio="xMidYMid meet"
+            className="w-full h-full max-h-[calc(100vh-14rem)] max-w-full drop-shadow-xl transition-transform duration-300"
+            onMouseLeave={() => setHoveredDistrict(null)}
           >
-            <div className="flex items-center gap-2 mb-3">
-              <div className="w-5 h-5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center">
-                <Activity className="w-3 h-3 text-emerald-600 animate-pulse" />
-              </div>
-              <div>
-                <h4 className="text-[10px] font-black text-emerald-800 uppercase tracking-widest leading-none">{hoveredDistrict}</h4>
-                <span className="text-[8px] text-gray-400 font-black mt-0.5 block">{stateName}</span>
-              </div>
-            </div>
+            {districtNames.map((districtName) => {
+              const isHovered = hoveredDistrict === districtName;
+              const isHighlighted = filteredDistricts && filteredDistricts.includes(districtName);
+              const isDimmed = filteredDistricts && !isHighlighted;
 
-            {/* AQI Indicator */}
-            <div className="border-t border-b border-gray-100/60 py-2.5 mb-2.5 flex items-center justify-between">
-              <div>
-                <p className="text-[8px] text-gray-400 font-bold uppercase tracking-wider">Air Quality</p>
-                <p className="text-2xl font-black tracking-tight" style={{ color: hoveredDistrictData.statusColor }}>
-                  {hoveredDistrictData.aqi}
+              return (
+                <path
+                  key={districtName}
+                  d={mapData.districts[districtName]}
+                  fill={districtColors[districtName] || getAQIColor(stateData?.aqi || 100)}
+                  stroke="rgba(255, 255, 255, 0.6)"
+                  strokeWidth={isHovered || isHighlighted ? 2 : 0.65}
+                  onMouseEnter={() => setHoveredDistrict(districtName)}
+                  className="cursor-pointer transition-all duration-200"
+                  style={{
+                    opacity: isDimmed ? 0.25 : 1,
+                    filter: isHovered ? 'brightness(1.15) drop-shadow(0 4px 10px rgba(0,0,0,0.25))' : 'none',
+                    transform: isHovered ? 'scale(1.008)' : 'scale(1)',
+                    transformOrigin: 'center',
+                  }}
+                />
+              );
+            })}
+          </svg>
+        </div>
+
+        {/* 📊 District Fixed Info Card (Fixed in Bottom-Right Corner matching India Map) */}
+        <div className="absolute bottom-3 right-3 sm:bottom-4 sm:right-4 z-30 w-72 sm:w-[280px] pointer-events-auto">
+          <div className="w-full bg-white/95 backdrop-blur-md shadow-2xl shadow-emerald-950/20 border border-emerald-100/90 rounded-[1.6rem] p-3.5 sm:p-4 transition-all">
+            {hoveredDistrict && hoveredDistrictData ? (
+              <div className="space-y-2.5">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center shrink-0">
+                    <Activity className="w-4 h-4 text-emerald-600 animate-pulse" />
+                  </div>
+                  <div className="min-w-0">
+                    <h4 className="text-sm sm:text-base font-black text-emerald-950 uppercase tracking-wider leading-none truncate">
+                      {hoveredDistrict}
+                    </h4>
+                    <span className="text-[9px] text-gray-400 font-bold mt-0.5 block">
+                      {stateName} District Metrics
+                    </span>
+                  </div>
+                </div>
+
+                {/* AQI Indicator */}
+                <div className="border-t border-b border-gray-100/80 py-2 flex items-center justify-between">
+                  <div>
+                    <p className="text-[9px] text-gray-400 font-bold uppercase tracking-wider">
+                      Air Quality
+                    </p>
+                    <p
+                      className="text-2xl sm:text-3xl font-black tracking-tight mt-0.5"
+                      style={{ color: hoveredDistrictData.statusColor }}
+                    >
+                      {hoveredDistrictData.aqi}
+                    </p>
+                  </div>
+                  <span
+                    className="px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider border shadow-sm"
+                    style={{
+                      color: hoveredDistrictData.statusColor,
+                      borderColor: `${hoveredDistrictData.statusColor}40`,
+                      backgroundColor: `${hoveredDistrictData.statusColor}15`,
+                    }}
+                  >
+                    {hoveredDistrictData.level}
+                  </span>
+                </div>
+
+                {/* Weather & Temp */}
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="bg-gray-50/90 p-2.5 rounded-xl border border-gray-100/80">
+                    <div className="flex items-center gap-1 mb-0.5">
+                      <CloudSun className="w-3.5 h-3.5 text-orange-400" />
+                      <span className="text-[8px] text-gray-400 font-bold uppercase">Temp</span>
+                    </div>
+                    <p className="text-xs sm:text-sm font-black text-gray-800">{hoveredDistrictData.temp}°C</p>
+                  </div>
+                  <div className="bg-gray-50/90 p-2.5 rounded-xl border border-gray-100/80">
+                    <div className="flex items-center gap-1 mb-0.5">
+                      <Compass className="w-3.5 h-3.5 text-emerald-500" />
+                      <span className="text-[8px] text-gray-400 font-bold uppercase">Wind</span>
+                    </div>
+                    <p className="text-[11px] font-black text-gray-800 leading-tight">
+                      {hoveredDistrictData.windSpeed} km/h
+                    </p>
+                  </div>
+                </div>
+
+                {/* Humidity */}
+                <div className="bg-gray-50/90 p-2.5 rounded-xl border border-gray-100/80 flex items-center gap-2">
+                  <Droplets className="w-4 h-4 text-blue-500 shrink-0" />
+                  <div>
+                    <span className="text-[8px] text-gray-400 font-bold uppercase block">Humidity</span>
+                    <p className="text-[11px] font-black text-gray-800 mt-0.5">{hoveredDistrictData.humidity}%</p>
+                  </div>
+                </div>
+
+                {/* Primary Source */}
+                <div className="bg-emerald-50/80 p-2.5 rounded-xl border border-emerald-100/80 flex items-start gap-2">
+                  <Info className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                  <div>
+                    <span className="text-[9px] font-black text-emerald-950 uppercase tracking-wider block leading-none mb-0.5">
+                      Primary Source
+                    </span>
+                    <p className="text-[10px] text-gray-600 font-medium leading-relaxed">
+                      {hoveredDistrictData.source}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center py-6 sm:py-8 text-center">
+                <div className="w-10 h-10 rounded-xl bg-emerald-50 border border-emerald-100 flex items-center justify-center mb-2">
+                  <Activity className="w-5 h-5 text-emerald-500 animate-pulse" />
+                </div>
+                <p className="text-[11px] font-black text-gray-700 uppercase tracking-wider">
+                  Hover over any district
+                </p>
+                <p className="text-[9px] text-gray-400 mt-0.5 max-w-[190px] leading-relaxed">
+                  to view real-time district air quality, weather & pollution sources
                 </p>
               </div>
-              <span 
-                className="px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-widest border"
-                style={{ 
-                  color: hoveredDistrictData.statusColor, 
-                  borderColor: `${hoveredDistrictData.statusColor}30`, 
-                  backgroundColor: `${hoveredDistrictData.statusColor}10` 
-                }}
-              >
-                {hoveredDistrictData.level}
-              </span>
-            </div>
-
-            {/* Weather & Temp */}
-            <div className="grid grid-cols-2 gap-2 mb-2">
-              <div className="flex items-center gap-1.5 bg-gray-50/50 p-1.5 rounded-lg border border-gray-100/30">
-                <CloudSun className="w-3.5 h-3.5 text-orange-400" />
-                <div>
-                  <p className="text-[8px] text-gray-400 font-bold uppercase">Temp</p>
-                  <p className="text-[10px] font-black text-gray-700">{hoveredDistrictData.temp}°C</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-1.5 bg-gray-50/50 p-1.5 rounded-lg border border-gray-100/30">
-                <Compass className="w-3.5 h-3.5 text-emerald-400" />
-                <div>
-                  <p className="text-[8px] text-gray-400 font-bold uppercase">Wind</p>
-                  <p className="text-[10px] font-black text-gray-700">{hoveredDistrictData.windSpeed}km/h</p>
-                </div>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-1.5 bg-gray-50/50 p-2 rounded-lg border border-gray-100/30 mb-2 text-xs">
-              <Droplets className="w-3.5 h-3.5 text-blue-400" />
-              <div>
-                <span className="text-[8px] text-gray-400 font-bold uppercase block leading-none">Humidity</span>
-                <span className="font-extrabold text-[10px] text-gray-700">{hoveredDistrictData.humidity}%</span>
-              </div>
-            </div>
-
-            {/* Primary Source */}
-            <div className="bg-emerald-500/5 p-2 rounded-xl border border-emerald-500/10 flex items-start gap-1.5">
-              <Info className="w-3 h-3 text-emerald-600 shrink-0 mt-0.5" />
-              <div>
-                <span className="text-[8px] font-black text-emerald-800 uppercase tracking-widest block leading-none mb-1">Primary Source</span>
-                <p className="text-[9px] text-gray-500 font-bold leading-tight">{hoveredDistrictData.source}</p>
-              </div>
-            </div>
+            )}
           </div>
-        )}
+        </div>
       </div>
     </div>
   );

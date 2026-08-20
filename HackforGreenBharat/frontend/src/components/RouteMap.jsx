@@ -1,36 +1,51 @@
-import { useEffect, useState, useMemo, Fragment, useRef, useCallback } from "react";
-import {
-  MapContainer,
-  TileLayer,
-  Polyline,
-  Marker,
-  Popup,
-  Tooltip,
-  useMap,
-} from "react-leaflet";
+import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import StateMap from "./StateMap";
-import { Activity, CloudSun, Compass, Droplets, Info } from "lucide-react";
+import { Activity, CloudSun, Compass, Droplets, Info, Layers, Map as MapIcon, Trees } from "lucide-react";
+
+/* ===== GOOGLE MAPS & LEAFLET CONFIG ===== */
+const GOOGLE_TILE_LAYERS = {
+  roadmap: "https://{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}",
+  satellite: "https://{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}",
+  terrain: "https://{s}.google.com/vt/lyrs=p&x={x}&y={y}&z={z}",
+};
 
 /* ===== LEAFLET ICONS ===== */
 const evIcon = L.divIcon({
   className: "custom-ev-marker",
-  html: `<div style="background-color: #10b981; color: white; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; border: 3px solid white; box-shadow: 0 4px 6px rgba(0,0,0,0.3); font-size: 14px;">⚡</div>`,
-  iconSize: [32, 32],
-  iconAnchor: [16, 16],
+  html: `<div style="background-color: #10b981; color: white; width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; border: 2.5px solid white; box-shadow: 0 4px 8px rgba(0,0,0,0.3); font-size: 13px; font-weight: bold;">⚡</div>`,
+  iconSize: [30, 30],
+  iconAnchor: [15, 15],
 });
 
-const originIcon = new L.Icon({
-  iconUrl: "https://maps.gstatic.com/mapfiles/ms2/micons/red-pushpin.png",
-  iconSize: [32, 32],
-  iconAnchor: [10, 32],
+// 1. Custom Google Maps-style Destination Pin (Teardrop Red Pin with inner circle)
+const destIcon = L.divIcon({
+  className: "custom-dest-pin",
+  html: `
+    <div style="display: flex; flex-direction: column; align-items: center; filter: drop-shadow(0 4px 6px rgba(0,0,0,0.45));">
+      <svg width="32" height="42" viewBox="0 0 24 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M12 0C5.37258 0 0 5.37258 0 12C0 20.5 12 32 12 32C12 32 24 20.5 24 12C24 5.37258 18.6274 0 12 0Z" fill="#EA4335"/>
+        <circle cx="12" cy="11.5" r="4.5" fill="white"/>
+        <circle cx="12" cy="11.5" r="2.5" fill="#B31412"/>
+      </svg>
+    </div>
+  `,
+  iconSize: [32, 42],
+  iconAnchor: [16, 40],
 });
 
-const destIcon = new L.Icon({
-  iconUrl: "https://maps.gstatic.com/mapfiles/ms2/micons/blue-pushpin.png",
-  iconSize: [32, 32],
-  iconAnchor: [10, 32],
+// 2. Custom Google Maps-style Origin Pin (Blue circle with pulse halo)
+const originIcon = L.divIcon({
+  className: "custom-origin-pin",
+  html: `
+    <div style="position: relative; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center;">
+      <div style="position: absolute; width: 28px; height: 28px; border-radius: 50%; background: rgba(66, 133, 244, 0.35);"></div>
+      <div style="width: 18px; height: 18px; border-radius: 50%; background: #1a73e8; border: 3.5px solid white; box-shadow: 0 2px 8px rgba(0,0,0,0.45);"></div>
+    </div>
+  `,
+  iconSize: [28, 28],
+  iconAnchor: [14, 14],
 });
 
 /* ===== STATE MAP LOOKUPS ===== */
@@ -53,69 +68,59 @@ const STATE_CODE_TO_NAME = Object.fromEntries(
 
 /* ===== ECO-MAP STATE ENVIRONMENT DATA ===== */
 const STATE_ENV_DATA = {
-  'AP': { aqi: 75, temp: 32, roadQuality: "88% Smooth", greenery: "Dense Canopy", status: "Healthy", advice: "Smooth roads & clean air. Ideal for EV travel." },
-  'AR': { aqi: 35, temp: 22, roadQuality: "70% Bumpy", greenery: "Lush Forest", status: "Excellent", advice: "Extremely clean air, but terrain is rough and bumpy." },
-  'AS': { aqi: 62, temp: 26, roadQuality: "75% Smooth", greenery: "Lush Forest", status: "Good", advice: "Lush foliage provides great natural canopy shade." },
-  'BR': { aqi: 185, temp: 30, roadQuality: "68% Bumpy", greenery: "Moderate Grassland", status: "Unhealthy", advice: "Elevated particulate pollution. Wear protective masks." },
-  'CH': { aqi: 110, temp: 28, roadQuality: "95% Smooth", greenery: "High Canopy", status: "Moderate", advice: "Perfect urban roads but moderate air haze present." },
-  'CT': { aqi: 95, temp: 31, roadQuality: "80% Smooth", greenery: "High Canopy", status: "Moderate", advice: "Abundant forests balance local coal-generation emissions." },
-  'DL': { aqi: 340, temp: 35, roadQuality: "90% Smooth", greenery: "Low Canopy", status: "Severe", advice: "Critical pollution levels. Restrict outdoor workouts." },
-  'GA': { aqi: 45, temp: 30, roadQuality: "92% Smooth", greenery: "Dense Canopy", status: "Excellent", advice: "Coastal winds keep air fresh. Excellent highway quality." },
-  'GJ': { aqi: 140, temp: 36, roadQuality: "92% Smooth", greenery: "Sparse Shrubland", status: "Moderate", advice: "High heat index. Keep hydrated during daytime travel." },
-  'HR': { aqi: 240, temp: 33, roadQuality: "86% Smooth", greenery: "Low Canopy", status: "Severe", advice: "Heavy agrarian stubble haze. Prefer indoor routing." },
-  'HP': { aqi: 48, temp: 18, roadQuality: "72% Bumpy", greenery: "Lush Forest", status: "Excellent", advice: "Cool mountain air. Smooth driving inside main valleys." },
-  'JK': { aqi: 42, temp: 15, roadQuality: "65% Bumpy", greenery: "Lush Forest", status: "Excellent", advice: "Cold climate, check for high elevation rough roads." },
-  'JH': { aqi: 125, temp: 29, roadQuality: "76% Smooth", greenery: "High Canopy", status: "Moderate", advice: "Industrial dust particles suspended. Watch out for road works." },
-  'KA': { aqi: 68, temp: 28, roadQuality: "85% Smooth", greenery: "Dense Canopy", status: "Healthy", advice: "Favorable green cover and smooth, well-lit highways." },
-  'KL': { aqi: 52, temp: 29, roadQuality: "88% Smooth", greenery: "Lush Forest", status: "Excellent", advice: "High humidity but excellent eco-system air quality." },
-  'LA': { aqi: 30, temp: 10, roadQuality: "55% Rough", greenery: "Alpine Meadows", status: "Excellent", advice: "High altitude zone. Cold weather, ensure heavy winter gear." },
-  'MP': { aqi: 115, temp: 32, roadQuality: "82% Smooth", greenery: "High Canopy", status: "Moderate", advice: "Dry inland climate. Road condition is moderately stable." },
-  'MH': { aqi: 135, temp: 31, roadQuality: "87% Smooth", greenery: "Moderate Canopy", status: "Moderate", advice: "Urban vehicular dust. Good streetlights on central corridors." },
-  'MN': { aqi: 40, temp: 23, roadQuality: "68% Bumpy", greenery: "Lush Forest", status: "Excellent", advice: "Pure natural atmosphere with dense forest coverage." },
-  'ML': { aqi: 38, temp: 21, roadQuality: "70% Bumpy", greenery: "Lush Forest", status: "Excellent", advice: "Extremely clean air, but persistent high monsoon rainfall." },
-  'MZ': { aqi: 35, temp: 22, roadQuality: "62% Bumpy", greenery: "Lush Forest", status: "Excellent", advice: "Pristine mountain forests. Roads are slippery when wet." },
-  'NL': { aqi: 45, temp: 22, roadQuality: "64% Bumpy", greenery: "Lush Forest", status: "Excellent", advice: "Low human pollution. Very healthy atmosphere." },
-  'OR': { aqi: 88, temp: 31, roadQuality: "79% Smooth", greenery: "High Canopy", status: "Moderate", advice: "Coastal breeze offsets inland industrial zones." },
-  'PB': { aqi: 195, temp: 32, roadQuality: "89% Smooth", greenery: "Low Canopy", status: "Unhealthy", advice: "Seasonal crop harvesting dust. High particulate matter." },
-  'RJ': { aqi: 155, temp: 38, roadQuality: "85% Smooth", greenery: "Desert Scrub", status: "Unhealthy", advice: "Desert sand particles and extreme summer heat waves." },
-  'SK': { aqi: 32, temp: 17, roadQuality: "60% Bumpy", greenery: "Lush Forest", status: "Excellent", advice: "Pristine ecosystem. Mountain paths require high caution." },
-  'TN': { aqi: 78, temp: 33, roadQuality: "90% Smooth", greenery: "Moderate Canopy", status: "Healthy", advice: "Great sea breeze. Smooth and well-lit highway structures." },
-  'TG': { aqi: 85, temp: 32, roadQuality: "88% Smooth", greenery: "Moderate Canopy", status: "Healthy", advice: "Warm dry air, solid road construction around cities." },
-  'TR': { aqi: 50, temp: 25, roadQuality: "68% Bumpy", greenery: "Dense Canopy", status: "Good", advice: "Rich flora. Watch for narrow pathways and potholes." },
-  'UP': { aqi: 220, temp: 33, roadQuality: "82% Smooth", greenery: "Low Canopy", status: "Severe", advice: "Heavy smog in Gangetic plain. Mask recommended." },
-  'UT': { aqi: 55, temp: 20, roadQuality: "74% Bumpy", greenery: "Lush Forest", status: "Excellent", advice: "Clean mountain valleys, but landslide risk during rains." },
-  'WB': { aqi: 165, temp: 30, roadQuality: "78% Smooth", greenery: "Moderate Canopy", status: "Unhealthy", advice: "Dense urban concentration. Prefer eco-safe green paths." },
-  'AN': { aqi: 25, temp: 28, roadQuality: "80% Smooth", greenery: "Lush Forest", status: "Excellent", advice: "Pure marine atmosphere. No major pollution zones." },
-  'DN': { aqi: 90, temp: 30, roadQuality: "85% Smooth", greenery: "Moderate Canopy", status: "Moderate", advice: "Moderate coastal air quality. Paths are well paved." },
-  'LD': { aqi: 20, temp: 29, roadQuality: "90% Smooth", greenery: "Dense Canopy", status: "Excellent", advice: "Unpolluted islands. Pure sea breeze and clear skies." },
-  'PY': { aqi: 65, temp: 31, roadQuality: "90% Smooth", greenery: "Moderate Canopy", status: "Healthy", advice: "Clean coastal boulevard. Smooth driving parameters." }
+  'AP': { aqi: 75, temp: 32, roadQuality: "88% Smooth", greenery: "Dense Canopy", status: "GOOD", advice: "Smooth roads & clean air. Ideal for EV travel." },
+  'AR': { aqi: 35, temp: 22, roadQuality: "70% Bumpy", greenery: "Lush Forest", status: "GOOD", advice: "Extremely clean air, but terrain is rough and bumpy." },
+  'AS': { aqi: 62, temp: 26, roadQuality: "75% Smooth", greenery: "Lush Forest", status: "GOOD", advice: "Lush foliage provides great natural canopy shade." },
+  'BR': { aqi: 185, temp: 30, roadQuality: "68% Bumpy", greenery: "Moderate Grassland", status: "SEVERE", advice: "Elevated particulate pollution. Wear protective masks." },
+  'CH': { aqi: 110, temp: 28, roadQuality: "95% Smooth", greenery: "High Canopy", status: "MODERATE", advice: "Perfect urban roads but moderate air haze present." },
+  'CT': { aqi: 95, temp: 31, roadQuality: "80% Smooth", greenery: "High Canopy", status: "GOOD", advice: "Abundant forests balance local coal-generation emissions." },
+  'DL': { aqi: 340, temp: 35, roadQuality: "90% Smooth", greenery: "Low Canopy", status: "SEVERE", advice: "Critical pollution levels. Restrict outdoor workouts." },
+  'GA': { aqi: 45, temp: 30, roadQuality: "92% Smooth", greenery: "Dense Canopy", status: "GOOD", advice: "Coastal winds keep air fresh. Excellent highway quality." },
+  'GJ': { aqi: 140, temp: 36, roadQuality: "92% Smooth", greenery: "Sparse Shrubland", status: "MODERATE", advice: "High heat index. Keep hydrated during daytime travel." },
+  'HR': { aqi: 240, temp: 33, roadQuality: "86% Smooth", greenery: "Low Canopy", status: "SEVERE", advice: "Heavy agrarian stubble haze. Prefer indoor routing." },
+  'HP': { aqi: 48, temp: 18, roadQuality: "72% Bumpy", greenery: "Lush Forest", status: "GOOD", advice: "Cool mountain air. Smooth driving inside main valleys." },
+  'JK': { aqi: 42, temp: 15, roadQuality: "65% Bumpy", greenery: "Lush Forest", status: "GOOD", advice: "Cold climate, check for high elevation rough roads." },
+  'JH': { aqi: 125, temp: 29, roadQuality: "76% Smooth", greenery: "High Canopy", status: "MODERATE", advice: "Industrial dust particles suspended. Watch out for road works." },
+  'KA': { aqi: 68, temp: 28, roadQuality: "85% Smooth", greenery: "Dense Canopy", status: "GOOD", advice: "Favorable green cover and smooth, well-lit highways." },
+  'KL': { aqi: 52, temp: 29, roadQuality: "88% Smooth", greenery: "Lush Forest", status: "GOOD", advice: "High humidity but excellent eco-system air quality." },
+  'LA': { aqi: 30, temp: 10, roadQuality: "55% Rough", greenery: "Alpine Meadows", status: "GOOD", advice: "High altitude zone. Cold weather, ensure heavy winter gear." },
+  'MP': { aqi: 115, temp: 32, roadQuality: "82% Smooth", greenery: "High Canopy", status: "MODERATE", advice: "Dry inland climate. Road condition is moderately stable." },
+  'MH': { aqi: 135, temp: 31, roadQuality: "87% Smooth", greenery: "Moderate Canopy", status: "MODERATE", advice: "Urban vehicular dust. Good streetlights on central corridors." },
+  'MN': { aqi: 40, temp: 23, roadQuality: "68% Bumpy", greenery: "Lush Forest", status: "GOOD", advice: "Pure natural atmosphere with dense forest coverage." },
+  'ML': { aqi: 38, temp: 21, roadQuality: "70% Bumpy", greenery: "Lush Forest", status: "GOOD", advice: "Extremely clean air, but persistent high monsoon rainfall." },
+  'MZ': { aqi: 35, temp: 22, roadQuality: "62% Bumpy", greenery: "Lush Forest", status: "GOOD", advice: "Pristine mountain forests. Roads are slippery when wet." },
+  'NL': { aqi: 45, temp: 22, roadQuality: "64% Bumpy", greenery: "Lush Forest", status: "GOOD", advice: "Low human pollution. Very healthy atmosphere." },
+  'OR': { aqi: 88, temp: 31, roadQuality: "79% Smooth", greenery: "High Canopy", status: "GOOD", advice: "Coastal breeze offsets inland industrial zones." },
+  'PB': { aqi: 195, temp: 32, roadQuality: "89% Smooth", greenery: "Low Canopy", status: "SEVERE", advice: "Seasonal crop harvesting dust. High particulate matter." },
+  'RJ': { aqi: 155, temp: 38, roadQuality: "85% Smooth", greenery: "Desert Scrub", status: "MODERATE", advice: "Desert sand particles and extreme summer heat waves." },
+  'SK': { aqi: 32, temp: 17, roadQuality: "60% Bumpy", greenery: "Lush Forest", status: "GOOD", advice: "Pristine ecosystem. Mountain paths require high caution." },
+  'TN': { aqi: 78, temp: 33, roadQuality: "90% Smooth", greenery: "Moderate Canopy", status: "GOOD", advice: "Great sea breeze. Smooth and well-lit highway structures." },
+  'TG': { aqi: 85, temp: 32, roadQuality: "88% Smooth", greenery: "Moderate Canopy", status: "GOOD", advice: "Warm dry air, solid road construction around cities." },
+  'TR': { aqi: 50, temp: 25, roadQuality: "68% Bumpy", greenery: "Dense Canopy", status: "GOOD", advice: "Rich flora. Watch for narrow pathways and potholes." },
+  'UP': { aqi: 220, temp: 33, roadQuality: "82% Smooth", greenery: "Low Canopy", status: "SEVERE", advice: "Heavy smog in Gangetic plain. Mask recommended." },
+  'UT': { aqi: 55, temp: 20, roadQuality: "74% Bumpy", greenery: "Lush Forest", status: "GOOD", advice: "Clean mountain valleys, but landslide risk during rains." },
+  'WB': { aqi: 165, temp: 30, roadQuality: "78% Smooth", greenery: "Moderate Canopy", status: "MODERATE", advice: "Dense urban concentration. Prefer eco-safe green paths." },
+  'AN': { aqi: 25, temp: 28, roadQuality: "80% Smooth", greenery: "Lush Forest", status: "GOOD", advice: "Pure marine atmosphere. No major pollution zones." },
+  'DN': { aqi: 90, temp: 30, roadQuality: "85% Smooth", greenery: "Moderate Canopy", status: "GOOD", advice: "Moderate coastal air quality. Paths are well paved." },
+  'LD': { aqi: 20, temp: 29, roadQuality: "90% Smooth", greenery: "Dense Canopy", status: "GOOD", advice: "Unpolluted islands. Pure sea breeze and clear skies." },
+  'PY': { aqi: 65, temp: 31, roadQuality: "90% Smooth", greenery: "Moderate Canopy", status: "GOOD", advice: "Clean coastal boulevard. Smooth driving parameters." }
 };
 
-/* Get risk color scale matching CivicShield heat map styles */
 const getAQIColor = (aqi) => {
-  if (aqi <= 50) return "rgba(16, 185, 129, 0.85)";   // Clean emerald
-  if (aqi <= 100) return "rgba(132, 204, 22, 0.85)";  // Good lime
-  if (aqi <= 150) return "rgba(234, 179, 8, 0.85)";   // Moderate yellow
-  if (aqi <= 200) return "rgba(249, 115, 22, 0.85)";   // Unhealthy orange
-  return "rgba(239, 68, 68, 0.85)";                  // Severe red
+  if (aqi <= 50) return "rgba(16, 185, 129, 0.85)";
+  if (aqi <= 100) return "rgba(132, 204, 22, 0.85)";
+  if (aqi <= 150) return "rgba(234, 179, 8, 0.85)";
+  if (aqi <= 200) return "rgba(249, 115, 22, 0.85)";
+  return "rgba(239, 68, 68, 0.85)";
 };
 
-const getAQILabel = (aqi) => {
-  if (aqi <= 50) return "Healthy";
-  if (aqi <= 100) return "Good";
-  if (aqi <= 150) return "Moderate";
-  if (aqi <= 200) return "Unhealthy";
-  return "Severe";
-};
-
-/* ===== HELPERS ===== */
 const getRouteSegmentAQIColor = (aqi) => {
   if (aqi === null || aqi === undefined) return "#9CA3AF";
-  if (aqi <= 50) return "#16a34a";   // green
-  if (aqi <= 100) return "#ca8a04";  // yellow
-  if (aqi <= 150) return "#ea580c";  // orange
-  if (aqi <= 200) return "#dc2626";  // red
-  return "#7c3aed";                  // purple
+  if (aqi <= 50) return "#16a34a";
+  if (aqi <= 100) return "#ca8a04";
+  if (aqi <= 150) return "#ea580c";
+  if (aqi <= 200) return "#dc2626";
+  return "#7c3aed";
 };
 
 const getLabelCount = (distanceKm) => {
@@ -124,82 +129,32 @@ const getLabelCount = (distanceKm) => {
   return 5;
 };
 
-/* ===== AUTO FIT MAP ===== */
-const FitBounds = ({ origin, destination }) => {
-  const map = useMap();
-  useEffect(() => {
-    if (!origin || !destination) return;
-    const bounds = L.latLngBounds(
-      [origin.lat, origin.lon],
-      [destination.lat, destination.lon]
-    );
-    map.fitBounds(bounds, { padding: [50, 50] });
-  }, [map, origin, destination]);
-  return null;
-};
+const RouteMap = ({ routes = [], selectedRouteId = 0, origin, destination, onSelectRoute }) => {
+  const mapContainerRef = useRef(null);
+  const mapRef = useRef(null);
+  const layerGroupRef = useRef(null);
+  const tileLayerRef = useRef(null);
 
-/* ===== INVALIDATE MAP SIZE HELPER ===== */
-const InvalidateSizeHelper = ({ isActive }) => {
-  const map = useMap();
-  useEffect(() => {
-    if (isActive) {
-      map.invalidateSize({ animate: false });
-      const t1 = setTimeout(() => map.invalidateSize({ animate: true }), 100);
-      const t2 = setTimeout(() => map.invalidateSize({ animate: true }), 400);
-      const t3 = setTimeout(() => map.invalidateSize({ animate: true }), 800);
-      const t4 = setTimeout(() => map.invalidateSize({ animate: true }), 1200);
-      return () => {
-        clearTimeout(t1);
-        clearTimeout(t2);
-        clearTimeout(t3);
-        clearTimeout(t4);
-      };
-    }
-  }, [map, isActive]);
-  return null;
-};
+  // Map style state (Google Maps: roadmap, satellite, terrain)
+  const [mapStyle, setMapStyle] = useState("roadmap");
 
-/* ===== MAIN MAP ORCHESTRATOR ===== */
-const RouteMap = ({ routes, selectedRouteId, origin, destination, onSelectRoute }) => {
+  // Determine active view: If routes exist, show "map" by default. Otherwise show "heatmap".
+  const hasRoutes = routes && routes.length > 0;
+  const [userViewOverride, setUserViewOverride] = useState(null); // null | "map" | "heatmap"
+  const currentView = userViewOverride || (hasRoutes ? "map" : "heatmap");
+
+  // SVG Heatmap State
   const [selectedState, setSelectedState] = useState(null);
   const [pathData, setPathData] = useState(null);
   const [hoveredState, setHoveredState] = useState(null);
 
-  // Transition States for Smooth space-to-ground Zoom Animation
-  const [heatmapScale, setHeatmapScale] = useState(1);
-  const [heatmapOpacity, setHeatmapOpacity] = useState(1);
-  const [mapOpacity, setMapOpacity] = useState(0);
-
-  const showLeafletMap = destination !== null;
-
-  // Load India SVG paths
+  // Load India SVG paths for Heatmap view
   useEffect(() => {
-    fetch('/india-paths.json')
-      .then((r) => r.ok ? r.json() : Promise.reject())
+    fetch("/india-paths.json")
+      .then((r) => (r.ok ? r.json() : Promise.reject()))
       .then((data) => setPathData(data))
-      .catch((err) => console.error('Failed to load map paths:', err));
+      .catch((err) => console.error("Failed to load map paths:", err));
   }, []);
-
-  // Manage Zoom Scale transition when Destination is searched
-  useEffect(() => {
-    if (showLeafletMap) {
-      // Zoom out/into the ground: SVG scale up to 8x and fade out
-      setHeatmapScale(8);
-      setHeatmapOpacity(0);
-      
-      const timer = setTimeout(() => {
-        setMapOpacity(1);
-      }, 150);
-
-      return () => clearTimeout(timer);
-    } else {
-      // Reset back to initial space-view SVG Heatmap of India
-      setHeatmapScale(1);
-      setHeatmapOpacity(1);
-      setMapOpacity(0);
-      setSelectedState(null);
-    }
-  }, [showLeafletMap]);
 
   const handleStateHover = useCallback((stateName) => {
     const code = STATE_NAME_TO_CODE[stateName];
@@ -214,304 +169,518 @@ const RouteMap = ({ routes, selectedRouteId, origin, destination, onSelectRoute 
     }
   };
 
-  const handleMouseLeave = () => {};
+  // Initialize Leaflet Map
+  useEffect(() => {
+    if (!mapContainerRef.current) return;
 
-  const leafletOrigin = origin || { lat: 28.6139, lon: 77.2090, name: "Delhi" };
-  const originPos = [leafletOrigin.lat, leafletOrigin.lon];
-  const destPos = destination ? [destination.lat, destination.lon] : null;
+    if (!mapRef.current) {
+      const map = L.map(mapContainerRef.current, {
+        center: [22.5, 78.9],
+        zoom: 5,
+        zoomControl: true,
+        scrollWheelZoom: true,
+      });
 
-  const selectedRoute = routes.find((r) => r.id === selectedRouteId);
-  const labelIndexes = new Set();
+      const initialTileLayer = L.tileLayer(
+        GOOGLE_TILE_LAYERS[mapStyle] || GOOGLE_TILE_LAYERS.roadmap,
+        {
+          attribution: '&copy; <a href="https://maps.google.com/">Google Maps</a>',
+          maxZoom: 20,
+          subdomains: ["mt0", "mt1", "mt2", "mt3"],
+        }
+      ).addTo(map);
+      tileLayerRef.current = initialTileLayer;
 
-  if (selectedRoute?.pollutionSegments?.length) {
-    const total = selectedRoute.pollutionSegments.length;
-    const distanceKm = parseFloat(selectedRoute.distance);
-    const labelsToShow = getLabelCount(distanceKm);
-    for (let i = 0; i < labelsToShow; i++) {
-      labelIndexes.add(Math.floor((i * total) / labelsToShow));
+      const layerGroup = L.layerGroup().addTo(map);
+      layerGroupRef.current = layerGroup;
+      mapRef.current = map;
+
+      const handleResize = () => map.invalidateSize();
+      window.addEventListener("resize", handleResize);
+
+      setTimeout(() => map.invalidateSize(), 150);
+      setTimeout(() => map.invalidateSize(), 500);
     }
-  }
+  }, []);
+
+  // Update Google Maps Tile Layer when mapStyle changes
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    if (tileLayerRef.current) {
+      map.removeLayer(tileLayerRef.current);
+    }
+
+    const newLayer = L.tileLayer(
+      GOOGLE_TILE_LAYERS[mapStyle] || GOOGLE_TILE_LAYERS.roadmap,
+      {
+        attribution: '&copy; <a href="https://maps.google.com/">Google Maps</a>',
+        maxZoom: 20,
+        subdomains: ["mt0", "mt1", "mt2", "mt3"],
+      }
+    ).addTo(map);
+
+    tileLayerRef.current = newLayer;
+  }, [mapStyle]);
+
+  // Update Route Layers, Polylines, Markers, and Bounds
+  useEffect(() => {
+    const map = mapRef.current;
+    const layerGroup = layerGroupRef.current;
+    if (!map || !layerGroup) return;
+
+    layerGroup.clearLayers();
+
+    const leafletOrigin = origin || { lat: 28.6139, lon: 77.2090, name: "Delhi" };
+    const destPos = destination && destination.lat && destination.lon ? destination : null;
+
+    const bounds = L.latLngBounds();
+
+    // 1. Google Maps-style Origin Marker
+    if (leafletOrigin?.lat && leafletOrigin?.lon) {
+      const origMarker = L.marker([leafletOrigin.lat, leafletOrigin.lon], {
+        icon: originIcon,
+      }).bindPopup(`<strong>Origin:</strong> ${leafletOrigin.name || "Delhi"}`);
+      layerGroup.addLayer(origMarker);
+      bounds.extend([leafletOrigin.lat, leafletOrigin.lon]);
+    }
+
+    // 2. Google Maps-style Destination Marker
+    if (destPos?.lat && destPos?.lon) {
+      const destMarker = L.marker([destPos.lat, destPos.lon], {
+        icon: destIcon,
+      }).bindPopup(`<strong>Destination:</strong> ${destPos.name || "Destination"}`);
+      layerGroup.addLayer(destMarker);
+      bounds.extend([destPos.lat, destPos.lon]);
+    }
+
+    // 3. Render Routes
+    if (routes && routes.length > 0) {
+      const activeRoute = routes.find((r) => r.id === selectedRouteId) || routes[0];
+
+      // Draw non-selected routes in background (dashed gray)
+      routes.forEach((route) => {
+        if (route.id === activeRoute.id) return;
+        if (route.geometry && route.geometry.length > 1) {
+          const coords = route.geometry.map((p) => [p.lat, p.lon]);
+          const polyline = L.polyline(coords, {
+            color: "#94a3b8",
+            weight: 5,
+            opacity: 0.6,
+            dashArray: "8 5",
+          });
+          polyline.on("click", () => onSelectRoute && onSelectRoute(route.id));
+          layerGroup.addLayer(polyline);
+        }
+      });
+
+      // Draw active selected route
+      if (activeRoute.pollutionSegments && activeRoute.pollutionSegments.length > 1) {
+        const segments = activeRoute.pollutionSegments.filter(
+          (s) => s && s.lat != null && s.lon != null
+        );
+
+        const totalSegs = segments.length;
+        const distanceKm = parseFloat(activeRoute.distance) || 100;
+        const labelsToShow = getLabelCount(distanceKm);
+        const labelIndexes = new Set();
+        for (let i = 0; i < labelsToShow; i++) {
+          labelIndexes.add(Math.floor((i * totalSegs) / labelsToShow));
+        }
+
+        // Add EV station markers
+        (activeRoute.evStations || []).forEach((ev) => {
+          if (ev.lat && ev.lon) {
+            const evMarker = L.marker([ev.lat, ev.lon], { icon: evIcon }).bindPopup(`
+              <div style="font-weight:700; color:#10b981; text-transform:uppercase;">⚡ ${ev.name}</div>
+              <div style="font-size:11px; color:#666;">Operator: ${ev.operator || "EV Network"}</div>
+            `);
+            layerGroup.addLayer(evMarker);
+          }
+        });
+
+        // 1. Google Maps style Outer Casing (Dark contrast blue casing)
+        const fullCoords = segments.map((s) => [s.lat, s.lon]);
+        const casingPolyline = L.polyline(fullCoords, {
+          color: "#185ABC",
+          weight: 10,
+          opacity: 0.95,
+          lineCap: "round",
+          lineJoin: "round",
+        });
+        layerGroup.addLayer(casingPolyline);
+
+        // 2. Inner Colored AQI Polyline Segments
+        for (let i = 0; i < segments.length - 1; i++) {
+          const seg = segments[i];
+          const nextSeg = segments[i + 1];
+          const segColor = getRouteSegmentAQIColor(seg.aqi);
+
+          const polyline = L.polyline(
+            [
+              [seg.lat, seg.lon],
+              [nextSeg.lat, nextSeg.lon],
+            ],
+            {
+              color: segColor,
+              weight: 6,
+              opacity: 1,
+              lineCap: "round",
+              lineJoin: "round",
+            }
+          );
+
+          if (labelIndexes.has(i)) {
+            polyline.bindTooltip(
+              `
+              <div style="
+                background: #fff;
+                border: 2.5px solid ${segColor};
+                border-radius: 10px;
+                padding: 5px 10px;
+                box-shadow: 0 2px 10px rgba(0,0,0,0.18);
+                font-size: 12px;
+                font-weight: 700;
+                color: #111;
+                min-width: 90px;
+                text-align: center;
+              ">
+                <div style="color: ${segColor}; font-weight: 800; font-size: 11px;">${seg.zone || "Zone"}</div>
+                <div style="color: #444; font-weight: 700;">AQI: ${seg.aqi ?? "N/A"}</div>
+              </div>
+            `,
+              { permanent: true, direction: "top", opacity: 1 }
+            );
+          }
+
+          polyline.on("click", () => onSelectRoute && onSelectRoute(activeRoute.id));
+          layerGroup.addLayer(polyline);
+          bounds.extend([seg.lat, seg.lon]);
+        }
+      } else if (activeRoute.geometry && activeRoute.geometry.length > 1) {
+        const coords = activeRoute.geometry.map((p) => [p.lat, p.lon]);
+        
+        // Double-layer Google Maps Blue Route
+        const outerCasing = L.polyline(coords, {
+          color: "#185ABC",
+          weight: 10,
+          opacity: 0.95,
+          lineCap: "round",
+          lineJoin: "round",
+        });
+        layerGroup.addLayer(outerCasing);
+
+        const innerCore = L.polyline(coords, {
+          color: "#1A73E8",
+          weight: 6,
+          opacity: 1,
+          lineCap: "round",
+          lineJoin: "round",
+        });
+        layerGroup.addLayer(innerCore);
+        coords.forEach((c) => bounds.extend(c));
+      }
+    }
+
+    // Auto-fit bounds
+    if (bounds.isValid()) {
+      map.fitBounds(bounds, { padding: [60, 60], maxZoom: 15 });
+    } else if (leafletOrigin?.lat && leafletOrigin?.lon) {
+      map.setView([leafletOrigin.lat, leafletOrigin.lon], 9);
+    }
+  }, [routes, selectedRouteId, origin, destination, onSelectRoute]);
+
+  // Invalidate map size when view switches to "map"
+  useEffect(() => {
+    if (currentView === "map" && mapRef.current) {
+      setTimeout(() => mapRef.current.invalidateSize(), 50);
+      setTimeout(() => mapRef.current.invalidateSize(), 200);
+    }
+  }, [currentView]);
 
   return (
-    <div className="relative w-full h-full rounded-[3rem] bg-white" style={{ overflow: "visible" }}>
+    <div className="relative w-full h-full bg-white overflow-hidden select-none flex flex-col">
       
-      {/* 🗺️ LEAFLET MAP VIEW WRAPPER (Always mounted to prevent React unmount/removeChild DOM crashes) */}
-      <div 
-        className="absolute inset-0 w-full h-full rounded-[3rem] overflow-hidden bg-emerald-50/10 transition-opacity duration-700 ease-out"
-        style={{ 
-          opacity: mapOpacity, 
-          zIndex: showLeafletMap ? 10 : 1,
-          pointerEvents: showLeafletMap ? "auto" : "none" 
-        }}
-      >
-        <MapContainer
-          center={[22.5, 78.9]}
-          zoom={4.2}
-          minZoom={3}
-          maxZoom={18}
-          scrollWheelZoom={true}
-          dragging={true}
-          doubleClickZoom={true}
-          zoomControl={true}
-          style={{ height: "100%", width: "100%", filter: "hue-rotate(85deg) saturate(105%) brightness(1.02) contrast(95%)" }}
-          className="h-full w-full rounded-[3rem]"
-        >
-          <TileLayer
-            url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
-            attribution='&copy; <a href="https://carto.com/">CARTO</a>'
-          />
+      {/* ── View & Map Style Switcher (Top-Left) ── */}
+      {hasRoutes && (
+        <div className="absolute top-4 left-4 z-[400] flex flex-wrap items-center gap-2">
+          {/* View Switcher: Route Map vs National AQI */}
+          <div className="bg-white/95 backdrop-blur-md p-1 rounded-2xl shadow-lg border border-gray-200/80 flex items-center gap-1">
+            <button
+              type="button"
+              onClick={() => setUserViewOverride("map")}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-black transition-all ${
+                currentView === "map"
+                  ? "bg-emerald-500 text-white shadow-sm"
+                  : "text-gray-600 hover:text-gray-900 hover:bg-gray-100"
+              }`}
+            >
+              <MapIcon className="w-3.5 h-3.5" />
+              <span>Route Map</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setUserViewOverride("heatmap")}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-black transition-all ${
+                currentView === "heatmap"
+                  ? "bg-emerald-500 text-white shadow-sm"
+                  : "text-gray-600 hover:text-gray-900 hover:bg-gray-100"
+              }`}
+            >
+              <Layers className="w-3.5 h-3.5" />
+              <span>National AQI</span>
+            </button>
+          </div>
 
-          <InvalidateSizeHelper isActive={showLeafletMap} />
-
-          {destination && <FitBounds origin={leafletOrigin} destination={destination} />}
-
-          <Marker position={originPos} icon={originIcon}>
-            <Popup><strong>Origin:</strong> {leafletOrigin.name}</Popup>
-          </Marker>
-          {destPos && <Marker position={destPos} icon={destIcon}>
-            <Popup><strong>Destination:</strong> {destination?.name}</Popup>
-          </Marker>}
-
-          {routes.map((route) => {
-            const isSelected = route.id === selectedRouteId;
-
-            if (isSelected && route.pollutionSegments?.length > 1) {
-              const evMarkers = (route.evStations || []).map((ev) => (
-                <Marker key={`ev-${ev.id}`} position={[ev.lat, ev.lon]} icon={evIcon}>
-                  <Popup>
-                    <div style={{ fontWeight: 700, color: "#10b981", textTransform: "uppercase" }}>{ev.name}</div>
-                    <div style={{ fontSize: "11px", color: "#666" }}>Operator: {ev.operator}</div>
-                  </Popup>
-                </Marker>
-              ));
-
-              const routeLines = route.pollutionSegments.map((seg, i) => {
-                if (i === route.pollutionSegments.length - 1) return null;
-                const segColor = getRouteSegmentAQIColor(seg.aqi);
-                const nextSeg = route.pollutionSegments[i + 1];
-
-                return (
-                  <Fragment key={`${route.id}-seg-${i}`}>
-                    <Polyline
-                      positions={[[seg.lat, seg.lon], [nextSeg.lat, nextSeg.lon]]}
-                      pathOptions={{ color: segColor, weight: 8, opacity: 0.85, lineCap: "round" }}
-                      eventHandlers={{ click: () => onSelectRoute && onSelectRoute(route.id) }}
-                    >
-                      {labelIndexes.has(i) && (
-                        <Tooltip permanent direction="top" opacity={1}>
-                          <div style={{
-                            background: "#fff",
-                            border: `3px solid ${segColor}`,
-                            borderRadius: "10px",
-                            padding: "6px 12px",
-                            boxShadow: "0 2px 12px rgba(0,0,0,0.15)",
-                            fontSize: "13px",
-                            fontWeight: 700,
-                            color: "#111",
-                            minWidth: "100px",
-                            textAlign: "center",
-                          }}>
-                            <div style={{ color: segColor, fontWeight: 800 }}>{seg.zone || "Unknown"}</div>
-                            <div style={{ color: "#555", fontWeight: 600 }}>AQI: {seg.aqi ?? "N/A"}</div>
-                          </div>
-                        </Tooltip>
-                      )}
-                    </Polyline>
-                  </Fragment>
-                );
-              });
-
-              return [...evMarkers, ...routeLines];
-            }
-
-            const positions = route.geometry?.map((p) => [p.lat, p.lon]) || [];
-            const colors = ["#3b82f6", "#8b5cf6", "#f59e0b"];
-            const routeColor = colors[route.id % colors.length] || "#9CA3AF";
-
-            return (
-              <Polyline
-                key={route.id}
-                positions={positions}
-                pathOptions={{ color: routeColor, weight: 5, opacity: 0.45, dashArray: "8 4" }}
-                eventHandlers={{ click: () => onSelectRoute && onSelectRoute(route.id) }}
-              />
-            );
-          })}
-        </MapContainer>
-      </div>
-
-      {/* 🗺️ DYNAMIC CIVICSHIELD-STYLE SVG HEATMAP VIEW WRAPPER */}
-      <div 
-        className="absolute inset-0 w-full h-full transition-all duration-700 ease-out origin-center"
-        style={{ 
-          opacity: heatmapOpacity,
-          transform: `scale(${heatmapScale})`,
-          zIndex: !showLeafletMap ? 10 : 1,
-          pointerEvents: !showLeafletMap ? "auto" : "none",
-          overflow: "visible",
-        }}
-      >
-        <div className="map-container-relative w-full h-full flex flex-col items-center justify-center p-4 relative bg-gradient-to-b from-[#f0faf5] to-white rounded-[3rem]" style={{ overflow: "visible" }}>
-          {selectedState ? (
-            /* District-level State Map View */
-            <StateMap 
-              stateCode={selectedState} 
-              stateData={STATE_ENV_DATA[selectedState]} 
-              stateName={STATE_CODE_TO_NAME[selectedState]} 
-              onBack={() => setSelectedState(null)} 
-            />
-          ) : (
-            /* National India Heatmap View */
-            <div className="w-full flex flex-col items-center">
-              
-              {/* Legend and Title Bar */}
-              <div className="w-full flex items-center justify-between border-b border-gray-100 pb-3 mb-3">
-                <div>
-                  <h3 className="font-black text-gray-800 text-base leading-none">🗺️ National Health Index</h3>
-                  <span className="text-[10px] font-bold text-gray-400 mt-1 block">Click any state to explore district-level details</span>
-                </div>
-                
-                {/* Color Scale Legend */}
-                <div className="flex items-center gap-2">
-                  <span className="text-[9px] font-black text-gray-400 uppercase">AQI Scale</span>
-                  <div className="flex items-center gap-1.5 bg-gray-50 border border-gray-200/50 p-1 rounded-xl text-[8px] font-black text-gray-500">
-                    <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-[#10b981]" /> Good</span>
-                    <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-[#eab308]" /> Moderate</span>
-                    <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-[#ef4444]" /> Severe</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* SVG Map + Static Info Card side by side */}
-              {pathData ? (
-                <div className="relative w-full flex gap-3 items-start">
-
-                  {/* SVG Map */}
-                  <div className="flex-1 min-w-0">
-                    <svg
-                      viewBox="0 0 600 700"
-                      preserveAspectRatio="xMidYMid meet"
-                      className="w-full max-h-[420px]"
-                    >
-                      {Object.entries(pathData).map(([stateName, d]) => {
-                        const code = STATE_NAME_TO_CODE[stateName];
-                        const stateData = STATE_ENV_DATA[code];
-                        const fillColor = stateData ? getAQIColor(stateData.aqi) : "rgba(200, 200, 200, 0.4)";
-                        return (
-                          <path
-                            key={stateName}
-                            d={d}
-                            fill={fillColor}
-                            stroke="rgba(255, 255, 255, 0.55)"
-                            strokeWidth={hoveredState?.name === stateName ? 1.5 : 0.55}
-                            onMouseEnter={() => handleStateHover(stateName)}
-                            onMouseLeave={handleMouseLeave}
-                            onClick={() => handleStateClick(stateName)}
-                            className="cursor-pointer transition-all duration-200"
-                            style={{ filter: hoveredState?.name === stateName ? "brightness(1.1)" : "none" }}
-                          />
-                        );
-                      })}
-                    </svg>
-                  </div>
-
-                  {/* 📊 Static Info Card — fixed at right side, never moves */}
-                  <div className="w-52 shrink-0 self-end mb-4">
-                    <div
-                      className="w-full bg-white/95 backdrop-blur-md shadow-2xl shadow-emerald-950/15 border border-emerald-100/60 rounded-[1.5rem] p-4"
-                      style={{ transition: "opacity 200ms ease" }}
-                    >
-                      {hoveredState && hoveredState.data ? (
-                        <>
-                          <div className="flex items-center gap-2 mb-3">
-                            <div className="w-5 h-5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center">
-                              <Activity className="w-3 h-3 text-emerald-600 animate-pulse" />
-                            </div>
-                            <div>
-                              <h4 className="text-[10px] font-black text-emerald-800 uppercase tracking-widest leading-none">{hoveredState.name}</h4>
-                              <span className="text-[8px] text-gray-400 font-black mt-0.5 block">State Level Metrics</span>
-                            </div>
-                          </div>
-
-                          {/* AQI Indicator */}
-                          <div className="border-t border-b border-gray-100/60 py-2 mb-2 flex items-center justify-between">
-                            <div>
-                              <p className="text-[8px] text-gray-400 font-bold uppercase tracking-wider">State Avg AQI</p>
-                              <p className="text-2xl font-black tracking-tight" style={{ color: getAQIColor(hoveredState.data.aqi) }}>
-                                {hoveredState.data.aqi}
-                              </p>
-                            </div>
-                            <span
-                              className="px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-widest border"
-                              style={{
-                                color: getAQIColor(hoveredState.data.aqi),
-                                borderColor: `${getAQIColor(hoveredState.data.aqi)}30`,
-                                backgroundColor: `${getAQIColor(hoveredState.data.aqi)}10`,
-                              }}
-                            >
-                              {getAQILabel(hoveredState.data.aqi)}
-                            </span>
-                          </div>
-
-                          {/* Temp + Roads */}
-                          <div className="grid grid-cols-2 gap-1.5 mb-2">
-                            <div className="flex items-center gap-1 bg-gray-50/50 p-1.5 rounded-lg border border-gray-100/30">
-                              <CloudSun className="w-3 h-3 text-orange-400 shrink-0" />
-                              <div>
-                                <p className="text-[7px] text-gray-400 font-bold uppercase">Temp</p>
-                                <p className="text-[9px] font-black text-gray-700">{hoveredState.data.temp}°C</p>
-                              </div>
-                            </div>
-                            <div className="flex items-center gap-1 bg-gray-50/50 p-1.5 rounded-lg border border-gray-100/30">
-                              <Compass className="w-3 h-3 text-emerald-400 shrink-0" />
-                              <div>
-                                <p className="text-[7px] text-gray-400 font-bold uppercase">Roads</p>
-                                <p className="text-[8px] font-black text-gray-700 leading-tight">{hoveredState.data.roadQuality}</p>
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* Greenery */}
-                          <div className="flex items-center gap-1.5 bg-gray-50/50 p-1.5 rounded-lg border border-gray-100/30 mb-2">
-                            <Droplets className="w-3 h-3 text-blue-400 shrink-0" />
-                            <div>
-                              <span className="text-[7px] text-gray-400 font-bold uppercase block leading-none">Green Canopy</span>
-                              <span className="font-extrabold text-[9px] text-gray-700">{hoveredState.data.greenery}</span>
-                            </div>
-                          </div>
-
-                          {/* Advice */}
-                          <div className="bg-emerald-500/5 p-2 rounded-xl border border-emerald-500/10 flex items-start gap-1.5">
-                            <Info className="w-3 h-3 text-emerald-600 shrink-0 mt-0.5" />
-                            <div>
-                              <span className="text-[7px] font-black text-emerald-800 uppercase tracking-widest block leading-none mb-1">Eco Travel Advice</span>
-                              <p className="text-[8px] text-gray-500 font-bold leading-tight">{hoveredState.data.advice}</p>
-                            </div>
-                          </div>
-                        </>
-                      ) : (
-                        /* Placeholder when no state is hovered */
-                        <div className="flex flex-col items-center justify-center py-6 text-center">
-                          <div className="w-8 h-8 rounded-full bg-emerald-50 border border-emerald-100 flex items-center justify-center mb-2">
-                            <Activity className="w-4 h-4 text-emerald-300" />
-                          </div>
-                          <p className="text-[9px] font-black text-gray-300 uppercase tracking-widest">Hover a state</p>
-                          <p className="text-[8px] text-gray-300 font-bold mt-0.5">to see metrics</p>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                </div>
-              ) : (
-                <div className="flex flex-col items-center justify-center h-[400px] text-gray-400">
-                  <div className="w-8 h-8 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin mb-3" />
-                  Loading national map data...
-                </div>
-              )}
+          {/* Google Maps Style Switcher (Map / Satellite / Terrain) */}
+          {currentView === "map" && (
+            <div className="bg-white/95 backdrop-blur-md p-1 rounded-2xl shadow-lg border border-gray-200/80 flex items-center gap-1 animate-in fade-in duration-200">
+              <button
+                type="button"
+                onClick={() => setMapStyle("roadmap")}
+                className={`px-2.5 py-1.5 rounded-xl text-xs font-black transition-all ${
+                  mapStyle === "roadmap"
+                    ? "bg-emerald-500 text-white shadow-sm"
+                    : "text-gray-600 hover:text-gray-900 hover:bg-gray-100"
+                }`}
+              >
+                Map
+              </button>
+              <button
+                type="button"
+                onClick={() => setMapStyle("satellite")}
+                className={`px-2.5 py-1.5 rounded-xl text-xs font-black transition-all ${
+                  mapStyle === "satellite"
+                    ? "bg-emerald-500 text-white shadow-sm"
+                    : "text-gray-600 hover:text-gray-900 hover:bg-gray-100"
+                }`}
+              >
+                Satellite
+              </button>
+              <button
+                type="button"
+                onClick={() => setMapStyle("terrain")}
+                className={`px-2.5 py-1.5 rounded-xl text-xs font-black transition-all ${
+                  mapStyle === "terrain"
+                    ? "bg-emerald-500 text-white shadow-sm"
+                    : "text-gray-600 hover:text-gray-900 hover:bg-gray-100"
+                }`}
+              >
+                Terrain
+              </button>
             </div>
           )}
         </div>
+      )}
+
+      {/* ════ VIEW 1: LEAFLET ROUTE MAP ════ */}
+      <div
+        ref={mapContainerRef}
+        className="w-full h-full"
+        style={{
+          display: currentView === "map" ? "block" : "none",
+          height: "100%",
+          width: "100%",
+        }}
+      />
+
+      {/* ════ VIEW 2: NATIONAL HEALTH INDEX HEATMAP (FIRST IMAGE) ════ */}
+      <div
+        className="w-full h-full relative overflow-hidden bg-gradient-to-b from-[#f0faf5] to-white p-2 sm:p-4 flex flex-col"
+        style={{
+          display: currentView === "heatmap" ? "flex" : "none",
+          height: "100%",
+          width: "100%",
+        }}
+      >
+        {selectedState ? (
+          <StateMap
+            stateCode={selectedState}
+            stateData={STATE_ENV_DATA[selectedState]}
+            stateName={STATE_CODE_TO_NAME[selectedState]}
+            onBack={() => setSelectedState(null)}
+          />
+        ) : (
+          <div className="w-full h-full flex flex-col relative">
+            
+            {/* Header & AQI Scale Legend */}
+            <div className="w-full flex items-center justify-between border-b border-emerald-100/60 pb-1.5 mb-1 z-10 shrink-0 px-2">
+              <div>
+                <h3 className="font-black text-gray-900 text-base sm:text-lg flex items-center gap-2">
+                  <span>🗺️</span> National Health Index
+                </h3>
+                <span className="text-xs font-bold text-gray-400 mt-0.5 block">
+                  Click any state to explore district-level details
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-black text-gray-400 uppercase">AQI Scale</span>
+                <div className="flex items-center gap-2 bg-white border border-gray-200/80 p-1.5 rounded-xl text-[10px] font-black text-gray-600 shadow-sm">
+                  <span className="flex items-center gap-1">
+                    <span className="w-2.5 h-2.5 rounded-full bg-[#10b981]" /> Good
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <span className="w-2.5 h-2.5 rounded-full bg-[#eab308]" /> Moderate
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <span className="w-2.5 h-2.5 rounded-full bg-[#ef4444]" /> Severe
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Main Interactive Map Canvas + Floating South-East Info Card */}
+            {pathData ? (
+              <div className="relative w-full flex-1 flex items-center justify-center overflow-hidden">
+                
+                {/* SVG India Map — Natural Size */}
+                <div className="w-full h-full flex items-center justify-center">
+                  <svg
+                    viewBox="0 0 600 700"
+                    preserveAspectRatio="xMidYMid meet"
+                    className="w-full h-full max-h-[calc(100vh-8.5rem)] max-w-full drop-shadow-xl transition-transform duration-300"
+                  >
+                    {Object.entries(pathData).map(([stateName, d]) => {
+                      const code = STATE_NAME_TO_CODE[stateName];
+                      const stateData = STATE_ENV_DATA[code];
+                      const fillColor = stateData
+                        ? getAQIColor(stateData.aqi)
+                        : "rgba(200, 200, 200, 0.4)";
+                      const isHovered = hoveredState?.name === stateName;
+
+                      return (
+                        <path
+                          key={stateName}
+                          d={d}
+                          fill={fillColor}
+                          stroke="rgba(255, 255, 255, 0.85)"
+                          strokeWidth={isHovered ? 2.5 : 0.8}
+                          onMouseEnter={() => handleStateHover(stateName)}
+                          onClick={() => handleStateClick(stateName)}
+                          className="cursor-pointer transition-all duration-200"
+                          style={{
+                            filter: isHovered
+                              ? "brightness(1.15) drop-shadow(0 4px 12px rgba(0,0,0,0.3))"
+                              : "none",
+                            transform: isHovered ? "scale(1.01)" : "scale(1)",
+                            transformOrigin: "center",
+                          }}
+                        />
+                      );
+                    })}
+                  </svg>
+                </div>
+
+                {/* State Hover Info Card (Floating in South-East / Bottom-Right Corner) */}
+                <div className="absolute bottom-3 right-3 sm:bottom-4 sm:right-4 z-30 w-72 sm:w-[280px] pointer-events-auto">
+                  <div className="w-full bg-white/95 backdrop-blur-md shadow-2xl shadow-emerald-950/20 border border-emerald-100/90 rounded-[1.6rem] p-3.5 sm:p-4 transition-all">
+                    {hoveredState && hoveredState.data ? (
+                      <div className="space-y-2.5">
+                        <div className="flex items-center gap-2.5">
+                          <div className="w-8 h-8 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center shrink-0">
+                            <Activity className="w-4 h-4 text-emerald-600 animate-pulse" />
+                          </div>
+                          <div className="min-w-0">
+                            <h4 className="text-sm sm:text-base font-black text-emerald-950 uppercase tracking-wider leading-none truncate">
+                              {hoveredState.name}
+                            </h4>
+                            <span className="text-[9px] text-gray-400 font-bold mt-0.5 block">
+                              State Level Metrics
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* State Avg AQI */}
+                        <div className="border-t border-b border-gray-100/80 py-2 flex items-center justify-between">
+                          <div>
+                            <p className="text-[9px] text-gray-400 font-bold uppercase tracking-wider">
+                              State Avg AQI
+                            </p>
+                            <p
+                              className="text-2xl sm:text-3xl font-black tracking-tight mt-0.5"
+                              style={{ color: getAQIColor(hoveredState.data.aqi) }}
+                            >
+                              {hoveredState.data.aqi}
+                            </p>
+                          </div>
+                          <span
+                            className="px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider border shadow-sm"
+                            style={{
+                              color: getAQIColor(hoveredState.data.aqi),
+                              borderColor: `${getAQIColor(hoveredState.data.aqi)}40`,
+                              backgroundColor: `${getAQIColor(hoveredState.data.aqi)}15`,
+                            }}
+                          >
+                            {hoveredState.data.status || "GOOD"}
+                          </span>
+                        </div>
+
+                        {/* Metrics Grid */}
+                        <div className="grid grid-cols-2 gap-2">
+                          <div className="bg-gray-50/90 p-2.5 rounded-xl border border-gray-100/80">
+                            <div className="flex items-center gap-1 mb-0.5">
+                              <CloudSun className="w-3.5 h-3.5 text-orange-400" />
+                              <span className="text-[8px] text-gray-400 font-bold uppercase">Temp</span>
+                            </div>
+                            <p className="text-xs sm:text-sm font-black text-gray-800">{hoveredState.data.temp}°C</p>
+                          </div>
+                          <div className="bg-gray-50/90 p-2.5 rounded-xl border border-gray-100/80">
+                            <div className="flex items-center gap-1 mb-0.5">
+                              <Compass className="w-3.5 h-3.5 text-emerald-500" />
+                              <span className="text-[8px] text-gray-400 font-bold uppercase">Roads</span>
+                            </div>
+                            <p className="text-[11px] font-black text-gray-800 leading-tight">
+                              {hoveredState.data.roadQuality}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="bg-gray-50/90 p-2.5 rounded-xl border border-gray-100/80 flex items-center gap-2">
+                          <Trees className="w-4 h-4 text-emerald-600 shrink-0" />
+                          <div>
+                            <span className="text-[8px] text-gray-400 font-bold uppercase block">Green Canopy</span>
+                            <p className="text-[11px] font-black text-emerald-900 mt-0.5">{hoveredState.data.greenery}</p>
+                          </div>
+                        </div>
+
+                        {/* Eco Travel Advice */}
+                        <div className="bg-emerald-50/80 p-2.5 rounded-xl border border-emerald-100/80 flex items-start gap-2">
+                          <Info className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                          <div>
+                            <span className="text-[9px] font-black text-emerald-950 uppercase tracking-wider block leading-none mb-0.5">
+                              Eco Travel Advice
+                            </span>
+                            <p className="text-[10px] text-gray-600 font-medium leading-relaxed">
+                              {hoveredState.data.advice}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col items-center justify-center py-6 sm:py-8 text-center">
+                        <div className="w-10 h-10 rounded-xl bg-emerald-50 border border-emerald-100 flex items-center justify-center mb-2">
+                          <Activity className="w-5 h-5 text-emerald-500 animate-pulse" />
+                        </div>
+                        <p className="text-[11px] font-black text-gray-700 uppercase tracking-wider">
+                          Hover over any state
+                        </p>
+                        <p className="text-[9px] text-gray-400 mt-0.5 max-w-[190px] leading-relaxed">
+                          to view real-time state air quality, road index & canopy metrics
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center h-[400px] text-gray-400">
+                <div className="w-8 h-8 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin mb-3" />
+                Loading national health index data...
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
     </div>

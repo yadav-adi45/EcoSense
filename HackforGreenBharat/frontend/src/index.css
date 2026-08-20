@@ -50,3 +50,12 @@ h1, h2, h3, h4, h5, h6 {
   border: none !important;
   background: transparent !important;
 }
+
+/* Custom Leaflet Marker Icons */
+.custom-dest-pin,
+.custom-origin-pin,
+.custom-ev-marker {
+  background: transparent !important;
+  border: none !important;
+}
+
