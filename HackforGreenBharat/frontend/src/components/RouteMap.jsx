@@ -425,23 +425,6 @@ const RouteMap = ({ routes = [], selectedRouteId = 0, origin, destination, onSel
     }
   }, [currentView]);
 
-  const [mapStyle, setMapStyle] = useState("roadmap");
-
-  const TILE_LAYERS = {
-    roadmap: {
-      url: "https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}",
-      attribution: '&copy; <a href="https://www.google.com/maps">Google Maps</a>',
-    },
-    satellite: {
-      url: "https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}",
-      attribution: '&copy; <a href="https://www.google.com/maps">Google Maps Satellite</a>',
-    },
-    terrain: {
-      url: "https://mt1.google.com/vt/lyrs=p&x={x}&y={y}&z={z}",
-      attribution: '&copy; <a href="https://www.google.com/maps">Google Maps Terrain</a>',
-    },
-  };
-
   return (
     <div className="relative w-full h-full bg-white overflow-hidden select-none flex flex-col">
       
