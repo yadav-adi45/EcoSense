@@ -154,15 +154,59 @@ export const routeController = async (req, res) => {
       return res.status(400).json({ success: false, message: "Could not find one or both cities." });
     }
 
-    /* 🛣️ OSRM with in-memory cache */
+    /* 🛣️ OSRM with in-memory cache & Multi-route corridor generation */
     const osrmKey = `${osrmProfile}:${origin.lon},${origin.lat};${destination.lon},${destination.lat}`;
     let osrmData = osrmCache.get(osrmKey);
 
     if (!osrmData) {
-      const osrmURL = `https://router.project-osrm.org/route/v1/${osrmProfile}/${origin.lon},${origin.lat};${destination.lon},${destination.lat}?overview=full&geometries=geojson&alternatives=true&steps=true`;
-      const osrmRes = await axios.get(osrmURL, { timeout: 12000 });
-      osrmData = osrmRes.data;
-      osrmCache.set(osrmKey, osrmData);
+      const osrmURL = `https://router.project-osrm.org/route/v1/${osrmProfile}/${origin.lon},${origin.lat};${destination.lon},${destination.lat}?overview=full&geometries=geojson&alternatives=3&steps=true`;
+      try {
+        const osrmRes = await axios.get(osrmURL, { timeout: 12000 });
+        osrmData = osrmRes.data;
+      } catch (err) {
+        console.warn(`[OSRM direct error] ${err.message}`);
+        osrmData = { routes: [] };
+      }
+
+      // If OSRM returned fewer than 3 routes, dynamically discover realistic arterial/bypass corridors
+      if (!osrmData.routes || osrmData.routes.length < 3) {
+        const routesList = [...(osrmData.routes || [])];
+        const midLat = (origin.lat + destination.lat) / 2;
+        const midLon = (origin.lon + destination.lon) / 2;
+        const dLat = destination.lat - origin.lat;
+        const dLon = destination.lon - origin.lon;
+
+        const waypoints = [
+          { lat: midLat + dLon * 0.12, lon: midLon - dLat * 0.12 },
+          { lat: midLat - dLon * 0.12, lon: midLon + dLat * 0.12 },
+          { lat: midLat + dLon * 0.20, lon: midLon - dLat * 0.20 },
+        ];
+
+        for (const wp of waypoints) {
+          if (routesList.length >= 3) break;
+          try {
+            const altUrl = `https://router.project-osrm.org/route/v1/${osrmProfile}/${origin.lon},${origin.lat};${wp.lon.toFixed(4)},${wp.lat.toFixed(4)};${destination.lon},${destination.lat}?overview=full&geometries=geojson&steps=true`;
+            const altRes = await axios.get(altUrl, { timeout: 5000 });
+            if (altRes.data.routes && altRes.data.routes.length > 0) {
+              const candidate = altRes.data.routes[0];
+              const isDuplicate = routesList.some(
+                (existing) => Math.abs(existing.distance - candidate.distance) < 1500
+              );
+              if (!isDuplicate) {
+                routesList.push(candidate);
+              }
+            }
+          } catch (e) {
+            // ignore
+          }
+        }
+
+        osrmData = { ...osrmData, routes: routesList };
+      }
+
+      if (osrmData.routes && osrmData.routes.length > 0) {
+        osrmCache.set(osrmKey, osrmData);
+      }
     }
 
     /* 🏎️ FAST FALLBACK MODE — no AQI, just geometry */
