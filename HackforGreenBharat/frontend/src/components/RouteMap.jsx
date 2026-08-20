@@ -4,24 +4,48 @@ import "leaflet/dist/leaflet.css";
 import StateMap from "./StateMap";
 import { Activity, CloudSun, Compass, Droplets, Info, Layers, Map as MapIcon, Trees } from "lucide-react";
 
+/* ===== GOOGLE MAPS & LEAFLET CONFIG ===== */
+const GOOGLE_TILE_LAYERS = {
+  roadmap: "https://{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}",
+  satellite: "https://{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}",
+  terrain: "https://{s}.google.com/vt/lyrs=p&x={x}&y={y}&z={z}",
+};
+
 /* ===== LEAFLET ICONS ===== */
 const evIcon = L.divIcon({
   className: "custom-ev-marker",
-  html: `<div style="background-color: #10b981; color: white; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; border: 3px solid white; box-shadow: 0 4px 6px rgba(0,0,0,0.3); font-size: 14px; font-weight: bold;">⚡</div>`,
-  iconSize: [32, 32],
-  iconAnchor: [16, 16],
+  html: `<div style="background-color: #10b981; color: white; width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; border: 2.5px solid white; box-shadow: 0 4px 8px rgba(0,0,0,0.3); font-size: 13px; font-weight: bold;">⚡</div>`,
+  iconSize: [30, 30],
+  iconAnchor: [15, 15],
 });
 
-const originIcon = new L.Icon({
-  iconUrl: "https://maps.gstatic.com/mapfiles/ms2/micons/red-pushpin.png",
-  iconSize: [32, 32],
-  iconAnchor: [10, 32],
+// 1. Custom Google Maps-style Destination Pin (Teardrop Red Pin with inner circle)
+const destIcon = L.divIcon({
+  className: "custom-dest-pin",
+  html: `
+    <div style="display: flex; flex-direction: column; align-items: center; filter: drop-shadow(0 4px 6px rgba(0,0,0,0.45));">
+      <svg width="32" height="42" viewBox="0 0 24 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M12 0C5.37258 0 0 5.37258 0 12C0 20.5 12 32 12 32C12 32 24 20.5 24 12C24 5.37258 18.6274 0 12 0Z" fill="#EA4335"/>
+        <circle cx="12" cy="11.5" r="4.5" fill="white"/>
+        <circle cx="12" cy="11.5" r="2.5" fill="#B31412"/>
+      </svg>
+    </div>
+  `,
+  iconSize: [32, 42],
+  iconAnchor: [16, 40],
 });
 
-const destIcon = new L.Icon({
-  iconUrl: "https://maps.gstatic.com/mapfiles/ms2/micons/blue-pushpin.png",
-  iconSize: [32, 32],
-  iconAnchor: [10, 32],
+// 2. Custom Google Maps-style Origin Pin (Blue circle with pulse halo)
+const originIcon = L.divIcon({
+  className: "custom-origin-pin",
+  html: `
+    <div style="position: relative; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center;">
+      <div style="position: absolute; width: 28px; height: 28px; border-radius: 50%; background: rgba(66, 133, 244, 0.35);"></div>
+      <div style="width: 18px; height: 18px; border-radius: 50%; background: #1a73e8; border: 3.5px solid white; box-shadow: 0 2px 8px rgba(0,0,0,0.45);"></div>
+    </div>
+  `,
+  iconSize: [28, 28],
+  iconAnchor: [14, 14],
 });
 
 /* ===== STATE MAP LOOKUPS ===== */
@@ -109,6 +133,10 @@ const RouteMap = ({ routes = [], selectedRouteId = 0, origin, destination, onSel
   const mapContainerRef = useRef(null);
   const mapRef = useRef(null);
   const layerGroupRef = useRef(null);
+  const tileLayerRef = useRef(null);
+
+  // Map style state (Google Maps: roadmap, satellite, terrain)
+  const [mapStyle, setMapStyle] = useState("roadmap");
 
   // Determine active view: If routes exist, show "map" by default. Otherwise show "heatmap".
   const hasRoutes = routes && routes.length > 0;
@@ -153,13 +181,15 @@ const RouteMap = ({ routes = [], selectedRouteId = 0, origin, destination, onSel
         scrollWheelZoom: true,
       });
 
-      L.tileLayer(
-        "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png",
+      const initialTileLayer = L.tileLayer(
+        GOOGLE_TILE_LAYERS[mapStyle] || GOOGLE_TILE_LAYERS.roadmap,
         {
-          attribution: '&copy; <a href="https://carto.com/">CARTO</a>',
-          maxZoom: 19,
+          attribution: '&copy; <a href="https://maps.google.com/">Google Maps</a>',
+          maxZoom: 20,
+          subdomains: ["mt0", "mt1", "mt2", "mt3"],
         }
       ).addTo(map);
+      tileLayerRef.current = initialTileLayer;
 
       const layerGroup = L.layerGroup().addTo(map);
       layerGroupRef.current = layerGroup;
@@ -172,6 +202,27 @@ const RouteMap = ({ routes = [], selectedRouteId = 0, origin, destination, onSel
       setTimeout(() => map.invalidateSize(), 500);
     }
   }, []);
+
+  // Update Google Maps Tile Layer when mapStyle changes
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    if (tileLayerRef.current) {
+      map.removeLayer(tileLayerRef.current);
+    }
+
+    const newLayer = L.tileLayer(
+      GOOGLE_TILE_LAYERS[mapStyle] || GOOGLE_TILE_LAYERS.roadmap,
+      {
+        attribution: '&copy; <a href="https://maps.google.com/">Google Maps</a>',
+        maxZoom: 20,
+        subdomains: ["mt0", "mt1", "mt2", "mt3"],
+      }
+    ).addTo(map);
+
+    tileLayerRef.current = newLayer;
+  }, [mapStyle]);
 
   // Update Route Layers, Polylines, Markers, and Bounds
   useEffect(() => {
@@ -186,7 +237,7 @@ const RouteMap = ({ routes = [], selectedRouteId = 0, origin, destination, onSel
 
     const bounds = L.latLngBounds();
 
-    // 1. Origin Marker
+    // 1. Google Maps-style Origin Marker
     if (leafletOrigin?.lat && leafletOrigin?.lon) {
       const origMarker = L.marker([leafletOrigin.lat, leafletOrigin.lon], {
         icon: originIcon,
@@ -195,7 +246,7 @@ const RouteMap = ({ routes = [], selectedRouteId = 0, origin, destination, onSel
       bounds.extend([leafletOrigin.lat, leafletOrigin.lon]);
     }
 
-    // 2. Destination Marker
+    // 2. Google Maps-style Destination Marker
     if (destPos?.lat && destPos?.lon) {
       const destMarker = L.marker([destPos.lat, destPos.lon], {
         icon: destIcon,
@@ -208,7 +259,7 @@ const RouteMap = ({ routes = [], selectedRouteId = 0, origin, destination, onSel
     if (routes && routes.length > 0) {
       const activeRoute = routes.find((r) => r.id === selectedRouteId) || routes[0];
 
-      // Draw non-selected routes in background (dashed)
+      // Draw non-selected routes in background (dashed gray)
       routes.forEach((route) => {
         if (route.id === activeRoute.id) return;
         if (route.geometry && route.geometry.length > 1) {
@@ -216,7 +267,7 @@ const RouteMap = ({ routes = [], selectedRouteId = 0, origin, destination, onSel
           const polyline = L.polyline(coords, {
             color: "#94a3b8",
             weight: 5,
-            opacity: 0.5,
+            opacity: 0.6,
             dashArray: "8 5",
           });
           polyline.on("click", () => onSelectRoute && onSelectRoute(route.id));
@@ -249,7 +300,18 @@ const RouteMap = ({ routes = [], selectedRouteId = 0, origin, destination, onSel
           }
         });
 
-        // Add colored AQI polyline segments
+        // 1. Google Maps style Outer Casing (Dark contrast blue casing)
+        const fullCoords = segments.map((s) => [s.lat, s.lon]);
+        const casingPolyline = L.polyline(fullCoords, {
+          color: "#185ABC",
+          weight: 10,
+          opacity: 0.95,
+          lineCap: "round",
+          lineJoin: "round",
+        });
+        layerGroup.addLayer(casingPolyline);
+
+        // 2. Inner Colored AQI Polyline Segments
         for (let i = 0; i < segments.length - 1; i++) {
           const seg = segments[i];
           const nextSeg = segments[i + 1];
@@ -262,8 +324,8 @@ const RouteMap = ({ routes = [], selectedRouteId = 0, origin, destination, onSel
             ],
             {
               color: segColor,
-              weight: 8,
-              opacity: 0.9,
+              weight: 6,
+              opacity: 1,
               lineCap: "round",
               lineJoin: "round",
             }
@@ -274,18 +336,18 @@ const RouteMap = ({ routes = [], selectedRouteId = 0, origin, destination, onSel
               `
               <div style="
                 background: #fff;
-                border: 3px solid ${segColor};
+                border: 2.5px solid ${segColor};
                 border-radius: 10px;
-                padding: 6px 12px;
-                box-shadow: 0 2px 12px rgba(0,0,0,0.15);
-                font-size: 13px;
+                padding: 5px 10px;
+                box-shadow: 0 2px 10px rgba(0,0,0,0.18);
+                font-size: 12px;
                 font-weight: 700;
                 color: #111;
-                min-width: 100px;
+                min-width: 90px;
                 text-align: center;
               ">
-                <div style="color: ${segColor}; font-weight: 800;">${seg.zone || "Zone"}</div>
-                <div style="color: #555; font-weight: 600;">AQI: ${seg.aqi ?? "N/A"}</div>
+                <div style="color: ${segColor}; font-weight: 800; font-size: 11px;">${seg.zone || "Zone"}</div>
+                <div style="color: #444; font-weight: 700;">AQI: ${seg.aqi ?? "N/A"}</div>
               </div>
             `,
               { permanent: true, direction: "top", opacity: 1 }
@@ -298,12 +360,25 @@ const RouteMap = ({ routes = [], selectedRouteId = 0, origin, destination, onSel
         }
       } else if (activeRoute.geometry && activeRoute.geometry.length > 1) {
         const coords = activeRoute.geometry.map((p) => [p.lat, p.lon]);
-        const polyline = L.polyline(coords, {
-          color: "#10b981",
-          weight: 7,
-          opacity: 0.9,
+        
+        // Double-layer Google Maps Blue Route
+        const outerCasing = L.polyline(coords, {
+          color: "#185ABC",
+          weight: 10,
+          opacity: 0.95,
+          lineCap: "round",
+          lineJoin: "round",
         });
-        layerGroup.addLayer(polyline);
+        layerGroup.addLayer(outerCasing);
+
+        const innerCore = L.polyline(coords, {
+          color: "#1A73E8",
+          weight: 6,
+          opacity: 1,
+          lineCap: "round",
+          lineJoin: "round",
+        });
+        layerGroup.addLayer(innerCore);
         coords.forEach((c) => bounds.extend(c));
       }
     }
@@ -327,33 +402,75 @@ const RouteMap = ({ routes = [], selectedRouteId = 0, origin, destination, onSel
   return (
     <div className="relative w-full h-full bg-white overflow-hidden select-none flex flex-col">
       
-      {/* ── View Switcher Pill (Top-Left) ── */}
+      {/* ── View & Map Style Switcher (Top-Left) ── */}
       {hasRoutes && (
-        <div className="absolute top-4 left-4 z-[400] bg-white/95 backdrop-blur-md p-1 rounded-2xl shadow-lg border border-gray-200/80 flex items-center gap-1">
-          <button
-            type="button"
-            onClick={() => setUserViewOverride("map")}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-black transition-all ${
-              currentView === "map"
-                ? "bg-emerald-500 text-white shadow-sm"
-                : "text-gray-600 hover:text-gray-900 hover:bg-gray-100"
-            }`}
-          >
-            <MapIcon className="w-3.5 h-3.5" />
-            <span>Route Map</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setUserViewOverride("heatmap")}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-black transition-all ${
-              currentView === "heatmap"
-                ? "bg-emerald-500 text-white shadow-sm"
-                : "text-gray-600 hover:text-gray-900 hover:bg-gray-100"
-            }`}
-          >
-            <Layers className="w-3.5 h-3.5" />
-            <span>National AQI</span>
-          </button>
+        <div className="absolute top-4 left-4 z-[400] flex flex-wrap items-center gap-2">
+          {/* View Switcher: Route Map vs National AQI */}
+          <div className="bg-white/95 backdrop-blur-md p-1 rounded-2xl shadow-lg border border-gray-200/80 flex items-center gap-1">
+            <button
+              type="button"
+              onClick={() => setUserViewOverride("map")}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-black transition-all ${
+                currentView === "map"
+                  ? "bg-emerald-500 text-white shadow-sm"
+                  : "text-gray-600 hover:text-gray-900 hover:bg-gray-100"
+              }`}
+            >
+              <MapIcon className="w-3.5 h-3.5" />
+              <span>Route Map</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setUserViewOverride("heatmap")}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-black transition-all ${
+                currentView === "heatmap"
+                  ? "bg-emerald-500 text-white shadow-sm"
+                  : "text-gray-600 hover:text-gray-900 hover:bg-gray-100"
+              }`}
+            >
+              <Layers className="w-3.5 h-3.5" />
+              <span>National AQI</span>
+            </button>
+          </div>
+
+          {/* Google Maps Style Switcher (Map / Satellite / Terrain) */}
+          {currentView === "map" && (
+            <div className="bg-white/95 backdrop-blur-md p-1 rounded-2xl shadow-lg border border-gray-200/80 flex items-center gap-1 animate-in fade-in duration-200">
+              <button
+                type="button"
+                onClick={() => setMapStyle("roadmap")}
+                className={`px-2.5 py-1.5 rounded-xl text-xs font-black transition-all ${
+                  mapStyle === "roadmap"
+                    ? "bg-emerald-500 text-white shadow-sm"
+                    : "text-gray-600 hover:text-gray-900 hover:bg-gray-100"
+                }`}
+              >
+                Map
+              </button>
+              <button
+                type="button"
+                onClick={() => setMapStyle("satellite")}
+                className={`px-2.5 py-1.5 rounded-xl text-xs font-black transition-all ${
+                  mapStyle === "satellite"
+                    ? "bg-emerald-500 text-white shadow-sm"
+                    : "text-gray-600 hover:text-gray-900 hover:bg-gray-100"
+                }`}
+              >
+                Satellite
+              </button>
+              <button
+                type="button"
+                onClick={() => setMapStyle("terrain")}
+                className={`px-2.5 py-1.5 rounded-xl text-xs font-black transition-all ${
+                  mapStyle === "terrain"
+                    ? "bg-emerald-500 text-white shadow-sm"
+                    : "text-gray-600 hover:text-gray-900 hover:bg-gray-100"
+                }`}
+              >
+                Terrain
+              </button>
+            </div>
+          )}
         </div>
       )}
 
