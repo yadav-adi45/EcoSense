@@ -102,6 +102,7 @@ const Routes = () => {
   const [showPreferences, setShowPreferences] = useState(false);
   const [showEVList, setShowEVList] = useState(false);
   const [showSegmentsList, setShowSegmentsList] = useState(false);
+  const [showDetailedInputs, setShowDetailedInputs] = useState(false);
 
   const [locatingUser, setLocatingUser] = useState(false);
   const [triggerSearchOnce, setTriggerSearchOnce] = useState(null);
@@ -160,6 +161,7 @@ const Routes = () => {
 
   /* ─── Auto-Fill & Route when query is "Delhi to Jaipur" ─── */
   const handleSelectRoutePair = async ({ from, to }) => {
+    setShowDetailedInputs(true);
     toast.info(`🛣️ Routing: ${from} ➔ ${to}`, { autoClose: 2000 });
     setLoading(true);
     try {
@@ -230,6 +232,7 @@ const Routes = () => {
       toast.error("Please enter both a starting location and destination.");
       return;
     }
+    setShowDetailedInputs(true);
     setRoutes([]);
     setSelectedRoute(0);
     setLoading(true);
@@ -250,7 +253,8 @@ const Routes = () => {
         originCity,
         destinationCity,
         preferences: prefs,
-        ...(originCoords?.fromGPS && { originCoords }),
+        originCoords,
+        destinationCoords,
       });
       if (fastRes.data.success) {
         setRoutes(fastRes.data.routes);
@@ -262,7 +266,8 @@ const Routes = () => {
         originCity,
         destinationCity,
         preferences: prefs,
-        ...(originCoords?.fromGPS && { originCoords }),
+        originCoords,
+        destinationCoords,
       });
       if (eliteRes.data.success) {
         setCachedRoute(originCity, destinationCity, eliteRes.data, prefs);
@@ -423,125 +428,151 @@ const Routes = () => {
               )}
             </div>
 
-            {/* ─── GOOGLE MAPS UNIFIED ROUTE SEARCH BAR (AUTO-FILLS FROM & TO) ─── */}
-            <div className="relative bg-white rounded-2xl p-3 border border-emerald-200/80 shadow-sm space-y-1.5">
-              <div className="flex items-center justify-between px-1">
-                <span className="text-[10px] font-black text-gray-600 uppercase tracking-wider flex items-center gap-1.5">
-                  <Search className="w-3.5 h-3.5 text-emerald-600" />
-                  <span>Route Search</span>
-                </span>
-                <span className="text-[9px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200/60">
-                  Auto-fills below
-                </span>
-              </div>
-              <LocationAutocomplete
-                value=""
-                onChange={() => {}}
-                onSelect={async (s) => {
-                  if (s) {
-                    setDestination(s.label);
-                    setDestinationCoords({ lat: s.lat, lon: s.lon, name: s.name });
-                    setTriggerSearchOnce(s.label);
-                  }
-                }}
-                onRouteQuerySelect={handleSelectRoutePair}
-                placeholder="Search route (e.g. 'Delhi to Jaipur')..."
-                iconBg="bg-emerald-500 text-white border-emerald-600 shadow-sm"
-                icon={<Search className="w-4 h-4 text-white" />}
-              />
-            </div>
-
-            {/* ─── 2. SOURCE & DESTINATION STACKED INPUTS ─── */}
-            <div className="relative bg-gray-50/90 rounded-2xl p-3.5 border border-gray-200/70 shadow-sm space-y-2">
-              
-              {/* Origin / Starting Location */}
-              <div className="relative">
-                <div className="flex items-center gap-1.5 mb-1">
-                  <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" />
-                  <span className="text-[10px] font-black text-gray-500 uppercase tracking-wider">From (Starting Point)</span>
+            {/* ─── PORTION 1: INITIAL UNIFIED ROUTE SEARCH BAR ─── */}
+            {!showDetailedInputs ? (
+              <div className="relative bg-white rounded-2xl p-3 border border-emerald-200/80 shadow-sm space-y-1.5 animate-in fade-in duration-200">
+                <div className="flex items-center justify-between px-1">
+                  <span className="text-[10px] font-black text-gray-600 uppercase tracking-wider flex items-center gap-1.5">
+                    <Search className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>Route Search</span>
+                  </span>
+                  <span className="text-[9px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200/60">
+                    Enter route (e.g. Delhi to Kolkata)
+                  </span>
                 </div>
                 <LocationAutocomplete
-                  value={origin}
-                  onChange={(v) => {
-                    setOrigin(v);
-                    if (!v) setOriginCoords(null);
-                  }}
-                  onSelect={(s) => {
-                    if (!s) {
-                      setOriginCoords(null);
-                      return;
+                  value=""
+                  onChange={() => {}}
+                  onSelect={async (s) => {
+                    if (s) {
+                      setShowDetailedInputs(true);
+                      setDestination(s.label);
+                      setDestinationCoords({ lat: s.lat, lon: s.lon, name: s.name });
+                      setTriggerSearchOnce(s.label);
                     }
-                    setOrigin(s.label);
-                    setOriginCoords({ lat: s.lat, lon: s.lon, name: s.name, fromGPS: false });
                   }}
-                  onRouteQuerySelect={handleSelectRoutePair}
-                  placeholder="Starting location or 'Delhi to Jaipur'..."
-                  iconBg="bg-emerald-100 border-emerald-200 text-emerald-600"
-                  icon={<MapPin className="w-4 h-4 text-emerald-600" />}
-                  extraDropdownTop={
-                    <button
-                      type="button"
-                      onMouseDown={(e) => e.preventDefault()}
-                      onClick={() => handleUseMyLocation()}
-                      className="w-full flex items-center gap-3 px-4 py-3 hover:bg-emerald-50 transition-colors border-b border-gray-100 group text-left"
-                    >
-                      <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center shrink-0 group-hover:bg-emerald-200 transition-colors">
-                        {locatingUser ? (
-                          <Loader2 className="w-4 h-4 text-emerald-600 animate-spin" />
-                        ) : (
-                          <Navigation className="w-4 h-4 text-emerald-600" />
-                        )}
-                      </div>
-                      <div>
-                        <span className="text-xs font-black text-gray-800 block">
-                          {locatingUser ? "Detecting location…" : "Your current location"}
-                        </span>
-                        <span className="text-[10px] text-gray-400 font-medium">Use GPS position</span>
-                      </div>
-                    </button>
-                  }
+                  onRouteQuerySelect={(pair) => {
+                    setShowDetailedInputs(true);
+                    handleSelectRoutePair(pair);
+                  }}
+                  placeholder="Search route (e.g. 'Delhi to Kolkata' or 'Delhi to Jaipur')..."
+                  iconBg="bg-emerald-500 text-white border-emerald-600 shadow-sm"
+                  icon={<Search className="w-4 h-4 text-white" />}
                 />
-              </div>
-
-              {/* Swap Locations Button */}
-              <div className="flex justify-end -my-1.5 pr-3 z-10">
                 <button
                   type="button"
-                  onClick={handleSwapLocations}
-                  title="Swap starting location and destination"
-                  className="w-7 h-7 rounded-full bg-white border border-gray-200 hover:border-emerald-400 text-gray-500 hover:text-emerald-600 flex items-center justify-center shadow-sm hover:shadow transition-all duration-200 hover:rotate-180 active:scale-95"
+                  onClick={() => setShowDetailedInputs(true)}
+                  className="text-[11px] font-bold text-emerald-600 hover:text-emerald-700 hover:underline flex items-center gap-1 pt-1 px-1 transition-colors"
                 >
-                  <ArrowUpDown className="w-3.5 h-3.5" />
+                  <span>+ Customize Starting Location &amp; Destination</span>
                 </button>
               </div>
-
-              {/* Destination */}
-              <div className="relative">
-                <div className="flex items-center gap-1.5 mb-1">
-                  <span className="w-2 h-2 rounded-full bg-red-500 inline-block" />
-                  <span className="text-[10px] font-black text-gray-500 uppercase tracking-wider">To (Destination)</span>
+            ) : (
+              /* ─── PORTION 2: REPLACES PORTION 1 AFTER ROUTE SEARCH ─── */
+              <div className="relative bg-gray-50/90 rounded-2xl p-3.5 border border-gray-200/70 shadow-sm space-y-2 animate-in fade-in slide-in-from-top-2 duration-300">
+                <div className="flex items-center justify-between pb-1 border-b border-gray-200/50">
+                  <span className="text-[10px] font-black text-gray-500 uppercase tracking-wider flex items-center gap-1">
+                    <RouteIcon className="w-3 h-3 text-emerald-600" />
+                    <span>Active Route</span>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setShowDetailedInputs(false)}
+                    className="text-[10px] font-bold text-emerald-600 hover:text-emerald-700 hover:underline flex items-center gap-1"
+                  >
+                    <span>← Search New Route</span>
+                  </button>
                 </div>
-                <LocationAutocomplete
-                  value={destination}
-                  onChange={(v) => {
-                    setDestination(v);
-                    if (!v) setDestinationCoords(null);
-                  }}
-                  onSelect={(s) => {
-                    if (!s) {
-                      setDestinationCoords(null);
-                      return;
+
+                {/* Origin / Starting Location */}
+                <div className="relative">
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" />
+                    <span className="text-[10px] font-black text-gray-500 uppercase tracking-wider">From (Starting Point)</span>
+                  </div>
+                  <LocationAutocomplete
+                    value={origin}
+                    onChange={(v) => {
+                      setOrigin(v);
+                      if (!v) setOriginCoords(null);
+                    }}
+                    onSelect={(s) => {
+                      if (!s) {
+                        setOriginCoords(null);
+                        return;
+                      }
+                      setOrigin(s.label);
+                      setOriginCoords({ lat: s.lat, lon: s.lon, name: s.name, fromGPS: false });
+                    }}
+                    onRouteQuerySelect={handleSelectRoutePair}
+                    placeholder="Starting location or 'Delhi to Jaipur'..."
+                    iconBg="bg-emerald-100 border-emerald-200 text-emerald-600"
+                    icon={<MapPin className="w-4 h-4 text-emerald-600" />}
+                    extraDropdownTop={
+                      <button
+                        type="button"
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={() => handleUseMyLocation()}
+                        className="w-full flex items-center gap-3 px-4 py-3 hover:bg-emerald-50 transition-colors border-b border-gray-100 group text-left"
+                      >
+                        <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center shrink-0 group-hover:bg-emerald-200 transition-colors">
+                          {locatingUser ? (
+                            <Loader2 className="w-4 h-4 text-emerald-600 animate-spin" />
+                          ) : (
+                            <Navigation className="w-4 h-4 text-emerald-600" />
+                          )}
+                        </div>
+                        <div>
+                          <span className="text-xs font-black text-gray-800 block">
+                            {locatingUser ? "Detecting location…" : "Your current location"}
+                          </span>
+                          <span className="text-[10px] text-gray-400 font-medium">Use GPS position</span>
+                        </div>
+                      </button>
                     }
-                    setDestination(s.label);
-                    setDestinationCoords({ lat: s.lat, lon: s.lon, name: s.name });
-                  }}
-                  onRouteQuerySelect={handleSelectRoutePair}
-                  placeholder="Destination or 'Delhi to Jaipur'..."
-                  iconBg="bg-red-100 border-red-200 text-red-600"
-                  icon={<Navigation className="w-4 h-4 text-red-500" />}
-                />
+                  />
+                </div>
+
+                {/* Swap Locations Button */}
+                <div className="flex justify-end -my-1.5 pr-3 z-10">
+                  <button
+                    type="button"
+                    onClick={handleSwapLocations}
+                    title="Swap starting location and destination"
+                    className="w-7 h-7 rounded-full bg-white border border-gray-200 hover:border-emerald-400 text-gray-500 hover:text-emerald-600 flex items-center justify-center shadow-sm hover:shadow transition-all duration-200 hover:rotate-180 active:scale-95"
+                  >
+                    <ArrowUpDown className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+
+                {/* Destination */}
+                <div className="relative">
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <span className="w-2 h-2 rounded-full bg-red-500 inline-block" />
+                    <span className="text-[10px] font-black text-gray-500 uppercase tracking-wider">To (Destination)</span>
+                  </div>
+                  <LocationAutocomplete
+                    value={destination}
+                    onChange={(v) => {
+                      setDestination(v);
+                      if (!v) setDestinationCoords(null);
+                    }}
+                    onSelect={(s) => {
+                      if (!s) {
+                        setDestinationCoords(null);
+                        return;
+                      }
+                      setDestination(s.label);
+                      setDestinationCoords({ lat: s.lat, lon: s.lon, name: s.name });
+                    }}
+                    onRouteQuerySelect={handleSelectRoutePair}
+                    placeholder="Destination or 'Delhi to Jaipur'..."
+                    iconBg="bg-red-100 border-red-200 text-red-600"
+                    icon={<Navigation className="w-4 h-4 text-red-500" />}
+                  />
+                </div>
               </div>
-            </div>
+            )}
 
             {/* Travel Mode Selector */}
             <div className="space-y-1.5">

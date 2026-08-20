@@ -35,6 +35,7 @@ const App = () => {
         <Route path="/environment-reports" element={<EnvironmentReports />} />
         <Route path="/register" element={<Register />} />
         <Route path="/routes" element={<Routeing />} />
+        <Route path="/route" element={<Routeing />} />
         {/* <Route path="/chat" element={<EcoBot />} /> */}
         <Route path="/login" element={<Login />} />
         <Route path="/dashboard" element={<Dasboard />} />
