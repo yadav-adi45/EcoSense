@@ -9,7 +9,9 @@
     "start": "node index.js",
     "build:frontend": "cd ../frontend && npm run build",
     "start:full": "npm run build:frontend && npm run start",
-    "dev:all": "concurrently --names \"BACKEND,FRONTEND\" --prefix-colors \"green,cyan\" \"nodemon index.js\" \"cd ../frontend && npm run dev\""
+    "dev:all": "concurrently --names \"BACKEND,FRONTEND\" --prefix-colors \"green,cyan\" \"nodemon index.js\" \"cd ../frontend && npm run dev\"",
+    "ingest:aqi": "node scripts/ingestDistrictAQI.js",
+    "validate:aqi": "node scripts/validateAQI.js"
   },
   "keywords": [],
   "author": "",

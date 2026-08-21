@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import axios from "axios";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import Navbar from "@/components/Navbar";
 import RouteMap from "@/components/RouteMap";
 import AQIBadge from "../components/AQIBadge";
@@ -28,8 +28,6 @@ import {
   ChevronUp,
   BatteryCharging,
   ShieldCheck,
-  ShieldAlert,
-  Eye,
   Compass,
   Info,
   CheckCircle2,
@@ -38,7 +36,6 @@ import { serverUrl } from "@/main";
 import { getCachedRoute, setCachedRoute } from "@/utils/routeCache";
 import { toast } from "react-toastify";
 import RouteInsights from "@/components/RouteInsights";
-import AnimalDangerZoneCard from "@/components/AnimalDangerZoneCard";
 
 /* Transport mode config */
 const TRANSPORT_MODES = [
@@ -85,6 +82,19 @@ const speak = (text) => {
 
 const Routes = () => {
   const navigate = useNavigate();
+  const location = useLocation();
+
+  useEffect(() => {
+    if (location.state?.triggerNavigateToStart) {
+      const { userCoords, targetOrigin, targetOriginCoords } = location.state;
+      toast.info(`Calculating route to starting point: ${targetOrigin}`);
+      setOrigin("Current Location");
+      setOriginCoords(userCoords);
+      setDestination(targetOrigin);
+      setDestinationCoords(targetOriginCoords);
+      setTriggerSearchOnce(targetOrigin);
+    }
+  }, [location.state]);
   const [origin, setOrigin] = useState("Delhi");
   const [destination, setDestination] = useState("");
   const [routes, setRoutes] = useState([]);
@@ -93,11 +103,11 @@ const Routes = () => {
   const [destinationCoords, setDestinationCoords] = useState(null);
   const [loading, setLoading] = useState(false);
   const [isNavigating, setIsNavigating] = useState(false);
+  const [launchingMode, setLaunchingMode] = useState(null);
 
   const [isPregnancyMode, setIsPregnancyMode] = useState(false);
   const [preferWellLit, setPreferWellLit] = useState(false);
   const [season, setSeason] = useState("none");
-  const [avoidAnimalRisk, setAvoidAnimalRisk] = useState(false);
   const [travelMode, setTravelMode] = useState("driving");
   const [showPreferences, setShowPreferences] = useState(false);
   const [showEVList, setShowEVList] = useState(false);
@@ -108,6 +118,95 @@ const Routes = () => {
   const [triggerSearchOnce, setTriggerSearchOnce] = useState(null);
   const voiceEnabledRef = useRef(true);
   const lastAlertRef = useRef("");
+
+  // Smart Start / Preview State
+  const [userCoords, setUserCoords] = useState(null);
+  const [locationError, setLocationError] = useState(null);
+  const [savedFinalDestination, setSavedFinalDestination] = useState(null);
+  const [savedFinalDestinationCoords, setSavedFinalDestinationCoords] = useState(null);
+  const [isPreviewModeActive, setIsPreviewModeActive] = useState(false);
+
+  // Silently request current position on load
+  useEffect(() => {
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          setUserCoords({ lat: pos.coords.latitude, lon: pos.coords.longitude });
+        },
+        (err) => {
+          console.warn("Silent GPS access denied or timed out:", err.message);
+          setLocationError("Location permission not granted. Enabling location permission allows comparing route origin with your current GPS position.");
+        },
+        { enableHighAccuracy: true, timeout: 8000 }
+      );
+    }
+  }, []);
+
+  const getDistanceMeters = (lat1, lon1, lat2, lon2) => {
+    const R = 6371e3; // meters
+    const φ1 = (lat1 * Math.PI) / 180;
+    const φ2 = (lat2 * Math.PI) / 180;
+    const Δφ = ((lat2 - lat1) * Math.PI) / 180;
+    const Δλ = ((lon2 - lon1) * Math.PI) / 180;
+
+    const a =
+      Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
+      Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+  };
+
+  const formatDistanceKm = (meters) => {
+    if (meters === null || meters === undefined) return "";
+    const km = meters / 1000;
+    return km < 1 ? `${Math.round(meters)} m` : `${km.toFixed(1)} km`;
+  };
+
+  const START_RADIUS_METERS = 1000; // 1 km radius threshold
+
+  const getRouteMode = () => {
+    if (!originCoords || !userCoords) return "preview";
+    const dist = getDistanceMeters(userCoords.lat, userCoords.lon, originCoords.lat, originCoords.lon);
+    return dist <= START_RADIUS_METERS ? "start" : "preview";
+  };
+
+  const routeMode = getRouteMode();
+  const distanceToOrigin = originCoords && userCoords
+    ? getDistanceMeters(userCoords.lat, userCoords.lon, originCoords.lat, originCoords.lon)
+    : null;
+
+  const handleNavigateToStartingPoint = async () => {
+    if (!userCoords || !originCoords) {
+      toast.error("User GPS location not detected. Please enable GPS permissions.");
+      return;
+    }
+    toast.info(`🛣️ Calculating route to starting point: ${origin}`, { autoClose: 3000 });
+    // Cache original destination
+    setSavedFinalDestination(destination);
+    setSavedFinalDestinationCoords(destinationCoords);
+
+    // Swap parameters
+    const startLat = userCoords.lat;
+    const startLon = userCoords.lon;
+    
+    // Reverse geocode to show nice name for user's starting point
+    let startName = "Current Location";
+    try {
+      const res = await axios.get(
+        `https://nominatim.openstreetmap.org/reverse?lat=${startLat}&lon=${startLon}&format=json`,
+        { headers: { "User-Agent": "ecosense-app" }, timeout: 5000 }
+      );
+      startName = res.data?.address?.city || res.data?.address?.town || "Current Location";
+    } catch (err) {
+      console.warn("Nominatim reverse geocode failed:", err.message);
+    }
+
+    setOrigin(startName);
+    setOriginCoords({ lat: startLat, lon: startLon, name: startName });
+    setDestination(origin);
+    setDestinationCoords(originCoords);
+    setTriggerSearchOnce(origin);
+  };
 
   const handleUseMyLocation = () => {
     if (!("geolocation" in navigator)) {
@@ -237,7 +336,7 @@ const Routes = () => {
     setSelectedRoute(0);
     setLoading(true);
     try {
-      const prefs = { isPregnancyMode, preferWellLit, season, travelMode, avoidAnimalRisk };
+      const prefs = { isPregnancyMode, preferWellLit, season, travelMode };
       const originCity = originCoords?.name || origin.split(",")[0].trim();
       const destinationCity = destinationCoords?.name || destination.split(",")[0].trim();
       const cached = getCachedRoute(originCity, destinationCity, prefs);
@@ -283,108 +382,36 @@ const Routes = () => {
     }
   };
 
-  const handleStartNavigation = () => {
+  const handleStartNavigation = (mode = "live") => {
+    if (launchingMode) return;
+
     if (isNavigating) {
       setIsNavigating(false);
       return;
     }
 
-    if (!originCoords || !destinationCoords) {
-      toast.error("Please search for a route first.");
+    if (!origin || !destination) {
+      toast.error("Please enter both origin and destination.");
       return;
     }
 
-    const ua = navigator.userAgent || "";
-    const isAndroid = /android/i.test(ua);
-    const isIOS = /iphone|ipad|ipod/i.test(ua);
-    const isMobile = isAndroid || isIOS;
+    if (!originCoords || !destinationCoords) {
+      toast.error("Please search for a route first to resolve coordinates.");
+      return;
+    }
 
-    const destLat = destinationCoords.lat;
-    const destLon = destinationCoords.lon;
-    const origLat = originCoords.lat;
-    const origLon = originCoords.lon;
+    const activeRoute = routes.find((r) => r.id === selectedRoute) || routes[0];
+    if (!activeRoute) {
+      toast.error("Unable to start navigation because route data is unavailable.");
+      return;
+    }
 
-    let gmTravelMode = "driving";
-    if (travelMode === "cycling" || travelMode === "bike") gmTravelMode = "bicycling";
-    else if (travelMode === "foot") gmTravelMode = "walking";
-    else if (travelMode === "bus") gmTravelMode = "transit";
+    setLaunchingMode(mode);
 
-    if (isMobile) {
-      const webFallbackUrl =
-        `https://www.google.com/maps/dir/?api=1` +
-        `&origin=${encodeURIComponent(`${origLat},${origLon}`)}` +
-        `&destination=${encodeURIComponent(`${destLat},${destLon}`)}` +
-        `&travelmode=${gmTravelMode}`;
-
-      if (isAndroid) {
-        let androidMode = "d";
-        if (travelMode === "cycling" || travelMode === "bike") androidMode = "b";
-        else if (travelMode === "foot") androidMode = "w";
-        else if (travelMode === "bus") androidMode = "r";
-
-        const intentUrl =
-          `intent://maps.google.com/maps?saddr=${origLat},${origLon}` +
-          `&daddr=${destLat},${destLon}` +
-          `&directionsmode=${gmTravelMode}` +
-          `#Intent;scheme=https;package=com.google.android.apps.maps;` +
-          `S.browser_fallback_url=${encodeURIComponent(webFallbackUrl)};end`;
-
-        const navIntent = `google.navigation:q=${destLat},${destLon}&mode=${androidMode}`;
-        let appLaunched = false;
-        const onHide = () => {
-          appLaunched = true;
-        };
-        document.addEventListener("visibilitychange", onHide, { once: true });
-
-        const a = document.createElement("a");
-        a.href = navIntent;
-        a.style.display = "none";
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-
-        setTimeout(() => {
-          document.removeEventListener("visibilitychange", onHide);
-          if (!appLaunched) {
-            const w = window.open(intentUrl, "_blank", "noopener,noreferrer");
-            if (!w) window.location.href = webFallbackUrl;
-          }
-        }, 1500);
-      } else {
-        const iosNavUrl =
-          `comgooglemaps://?saddr=${origLat},${origLon}` +
-          `&daddr=${destLat},${destLon}` +
-          `&directionsmode=${
-            gmTravelMode === "bicycling"
-              ? "bicycling"
-              : gmTravelMode === "walking"
-              ? "walking"
-              : gmTravelMode === "transit"
-              ? "transit"
-              : "driving"
-          }`;
-
-        let appLaunched = false;
-        const onHide = () => {
-          appLaunched = true;
-        };
-        document.addEventListener("visibilitychange", onHide, { once: true });
-        window.location.href = iosNavUrl;
-
-        setTimeout(() => {
-          document.removeEventListener("visibilitychange", onHide);
-          if (!appLaunched) {
-            const w = window.open(webFallbackUrl, "_blank", "noopener,noreferrer");
-            if (!w) window.location.href = webFallbackUrl;
-          }
-        }, 1500);
-      }
-
+    setTimeout(() => {
+      setLaunchingMode(null);
       setIsNavigating(true);
-    } else {
-      const activeRoute = routes.find((r) => r.id === selectedRoute) || routes[0];
-      setIsNavigating(true);
-      navigate("/navigation", {
+      navigate(`/navigation?mode=${mode}`, {
         state: {
           route: activeRoute,
           origin: origin,
@@ -392,9 +419,10 @@ const Routes = () => {
           originCoords: originCoords,
           destinationCoords: destinationCoords,
           travelMode: travelMode,
+          navigationMode: mode,
         },
       });
-    }
+    }, 800);
   };
 
   const activeRoute = routes.find((r) => r.id === selectedRoute) || routes[0];
@@ -609,7 +637,7 @@ const Routes = () => {
                   <SlidersHorizontal className="w-4 h-4 text-emerald-600" />
                   <span>Route Preferences</span>
                 </span>
-                {(isPregnancyMode || preferWellLit || season !== "none" || avoidAnimalRisk) && (
+                {(isPregnancyMode || preferWellLit || season !== "none") && (
                   <span className="text-[9px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200/60">
                     Active
                   </span>
@@ -669,33 +697,6 @@ const Routes = () => {
                     Summer (Shaded Canopy)
                   </span>
                 </label>
-
-                {/* Full Width: 3. Wildlife Corridor Avoidance */}
-                <div className="col-span-2 pt-1 border-t border-gray-100">
-                  <label className="flex items-center justify-between cursor-pointer p-2 rounded-xl bg-amber-50/60 hover:bg-amber-50 border border-amber-200/60 transition-colors">
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="checkbox"
-                        checked={avoidAnimalRisk}
-                        onChange={(e) => setAvoidAnimalRisk(e.target.checked)}
-                        className="w-4 h-4 rounded text-amber-600 border-amber-300 focus:ring-amber-400 accent-amber-500 shrink-0"
-                      />
-                      <div>
-                        <span className="text-xs font-bold text-amber-950 flex items-center gap-1.5">
-                          🐾 Wildlife Corridor Avoidance
-                        </span>
-                        <span className="text-[10px] text-amber-800/80 block leading-tight">
-                          Re-route away from animal collision hotspots and protected forest buffers
-                        </span>
-                      </div>
-                    </div>
-                    {avoidAnimalRisk && (
-                      <span className="text-[9px] font-black uppercase tracking-wider bg-amber-500 text-white px-2 py-0.5 rounded-full shadow-sm shrink-0">
-                        Safe Mode
-                      </span>
-                    )}
-                  </label>
-                </div>
               </div>
             </div>
 
@@ -737,6 +738,28 @@ const Routes = () => {
                     </span>
                   </div>
 
+                  {/* Silent location error alert */}
+                  {!userCoords && (
+                    <div className="p-3 bg-amber-50 border border-amber-200 rounded-2xl text-[10px] text-amber-800 font-bold space-y-1.5 leading-relaxed">
+                      <p>📍 GPS permission not granted. Enable location services to verify if you are near the start of the route.</p>
+                      <button
+                        type="button"
+                        onClick={() => handleUseMyLocation()}
+                        className="text-emerald-700 hover:underline block text-xs"
+                      >
+                        Authorize GPS Access ➔
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Route Preview Status Banner */}
+                  {routeMode === "preview" && (
+                    <div className="p-3 bg-blue-50 border border-blue-200 rounded-2xl text-xs font-black text-blue-800 flex items-center justify-between shadow-xs">
+                      <span>🗺️ Route Preview Mode</span>
+                      <span className="text-[10px] bg-blue-100 px-2 py-0.5 rounded text-blue-700">Comparing Options</span>
+                    </div>
+                  )}
+
                   {routes.map((route) => {
                     const isSelected = selectedRoute === route.id;
                     return (
@@ -752,41 +775,42 @@ const Routes = () => {
                         {isSelected && (
                           <div className="absolute top-2 right-2 flex items-center gap-1 bg-emerald-50 text-emerald-600 px-2 py-0.5 rounded-full border border-emerald-200 text-[9px] font-black uppercase">
                             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping" />
-                            Selected
+                            {routeMode === "start" ? "Active navigation" : "Preview"}
                           </div>
                         )}
 
                         <CardContent className="p-0 space-y-3">
-                          {/* Route Name & Badges */}
+                          {/* Route Name & Segment info */}
                           <div className="pr-16">
                             <h3 className={`text-base font-extrabold leading-tight ${isSelected ? "text-emerald-700" : "text-gray-800"}`}>
                               {route.name}
                             </h3>
-                            <div className="flex flex-wrap gap-1.5 mt-1.5">
-                              {route.avgAQI < 60 && (
-                                <span className="bg-emerald-50 text-emerald-700 text-[9px] px-2 py-0.5 rounded-md border border-emerald-200 uppercase font-black tracking-wider">
-                                  🌿 Elite Air
-                                </span>
-                              )}
-                              {route.name?.includes("Swift") && (
-                                <span className="bg-orange-50 text-orange-700 text-[9px] px-2 py-0.5 rounded-md border border-orange-200 uppercase font-black tracking-wider">
-                                  ⚡ Swift
-                                </span>
-                              )}
-                              {route.evStations?.length > 0 && (
-                                <span className="bg-blue-50 text-blue-700 text-[9px] px-2 py-0.5 rounded-md border border-blue-200 uppercase font-black tracking-wider">
-                                  🔋 {route.evStations.length} EV
-                                </span>
-                              )}
-                              {(route.animalRisk?.maxRisk > 30 || route.maxAnimalRisk > 30 || route.animalRiskLevel === "High" || route.animalRiskLevel === "Severe") && (
-                                <span className="bg-red-50 text-red-700 text-[9px] px-2 py-0.5 rounded-md border border-red-200 uppercase font-black tracking-wider">
-                                  🐾 Wildlife Risk
-                                </span>
-                              )}
-                            </div>
+                            {routeMode === "preview" ? (
+                              <p className="text-xs font-black text-gray-500 uppercase tracking-wider mt-1.5">
+                                {origin.split(",")[0]} ➔ {destination.split(",")[0]}
+                              </p>
+                            ) : (
+                              <div className="flex flex-wrap gap-1.5 mt-1.5">
+                                {route.avgAQI < 60 && (
+                                  <span className="bg-emerald-50 text-emerald-700 text-[9px] px-2 py-0.5 rounded-md border border-emerald-200 uppercase font-black tracking-wider">
+                                    🌿 Elite Air
+                                  </span>
+                                )}
+                                {route.name?.includes("Swift") && (
+                                  <span className="bg-orange-50 text-orange-700 text-[9px] px-2 py-0.5 rounded-md border border-orange-200 uppercase font-black tracking-wider">
+                                    ⚡ Swift
+                                  </span>
+                                )}
+                                {route.evStations?.length > 0 && (
+                                  <span className="bg-blue-50 text-blue-700 text-[9px] px-2 py-0.5 rounded-md border border-blue-200 uppercase font-black tracking-wider">
+                                    🔋 {route.evStations.length} EV
+                                  </span>
+                                )}
+                              </div>
+                            )}
                           </div>
 
-                          {/* Metrics Bar */}
+                          {/* Metrics bar */}
                           <div className="flex items-center justify-between gap-2 bg-gray-50/90 p-3 rounded-xl border border-gray-100">
                             <div className="flex items-center gap-3 text-xs font-bold text-gray-700">
                               <span className="flex items-center gap-1.5">
@@ -804,11 +828,19 @@ const Routes = () => {
                             </div>
                           </div>
 
+                          {/* Distance alert if far away */}
+                          {routeMode === "preview" && distanceToOrigin !== null && (
+                            <div className="text-[11px] font-bold text-amber-700 bg-amber-50 border border-amber-200 p-2.5 rounded-xl flex items-center gap-1.5 leading-tight">
+                              <span>📍</span>
+                              <span>You are {formatDistanceKm(distanceToOrigin)} away from {origin.split(",")[0]}.</span>
+                            </div>
+                          )}
+
                           {/* Selected Route Detailed Summary */}
                           {isSelected && (
                             <div className="space-y-3 pt-2 border-t border-gray-100 animate-in fade-in duration-300">
                               
-                              {/* Pollution Gradient Progress */}
+                              {/* Pollution profile */}
                               <div className="space-y-1">
                                 <div className="flex justify-between text-[9px] font-black text-gray-400 uppercase tracking-wider">
                                   <span>Route Pollution Profile</span>
@@ -828,27 +860,7 @@ const Routes = () => {
                                 </div>
                               </div>
 
-                              {/* 🐾 Premium Animal Danger Zone Dashboard Card */}
-                              {(route.animalRisk?.maxRisk > 25 || route.maxAnimalRisk > 25 || route.animalWarning || route.animalRiskLevel === "High" || route.animalRiskLevel === "Severe" || route.animalRisk > 25) && (
-                                <AnimalDangerZoneCard
-                                  route={route}
-                                  onChooseSaferRoute={() => {
-                                    const saferRoute = routes.find(
-                                      (r) => r.id !== route.id && (r.animalRisk < route.animalRisk || r.maxAnimalRisk < (route.maxAnimalRisk || 100))
-                                    );
-                                    if (saferRoute) {
-                                      setSelectedRoute(saferRoute.id);
-                                      toast.success(`Switched to safer corridor: ${saferRoute.name}`);
-                                    } else {
-                                      setAvoidAnimalRisk(true);
-                                      toast.info("Enabled Wildlife Corridor Avoidance mode! Recalculating route...");
-                                      setTimeout(() => handleSearch(), 200);
-                                    }
-                                  }}
-                                />
-                              )}
-
-                              {/* Wellness Intel */}
+                              {/* Wellness advice */}
                               <div className="p-3.5 bg-emerald-50/80 border border-emerald-100 rounded-xl space-y-1.5">
                                 <p className="text-emerald-900 font-black text-xs uppercase tracking-tight flex items-center gap-1.5">
                                   <Leaf className="w-3.5 h-3.5 text-emerald-600" /> Wellness Intel
@@ -863,14 +875,14 @@ const Routes = () => {
                                 )}
                               </div>
 
-                              {/* Route Insights Accordion */}
+                              {/* Route Insights */}
                               <RouteInsights
                                 route={route}
                                 originCoords={originCoords}
                                 destinationCoords={destinationCoords}
                               />
 
-                              {/* EV Stations Summary (Collapsible if present) */}
+                              {/* EV stations breakdown */}
                               {route.evStations?.length > 0 && (
                                 <div className="border border-blue-100 rounded-xl overflow-hidden bg-blue-50/30">
                                   <button
@@ -884,13 +896,8 @@ const Routes = () => {
                                         EV Stations ({route.evStations.length})
                                       </span>
                                     </div>
-                                    {showEVList ? (
-                                      <ChevronUp className="w-3.5 h-3.5 text-blue-400" />
-                                    ) : (
-                                      <ChevronDown className="w-3.5 h-3.5 text-blue-400" />
-                                    )}
+                                    {showEVList ? <ChevronUp className="w-3.5 h-3.5 text-blue-400" /> : <ChevronDown className="w-3.5 h-3.5 text-blue-400" />}
                                   </button>
-
                                   {showEVList && (
                                     <div className="p-2.5 space-y-2 bg-white border-t border-blue-100 text-xs">
                                       {route.evStations.map((ev) => (
@@ -918,11 +925,7 @@ const Routes = () => {
                                         Segment Checkpoints ({route.pollutionSegments.length})
                                       </span>
                                     </div>
-                                    {showSegmentsList ? (
-                                      <ChevronUp className="w-3.5 h-3.5 text-gray-400" />
-                                    ) : (
-                                      <ChevronDown className="w-3.5 h-3.5 text-gray-400" />
-                                    )}
+                                    {showSegmentsList ? <ChevronUp className="w-3.5 h-3.5 text-gray-400" /> : <ChevronDown className="w-3.5 h-3.5 text-gray-400" />}
                                   </button>
 
                                   {showSegmentsList && (
@@ -951,14 +954,42 @@ const Routes = () => {
                                 </div>
                               )}
 
-                              {/* Start Navigation Action in Sidebar */}
-                              <Button
-                                onClick={handleStartNavigation}
-                                className="w-full h-11 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl shadow-md flex items-center justify-center gap-2 text-xs uppercase tracking-wider"
-                              >
-                                <Navigation className="w-4 h-4" />
-                                Start Navigation
-                              </Button>
+                              {/* Smart buttons at bottom of Card */}
+                              {routeMode === "start" ? (
+                                <Button
+                                  disabled={launchingMode !== null}
+                                  onClick={() => handleStartNavigation("live")}
+                                  className="w-full h-11 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl shadow-md flex items-center justify-center gap-2 text-xs uppercase tracking-wider transition-all disabled:opacity-50"
+                                >
+                                  <Navigation className="w-4 h-4" />
+                                  <span>{launchingMode === "live" ? "Starting navigation..." : "Start Navigation"}</span>
+                                </Button>
+                              ) : (
+                                <div className="space-y-2">
+                                  <Button
+                                    type="button"
+                                    disabled={launchingMode !== null}
+                                    onClick={() => handleStartNavigation("preview")}
+                                    className="w-full h-11 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-md flex items-center justify-center gap-2 text-xs uppercase tracking-wider transition-all disabled:opacity-50"
+                                  >
+                                    <RouteIcon className="w-4 h-4" />
+                                    <span>{launchingMode === "preview" ? "Loading route preview..." : "Preview Route"}</span>
+                                  </Button>
+
+                                  {userCoords && (
+                                    <Button
+                                      type="button"
+                                      disabled={launchingMode !== null}
+                                      onClick={handleNavigateToStartingPoint}
+                                      className="w-full h-11 bg-emerald-55 hover:bg-emerald-100 border border-emerald-300 text-emerald-700 font-bold rounded-xl flex items-center justify-center gap-2 text-xs uppercase tracking-wider transition-all disabled:opacity-50"
+                                    >
+                                      <Navigation className="w-4 h-4 text-emerald-600" />
+                                      <span>Navigate to Starting Point</span>
+                                    </Button>
+                                  )}
+                                </div>
+                              )}
+
                             </div>
                           )}
                         </CardContent>
@@ -1002,23 +1033,43 @@ const Routes = () => {
 
           {/* Floating Navigation Button on Map (Bottom-Right) */}
           {routes.length > 0 && (
-            <div className="absolute bottom-6 right-6 z-[400] animate-in fade-in slide-in-from-bottom-3 duration-300">
-              <Button
-                onClick={handleStartNavigation}
-                className={`${
-                  isNavigating
-                    ? "bg-red-500 hover:bg-red-600 shadow-red-500/30"
-                    : "bg-emerald-500 hover:bg-emerald-600 shadow-emerald-500/30"
-                } h-13 px-6 shadow-2xl text-white font-black text-sm flex items-center gap-2.5 rounded-full group transition-all transform hover:scale-105 active:scale-95`}
-              >
-                <Navigation className="w-4 h-4 group-hover:rotate-12 transition-transform" />
-                <span>{isNavigating ? "EXIT NAVIGATION" : "START NAVIGATION"}</span>
-                {activeRoute && (
-                  <span className="ml-1 pl-2 border-l border-white/30 text-xs font-semibold opacity-90">
-                    {activeRoute.duration}
-                  </span>
-                )}
-              </Button>
+            <div className="absolute bottom-6 right-6 z-[400] animate-in fade-in slide-in-from-bottom-3 duration-300 flex flex-col gap-2">
+              {routeMode === "start" ? (
+                <Button
+                  disabled={launchingMode !== null}
+                  onClick={() => handleStartNavigation("live")}
+                  className={`${
+                    isNavigating
+                      ? "bg-red-500 hover:bg-red-600 shadow-red-500/30"
+                      : "bg-emerald-500 hover:bg-emerald-600 shadow-emerald-500/30"
+                  } h-13 px-6 shadow-2xl text-white font-black text-sm flex items-center gap-2.5 rounded-full group transition-all transform hover:scale-105 active:scale-95 disabled:opacity-50`}
+                >
+                  <Navigation className="w-4 h-4 group-hover:rotate-12 transition-transform" />
+                  <span>{launchingMode === "live" ? "STARTING..." : (isNavigating ? "EXIT NAVIGATION" : "START NAVIGATION")}</span>
+                </Button>
+              ) : (
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <Button
+                    disabled={launchingMode !== null}
+                    onClick={() => handleStartNavigation("preview")}
+                    className="bg-blue-600 hover:bg-blue-700 shadow-blue-500/30 h-13 px-6 shadow-2xl text-white font-black text-sm flex items-center gap-2.5 rounded-full group transition-all transform hover:scale-105 active:scale-95 disabled:opacity-50"
+                  >
+                    <RouteIcon className="w-4 h-4" />
+                    <span>{launchingMode === "preview" ? "LOADING..." : "PREVIEW ROUTE"}</span>
+                  </Button>
+
+                  {userCoords && (
+                    <Button
+                      disabled={launchingMode !== null}
+                      onClick={handleNavigateToStartingPoint}
+                      className="bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 text-emerald-700 h-13 px-6 shadow-2xl font-black text-sm flex items-center gap-2.5 rounded-full group transition-all transform hover:scale-105 active:scale-95 disabled:opacity-50"
+                    >
+                      <Navigation className="w-4 h-4 text-emerald-600" />
+                      <span>NAVIGATE TO START</span>
+                    </Button>
+                  )}
+                </div>
+              )}
             </div>
           )}
 

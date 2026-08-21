@@ -282,7 +282,7 @@ const Questionnaire = () => {
               )}
 
               {/* NAVIGATION BUTTONS */}
-              <div className="flex gap-6 pt-10 border-t border-gray-50">
+              <div className="flex flex-col-reverse sm:flex-row gap-4 sm:gap-6 pt-10 border-t border-gray-50">
                 <Button
                   variant="outline"
                   onClick={handlePrev}

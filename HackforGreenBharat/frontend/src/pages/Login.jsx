@@ -42,7 +42,7 @@ const Login = () => {
         <div className="absolute top-0 right-0 w-[600px] h-[600px] bg-emerald-100/50 blur-[150px] rounded-full -z-10"></div>
         <div className="absolute bottom-0 left-0 w-[400px] h-[400px] bg-emerald-100/30 blur-[120px] rounded-full -z-10"></div>
 
-        <div className="w-full max-w-xl bg-white border-none rounded-[3.5rem] shadow-2xl shadow-emerald-900/10 p-12 md:p-16 relative">
+        <div className="w-full max-w-xl bg-white border-none rounded-[3.5rem] shadow-2xl shadow-emerald-900/10 p-8 sm:p-12 md:p-16 relative">
             <div className="absolute top-0 left-1/2 -translate-x-1/2 w-32 h-1.5 bg-emerald-500 rounded-b-full"></div>
             
             {/* Header */}

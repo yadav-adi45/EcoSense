@@ -448,39 +448,41 @@ const Insights = () => {
               </div>
 
               {/* Table */}
-              <div className="bg-white">
-                <div className="grid grid-cols-[1fr_auto_auto] px-8 py-4 border-b border-gray-100 bg-gray-50/50">
-                  <span className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">Area Context</span>
-                  <span className="text-[11px] font-bold text-gray-400 uppercase tracking-widest w-24 text-center">AQI Profile</span>
-                  <span className="text-[11px] font-bold text-gray-400 uppercase tracking-widest w-40 text-right">Status Tier</span>
-                </div>
+              <div className="bg-white overflow-x-auto">
+                <div className="min-w-[500px]">
+                  <div className="grid grid-cols-[1fr_auto_auto] px-8 py-4 border-b border-gray-100 bg-gray-50/50">
+                    <span className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">Area Context</span>
+                    <span className="text-[11px] font-bold text-gray-400 uppercase tracking-widest w-24 text-center">AQI Profile</span>
+                    <span className="text-[11px] font-bold text-gray-400 uppercase tracking-widest w-40 text-right">Status Tier</span>
+                  </div>
 
-                <div className="divide-y divide-gray-50">
-                  {routeHeatmapData.map((area) => {
-                    const { label, color, bg, border } = getAQILabel(area.aqi);
-                    return (
-                      <div key={area.area} className="grid grid-cols-[1fr_auto_auto] items-center px-8 py-6 hover:bg-emerald-50/30 transition-colors">
-                        <div className="flex items-center gap-4">
-                          <div className="w-10 h-10 rounded-full bg-gray-50 border border-gray-100 flex items-center justify-center">
-                            <MapPin className="w-5 h-5 text-gray-400" />
+                  <div className="divide-y divide-gray-50">
+                    {routeHeatmapData.map((area) => {
+                      const { label, color, bg, border } = getAQILabel(area.aqi);
+                      return (
+                        <div key={area.area} className="grid grid-cols-[1fr_auto_auto] items-center px-8 py-6 hover:bg-emerald-50/30 transition-colors">
+                          <div className="flex items-center gap-4">
+                            <div className="w-10 h-10 rounded-full bg-gray-50 border border-gray-100 flex items-center justify-center">
+                              <MapPin className="w-5 h-5 text-gray-400" />
+                            </div>
+                            <span className="text-[14px] font-bold text-gray-700 uppercase tracking-wide">{area.area}</span>
                           </div>
-                          <span className="text-[14px] font-bold text-gray-700 uppercase tracking-wide">{area.area}</span>
-                        </div>
 
-                        <div className="w-24 flex justify-center">
-                          <span className={`text-xl font-extrabold tracking-tighter ${color}`}>
-                            {area.aqi}
-                          </span>
-                        </div>
+                          <div className="w-24 flex justify-center">
+                            <span className={`text-xl font-extrabold tracking-tighter ${color}`}>
+                              {area.aqi}
+                            </span>
+                          </div>
 
-                        <div className="w-40 flex justify-end">
-                          <span className={`text-[10px] font-bold uppercase tracking-widest px-4 py-2 rounded-xl border ${bg} ${color} ${border}`}>
-                            {label}
-                          </span>
+                          <div className="w-40 flex justify-end">
+                            <span className={`text-[10px] font-bold uppercase tracking-widest px-4 py-2 rounded-xl border ${bg} ${color} ${border}`}>
+                              {label}
+                            </span>
+                          </div>
                         </div>
-                      </div>
-                    );
-                  })}
+                      );
+                    })}
+                  </div>
                 </div>
               </div>
             </div>
