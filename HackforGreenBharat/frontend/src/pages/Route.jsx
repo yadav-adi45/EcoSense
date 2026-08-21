@@ -36,7 +36,8 @@ import { serverUrl } from "@/main";
 import { getCachedRoute, setCachedRoute } from "@/utils/routeCache";
 import { toast } from "react-toastify";
 import RouteInsights from "@/components/RouteInsights";
-import AnimalDangerZoneCard from "@/components/AnimalDangerZoneCard";
+import EmergencyHub from "@/components/EmergencyHub";
+import { fetchNearestEmergencyPOIs } from "@/services/emergencyService";
 
 /* Transport mode config */
 const TRANSPORT_MODES = [
@@ -85,17 +86,6 @@ const Routes = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
-  useEffect(() => {
-    if (location.state?.triggerNavigateToStart) {
-      const { userCoords, targetOrigin, targetOriginCoords } = location.state;
-      toast.info(`Calculating route to starting point: ${targetOrigin}`);
-      setOrigin("Current Location");
-      setOriginCoords(userCoords);
-      setDestination(targetOrigin);
-      setDestinationCoords(targetOriginCoords);
-      setTriggerSearchOnce(targetOrigin);
-    }
-  }, [location.state]);
   const [origin, setOrigin] = useState("Delhi");
   const [destination, setDestination] = useState("");
   const [routes, setRoutes] = useState([]);
@@ -115,6 +105,100 @@ const Routes = () => {
   const [showSegmentsList, setShowSegmentsList] = useState(false);
   const [showDetailedInputs, setShowDetailedInputs] = useState(false);
 
+  // Restore previous route search when returning from Preview / Navigation
+  useEffect(() => {
+    // 1. Direct state passed back from NavigationScreen
+    if (location.state?.preserveState || location.state?.routes) {
+      const {
+        routes: prevRoutes,
+        selectedRoute: prevSelected,
+        origin: prevOrigin,
+        destination: prevDest,
+        originCoords: prevOriginCoords,
+        destinationCoords: prevDestCoords,
+        travelMode: prevTravelMode,
+        preferences: prevPrefs,
+      } = location.state;
+
+      if (prevOrigin) setOrigin(prevOrigin);
+      if (prevDest) setDestination(prevDest);
+      if (prevOriginCoords) setOriginCoords(prevOriginCoords);
+      if (prevDestCoords) setDestinationCoords(prevDestCoords);
+      if (prevRoutes && prevRoutes.length > 0) {
+        setRoutes(prevRoutes);
+        setSelectedRoute(prevSelected || 0);
+      }
+      if (prevTravelMode) setTravelMode(prevTravelMode);
+      if (prevPrefs) {
+        if (prevPrefs.isPregnancyMode !== undefined) setIsPregnancyMode(prevPrefs.isPregnancyMode);
+        if (prevPrefs.preferWellLit !== undefined) setPreferWellLit(prevPrefs.preferWellLit);
+        if (prevPrefs.season !== undefined) setSeason(prevPrefs.season);
+      }
+      setShowDetailedInputs(true);
+      return;
+    }
+
+    // 2. Trigger navigate to start
+    if (location.state?.triggerNavigateToStart) {
+      const { userCoords, targetOrigin, targetOriginCoords } = location.state;
+      toast.info(`Calculating route to starting point: ${targetOrigin}`);
+      setOrigin("Current Location");
+      setOriginCoords(userCoords);
+      setDestination(targetOrigin);
+      setDestinationCoords(targetOriginCoords);
+      setTriggerSearchOnce(targetOrigin);
+      return;
+    }
+
+    // 3. Fallback: Restore from sessionStorage if user used browser history back button
+    try {
+      const raw = sessionStorage.getItem("ecosense_active_route_search");
+      if (raw) {
+        const saved = JSON.parse(raw);
+        if (saved && saved.destination && saved.routes?.length > 0) {
+          setOrigin(saved.origin || "Delhi");
+          setDestination(saved.destination);
+          setOriginCoords(saved.originCoords);
+          setDestinationCoords(saved.destinationCoords);
+          setRoutes(saved.routes);
+          setSelectedRoute(saved.selectedRoute || 0);
+          if (saved.travelMode) setTravelMode(saved.travelMode);
+          if (saved.preferences) {
+            if (saved.preferences.isPregnancyMode !== undefined) setIsPregnancyMode(saved.preferences.isPregnancyMode);
+            if (saved.preferences.preferWellLit !== undefined) setPreferWellLit(saved.preferences.preferWellLit);
+            if (saved.preferences.season !== undefined) setSeason(saved.preferences.season);
+          }
+          setShowDetailedInputs(true);
+        }
+      }
+    } catch (e) {
+      console.warn("Session restore error:", e);
+    }
+  }, [location.state]);
+
+  // Persist current active search to sessionStorage whenever routes or search changes
+  useEffect(() => {
+    if (routes.length > 0 && destination) {
+      try {
+        sessionStorage.setItem(
+          "ecosense_active_route_search",
+          JSON.stringify({
+            origin,
+            destination,
+            originCoords,
+            destinationCoords,
+            routes,
+            selectedRoute,
+            travelMode,
+            preferences: { isPregnancyMode, preferWellLit, season, travelMode },
+          })
+        );
+      } catch (e) {
+        // ignore storage errors
+      }
+    }
+  }, [routes, selectedRoute, origin, destination, originCoords, destinationCoords, travelMode, isPregnancyMode, preferWellLit, season]);
+
   const [locatingUser, setLocatingUser] = useState(false);
   const [triggerSearchOnce, setTriggerSearchOnce] = useState(null);
   const voiceEnabledRef = useRef(true);
@@ -126,6 +210,14 @@ const Routes = () => {
   const [savedFinalDestination, setSavedFinalDestination] = useState(null);
   const [savedFinalDestinationCoords, setSavedFinalDestinationCoords] = useState(null);
   const [isPreviewModeActive, setIsPreviewModeActive] = useState(false);
+
+  // Emergency & Safety Hub State (Top 10 Hospitals & 10 Police Stations)
+  const [emergencyPOIs, setEmergencyPOIs] = useState({ hospitals: [], police: [] });
+  const [emergencyLoading, setEmergencyLoading] = useState(false);
+  const [selectedEmergencyFacility, setSelectedEmergencyFacility] = useState(null);
+  const [focusedLocation, setFocusedLocation] = useState(null);
+  const [showHospitalsOnMap, setShowHospitalsOnMap] = useState(true);
+  const [showPoliceOnMap, setShowPoliceOnMap] = useState(true);
 
   // Silently request current position on load
   useEffect(() => {
@@ -142,6 +234,26 @@ const Routes = () => {
       );
     }
   }, []);
+
+  // Fetch nearest 10 hospitals and 10 police stations whenever routes are updated
+  useEffect(() => {
+    const currentActiveRoute = routes.find((r) => r.id === selectedRoute) || routes[0];
+    const geom = currentActiveRoute?.geometry || [];
+    
+    if (routes.length > 0 || (originCoords && destinationCoords)) {
+      setEmergencyLoading(true);
+      fetchNearestEmergencyPOIs(geom, originCoords, destinationCoords)
+        .then((data) => {
+          setEmergencyPOIs(data);
+        })
+        .catch((err) => {
+          console.warn("Emergency facilities load warning:", err);
+        })
+        .finally(() => {
+          setEmergencyLoading(false);
+        });
+    }
+  }, [selectedRoute, routes.length, originCoords?.lat, destinationCoords?.lat]);
 
   const getDistanceMeters = (lat1, lon1, lat2, lon2) => {
     const R = 6371e3; // meters
@@ -415,12 +527,16 @@ const Routes = () => {
       navigate(`/navigation?mode=${mode}`, {
         state: {
           route: activeRoute,
+          routes: routes,
+          selectedRoute: selectedRoute,
           origin: origin,
           destination: destination,
           originCoords: originCoords,
           destinationCoords: destinationCoords,
           travelMode: travelMode,
           navigationMode: mode,
+          preferences: { isPregnancyMode, preferWellLit, season, travelMode },
+          showDetailedInputs: true,
         },
       });
     }, 800);
@@ -876,6 +992,31 @@ const Routes = () => {
                                 )}
                               </div>
 
+                              {/* Emergency & Safety Hub (Nearest 10 Hospitals & 10 Police Stations) */}
+                              <EmergencyHub
+                                hospitals={emergencyPOIs.hospitals}
+                                police={emergencyPOIs.police}
+                                loading={emergencyLoading}
+                                selectedFacility={selectedEmergencyFacility}
+                                onFocusFacility={(fac) => {
+                                  setSelectedEmergencyFacility(fac);
+                                  setFocusedLocation({
+                                    id: fac.id,
+                                    lat: fac.lat,
+                                    lon: fac.lon,
+                                    name: fac.name,
+                                    address: fac.address,
+                                    type: fac.type,
+                                    timestamp: Date.now(),
+                                  });
+                                  toast.info(`📍 Focused on ${fac.name} on the map!`, { autoClose: 2000 });
+                                }}
+                                showHospitalsOnMap={showHospitalsOnMap}
+                                showPoliceOnMap={showPoliceOnMap}
+                                onToggleHospitals={() => setShowHospitalsOnMap((v) => !v)}
+                                onTogglePolice={() => setShowPoliceOnMap((v) => !v)}
+                              />
+
                               {/* Route Insights */}
                               <RouteInsights
                                 route={route}
@@ -975,18 +1116,9 @@ const Routes = () => {
                                 </div>
                               )}
 
-                              {/* Smart buttons at bottom of Card */}
-                              {routeMode === "start" ? (
-                                <Button
-                                  disabled={launchingMode !== null}
-                                  onClick={() => handleStartNavigation("live")}
-                                  className="w-full h-11 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl shadow-md flex items-center justify-center gap-2 text-xs uppercase tracking-wider transition-all disabled:opacity-50"
-                                >
-                                  <Navigation className="w-4 h-4" />
-                                  <span>{launchingMode === "live" ? "Starting navigation..." : "Start Navigation"}</span>
-                                </Button>
-                              ) : (
-                                <div className="space-y-2">
+                              {/* Action buttons at bottom of Card */}
+                              <div className="space-y-2 pt-2">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                                   <Button
                                     type="button"
                                     disabled={launchingMode !== null}
@@ -994,22 +1126,32 @@ const Routes = () => {
                                     className="w-full h-11 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-md flex items-center justify-center gap-2 text-xs uppercase tracking-wider transition-all disabled:opacity-50"
                                   >
                                     <RouteIcon className="w-4 h-4" />
-                                    <span>{launchingMode === "preview" ? "Loading route preview..." : "Preview Route"}</span>
+                                    <span>{launchingMode === "preview" ? "Loading preview..." : "Preview Route"}</span>
                                   </Button>
 
-                                  {userCoords && (
-                                    <Button
-                                      type="button"
-                                      disabled={launchingMode !== null}
-                                      onClick={handleNavigateToStartingPoint}
-                                      className="w-full h-11 bg-emerald-55 hover:bg-emerald-100 border border-emerald-300 text-emerald-700 font-bold rounded-xl flex items-center justify-center gap-2 text-xs uppercase tracking-wider transition-all disabled:opacity-50"
-                                    >
-                                      <Navigation className="w-4 h-4 text-emerald-600" />
-                                      <span>Navigate to Starting Point</span>
-                                    </Button>
-                                  )}
+                                  <Button
+                                    type="button"
+                                    disabled={launchingMode !== null}
+                                    onClick={() => handleStartNavigation("live")}
+                                    className="w-full h-11 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl shadow-md flex items-center justify-center gap-2 text-xs uppercase tracking-wider transition-all disabled:opacity-50"
+                                  >
+                                    <Navigation className="w-4 h-4" />
+                                    <span>{launchingMode === "live" ? "Starting..." : "Start Navigation"}</span>
+                                  </Button>
                                 </div>
-                              )}
+
+                                {userCoords && distanceToOrigin !== null && distanceToOrigin > START_RADIUS_METERS && (
+                                  <Button
+                                    type="button"
+                                    disabled={launchingMode !== null}
+                                    onClick={handleNavigateToStartingPoint}
+                                    className="w-full h-10 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 text-emerald-700 font-bold rounded-xl flex items-center justify-center gap-2 text-xs uppercase tracking-wider transition-all disabled:opacity-50"
+                                  >
+                                    <Navigation className="w-3.5 h-3.5 text-emerald-600" />
+                                    <span>Navigate to Start ({formatDistanceKm(distanceToOrigin)} away)</span>
+                                  </Button>
+                                )}
+                              </div>
 
                             </div>
                           )}
@@ -1046,50 +1188,63 @@ const Routes = () => {
             isNavigating={isNavigating}
             onExitNav={() => setIsNavigating(false)}
             transportMode={travelMode}
+            emergencyPOIs={emergencyPOIs}
+            showHospitals={showHospitalsOnMap}
+            showPolice={showPoliceOnMap}
+            focusedLocation={focusedLocation}
+            onSelectFacility={(fac) => {
+              setSelectedEmergencyFacility(fac);
+              setFocusedLocation({
+                id: fac.id,
+                lat: fac.lat,
+                lon: fac.lon,
+                name: fac.name,
+                address: fac.address,
+                type: fac.type,
+                timestamp: Date.now(),
+              });
+              toast.info(`📍 Selected ${fac.name}`, { autoClose: 2000 });
+            }}
             onSelectDestination={(destName) => {
               setDestination(destName);
               setTriggerSearchOnce(destName);
             }}
           />
 
-          {/* Floating Navigation Button on Map (Bottom-Right) */}
+          {/* Floating Navigation & Preview Buttons on Map (Bottom-Right) */}
           {routes.length > 0 && (
-            <div className="absolute bottom-6 right-6 z-[400] animate-in fade-in slide-in-from-bottom-3 duration-300 flex flex-col gap-2">
-              {routeMode === "start" ? (
+            <div className="absolute bottom-6 right-6 z-[400] animate-in fade-in slide-in-from-bottom-3 duration-300 flex flex-wrap items-center justify-end gap-2.5 max-w-[90vw]">
+              <Button
+                disabled={launchingMode !== null}
+                onClick={() => handleStartNavigation("preview")}
+                className="bg-blue-600 hover:bg-blue-700 shadow-blue-500/30 h-12 sm:h-13 px-5 sm:px-6 shadow-2xl text-white font-black text-xs sm:text-sm flex items-center gap-2 rounded-full group transition-all transform hover:scale-105 active:scale-95 disabled:opacity-50"
+              >
+                <RouteIcon className="w-4 h-4" />
+                <span>{launchingMode === "preview" ? "LOADING..." : "PREVIEW ROUTE"}</span>
+              </Button>
+
+              <Button
+                disabled={launchingMode !== null}
+                onClick={() => handleStartNavigation("live")}
+                className={`${
+                  isNavigating
+                    ? "bg-red-500 hover:bg-red-600 shadow-red-500/30"
+                    : "bg-emerald-500 hover:bg-emerald-600 shadow-emerald-500/30"
+                } h-12 sm:h-13 px-5 sm:px-6 shadow-2xl text-white font-black text-xs sm:text-sm flex items-center gap-2 rounded-full group transition-all transform hover:scale-105 active:scale-95 disabled:opacity-50`}
+              >
+                <Navigation className="w-4 h-4 group-hover:rotate-12 transition-transform" />
+                <span>{launchingMode === "live" ? "STARTING..." : (isNavigating ? "EXIT NAVIGATION" : "START NAVIGATION")}</span>
+              </Button>
+
+              {userCoords && distanceToOrigin !== null && distanceToOrigin > START_RADIUS_METERS && (
                 <Button
                   disabled={launchingMode !== null}
-                  onClick={() => handleStartNavigation("live")}
-                  className={`${
-                    isNavigating
-                      ? "bg-red-500 hover:bg-red-600 shadow-red-500/30"
-                      : "bg-emerald-500 hover:bg-emerald-600 shadow-emerald-500/30"
-                  } h-13 px-6 shadow-2xl text-white font-black text-sm flex items-center gap-2.5 rounded-full group transition-all transform hover:scale-105 active:scale-95 disabled:opacity-50`}
+                  onClick={handleNavigateToStartingPoint}
+                  className="bg-white/95 backdrop-blur-md hover:bg-emerald-50 border border-emerald-300 text-emerald-700 h-12 sm:h-13 px-4 sm:px-5 shadow-2xl font-black text-xs sm:text-sm flex items-center gap-2 rounded-full group transition-all transform hover:scale-105 active:scale-95 disabled:opacity-50"
                 >
-                  <Navigation className="w-4 h-4 group-hover:rotate-12 transition-transform" />
-                  <span>{launchingMode === "live" ? "STARTING..." : (isNavigating ? "EXIT NAVIGATION" : "START NAVIGATION")}</span>
+                  <Navigation className="w-4 h-4 text-emerald-600" />
+                  <span>NAVIGATE TO START</span>
                 </Button>
-              ) : (
-                <div className="flex flex-col sm:flex-row gap-2">
-                  <Button
-                    disabled={launchingMode !== null}
-                    onClick={() => handleStartNavigation("preview")}
-                    className="bg-blue-600 hover:bg-blue-700 shadow-blue-500/30 h-13 px-6 shadow-2xl text-white font-black text-sm flex items-center gap-2.5 rounded-full group transition-all transform hover:scale-105 active:scale-95 disabled:opacity-50"
-                  >
-                    <RouteIcon className="w-4 h-4" />
-                    <span>{launchingMode === "preview" ? "LOADING..." : "PREVIEW ROUTE"}</span>
-                  </Button>
-
-                  {userCoords && (
-                    <Button
-                      disabled={launchingMode !== null}
-                      onClick={handleNavigateToStartingPoint}
-                      className="bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 text-emerald-700 h-13 px-6 shadow-2xl font-black text-sm flex items-center gap-2.5 rounded-full group transition-all transform hover:scale-105 active:scale-95 disabled:opacity-50"
-                    >
-                      <Navigation className="w-4 h-4 text-emerald-600" />
-                      <span>NAVIGATE TO START</span>
-                    </Button>
-                  )}
-                </div>
               )}
             </div>
           )}

@@ -19,6 +19,37 @@ const evIcon = L.divIcon({
   iconAnchor: [15, 15],
 });
 
+// Hospital Marker Icon (Red 🏥)
+const hospitalIcon = L.divIcon({
+  className: "custom-hospital-marker",
+  html: `<div style="background-color: #ef4444; color: white; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; border: 2.5px solid white; box-shadow: 0 4px 10px rgba(239,68,68,0.45); font-size: 15px; font-weight: bold; cursor: pointer;">🏥</div>`,
+  iconSize: [32, 32],
+  iconAnchor: [16, 16],
+});
+
+// Police Station Marker Icon (Blue 🛡️)
+const policeIcon = L.divIcon({
+  className: "custom-police-marker",
+  html: `<div style="background-color: #2563eb; color: white; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; border: 2.5px solid white; box-shadow: 0 4px 10px rgba(37,99,235,0.45); font-size: 15px; font-weight: bold; cursor: pointer;">🛡️</div>`,
+  iconSize: [32, 32],
+  iconAnchor: [16, 16],
+});
+
+// Focused Location Pulse Marker
+const focusedPulseIcon = (isHospital) => L.divIcon({
+  className: "custom-focused-marker",
+  html: `
+    <div style="position: relative; width: 44px; height: 44px; display: flex; align-items: center; justify-content: center;">
+      <div style="position: absolute; width: 44px; height: 44px; border-radius: 50%; background: ${isHospital ? 'rgba(239, 68, 68, 0.4)' : 'rgba(37, 99, 235, 0.4)'}; animation: ping 1.2s cubic-bezier(0, 0, 0.2, 1) infinite;"></div>
+      <div style="width: 34px; height: 34px; border-radius: 50%; background: ${isHospital ? '#ef4444' : '#2563eb'}; border: 3px solid white; box-shadow: 0 4px 12px rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; font-size: 16px;">
+        ${isHospital ? '🏥' : '🛡️'}
+      </div>
+    </div>
+  `,
+  iconSize: [44, 44],
+  iconAnchor: [22, 22],
+});
+
 // 1. Custom Google Maps-style Destination Pin (Teardrop Red Pin with inner circle)
 const destIcon = L.divIcon({
   className: "custom-dest-pin",
@@ -141,11 +172,23 @@ const getLabelCount = (distanceKm) => {
   return 5;
 };
 
-const RouteMap = ({ routes = [], selectedRouteId = 0, origin, destination, onSelectRoute }) => {
+const RouteMap = ({
+  routes = [],
+  selectedRouteId = 0,
+  origin,
+  destination,
+  onSelectRoute,
+  emergencyPOIs = { hospitals: [], police: [] },
+  showHospitals = true,
+  showPolice = true,
+  focusedLocation = null,
+  onSelectFacility = () => {},
+}) => {
   const mapContainerRef = useRef(null);
   const mapRef = useRef(null);
   const layerGroupRef = useRef(null);
   const tileLayerRef = useRef(null);
+  const emergencyMarkersRef = useRef({});
 
   // Map style state (Google Maps: roadmap, satellite, terrain)
   const [mapStyle, setMapStyle] = useState("roadmap");
@@ -271,6 +314,7 @@ const RouteMap = ({ routes = [], selectedRouteId = 0, origin, destination, onSel
     if (!map || !layerGroup) return;
 
     layerGroup.clearLayers();
+    emergencyMarkersRef.current = {};
 
     const leafletOrigin = origin || { lat: 28.6139, lon: 77.2090, name: "Delhi" };
     const destPos = destination && destination.lat && destination.lon ? destination : null;
@@ -437,13 +481,86 @@ const RouteMap = ({ routes = [], selectedRouteId = 0, origin, destination, onSel
       }
     }
 
-    // Auto-fit bounds
-    if (bounds.isValid()) {
-      map.fitBounds(bounds, { padding: [60, 60], maxZoom: 15 });
-    } else if (leafletOrigin?.lat && leafletOrigin?.lon) {
-      map.setView([leafletOrigin.lat, leafletOrigin.lon], 9);
+    // 4. Render Nearest Hospitals on Map
+    if (showHospitals && Array.isArray(emergencyPOIs?.hospitals)) {
+      emergencyPOIs.hospitals.forEach((h, idx) => {
+        if (h.lat && h.lon) {
+          const isFocused = focusedLocation?.id === h.id;
+          const hMarker = L.marker([h.lat, h.lon], {
+            icon: isFocused ? focusedPulseIcon(true) : hospitalIcon,
+            zIndexOffset: isFocused ? 1000 : 350,
+          }).bindPopup(`
+            <div style="font-family: system-ui, -apple-system, sans-serif; padding: 2px; min-width: 175px;">
+              <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px;">
+                <span style="background: #ef4444; color: white; border-radius: 4px; padding: 1px 6px; font-size: 10px; font-weight: 800;">🏥 #${idx + 1} HOSPITAL</span>
+                <span style="font-size: 10px; color: #666; font-weight: 700;">📍 ${h.distFromStart ? (h.distFromStart < 1 ? Math.round(h.distFromStart * 1000) + ' m' : h.distFromStart.toFixed(1) + ' km') : 'Nearby'}</span>
+              </div>
+              <strong style="font-size: 13px; color: #111; display: block; line-height: 1.2;">${h.name}</strong>
+              <span style="font-size: 11px; color: #555; display: block; margin-top: 3px;">${h.address || "Healthcare Facility"}</span>
+              <div style="margin-top: 6px; padding-top: 4px; border-top: 1px solid #eee; display: flex; align-items: center; justify-content: space-between; font-size: 10px;">
+                <span style="color: #ef4444; font-weight: 700;">📞 ${h.phone || "108 / 112"}</span>
+                <span style="color: #059669; font-weight: 600;">${h.emergency || "24/7 Care"}</span>
+              </div>
+            </div>
+          `);
+          hMarker.on("click", () => onSelectFacility && onSelectFacility(h));
+          layerGroup.addLayer(hMarker);
+          emergencyMarkersRef.current[h.id] = hMarker;
+        }
+      });
     }
-  }, [routes, selectedRouteId, origin, destination, onSelectRoute, showWildlifeLayer]);
+
+    // 5. Render Nearest Police Stations on Map
+    if (showPolice && Array.isArray(emergencyPOIs?.police)) {
+      emergencyPOIs.police.forEach((p, idx) => {
+        if (p.lat && p.lon) {
+          const isFocused = focusedLocation?.id === p.id;
+          const pMarker = L.marker([p.lat, p.lon], {
+            icon: isFocused ? focusedPulseIcon(false) : policeIcon,
+            zIndexOffset: isFocused ? 1000 : 350,
+          }).bindPopup(`
+            <div style="font-family: system-ui, -apple-system, sans-serif; padding: 2px; min-width: 175px;">
+              <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px;">
+                <span style="background: #2563eb; color: white; border-radius: 4px; padding: 1px 6px; font-size: 10px; font-weight: 800;">🛡️ #${idx + 1} POLICE</span>
+                <span style="font-size: 10px; color: #666; font-weight: 700;">📍 ${p.distFromStart ? (p.distFromStart < 1 ? Math.round(p.distFromStart * 1000) + ' m' : p.distFromStart.toFixed(1) + ' km') : 'Nearby'}</span>
+              </div>
+              <strong style="font-size: 13px; color: #111; display: block; line-height: 1.2;">${p.name}</strong>
+              <span style="font-size: 11px; color: #555; display: block; margin-top: 3px;">${p.address || "Police Station"}</span>
+              <div style="margin-top: 6px; padding-top: 4px; border-top: 1px solid #eee; display: flex; align-items: center; justify-content: space-between; font-size: 10px;">
+                <span style="color: #2563eb; font-weight: 700;">📞 ${p.phone || "100 / 112"}</span>
+                <span style="color: #059669; font-weight: 600;">${p.emergency || "Active Patrol"}</span>
+              </div>
+            </div>
+          `);
+          pMarker.on("click", () => onSelectFacility && onSelectFacility(p));
+          layerGroup.addLayer(pMarker);
+          emergencyMarkersRef.current[p.id] = pMarker;
+        }
+      });
+    }
+
+    // Auto-fit bounds unless focusing on a specific facility
+    if (!focusedLocation) {
+      if (bounds.isValid()) {
+        map.fitBounds(bounds, { padding: [60, 60], maxZoom: 15 });
+      } else if (leafletOrigin?.lat && leafletOrigin?.lon) {
+        map.setView([leafletOrigin.lat, leafletOrigin.lon], 9);
+      }
+    }
+  }, [routes, selectedRouteId, origin, destination, onSelectRoute, emergencyPOIs, showHospitals, showPolice, focusedLocation, onSelectFacility]);
+
+  // Handle smooth flyTo when user clicks a hospital / police station card (like in EcoStores)
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !focusedLocation || !focusedLocation.lat || !focusedLocation.lon) return;
+
+    map.flyTo([focusedLocation.lat, focusedLocation.lon], 16, {
+      animate: true,
+      duration: 1.2,
+    });
+
+    const marker = emergencyMarkersRef.current[focusedLocation.id];
+  }, [focusedLocation]);
 
   // Invalidate map size when view switches to "map"
   useEffect(() => {
