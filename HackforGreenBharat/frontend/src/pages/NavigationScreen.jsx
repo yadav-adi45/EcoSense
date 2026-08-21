@@ -9,8 +9,9 @@ import axios from "axios";
 import {
   Navigation, ArrowLeft, Mic, MicOff, ChevronDown, ChevronRight,
   MapPin, Leaf, Zap, Sparkles, Share2, Compass, Gauge, Clock,
-  Route as RouteIcon, Target, Eye, Plus, Minus, Volume2,
+  Route as RouteIcon, Target, Eye, Plus, Minus, Volume2, Hospital, ShieldCheck, Crosshair,
 } from "lucide-react";
+import { fetchNearestEmergencyPOIs } from "@/services/emergencyService";
 
 /* ─── Overpass URL ────────────────────────────────────────── */
 const OVERPASS_URL = "https://overpass.openstreetmap.fr/api/interpreter";
@@ -238,6 +239,7 @@ const NavigationScreen = () => {
   const [allPolice, setAllPolice] = useState([]);
   const [showHospitalsOnMap, setShowHospitalsOnMap] = useState(true);
   const [showPoliceOnMap, setShowPoliceOnMap] = useState(true);
+  const [emergencyTab, setEmergencyTab] = useState("hospitals");
 
   // Watch ID for tracking user position in live mode
   const watchIdRef = useRef(null);
@@ -267,6 +269,23 @@ const NavigationScreen = () => {
       }
     };
   }, [navigationMode]);
+
+  const handleGoBack = () => {
+    navigate("/routes", {
+      state: {
+        preserveState: true,
+        routes: location.state?.routes || (route?.geometry ? [route] : []),
+        selectedRoute: location.state?.selectedRoute || 0,
+        origin: origin,
+        destination: destination,
+        originCoords: originCoords,
+        destinationCoords: destinationCoords,
+        travelMode: travelMode,
+        preferences: location.state?.preferences || {},
+        showDetailedInputs: true,
+      },
+    });
+  };
 
   const handleNavigateToStart = () => {
     if (navigator.geolocation) {
@@ -316,9 +335,13 @@ const NavigationScreen = () => {
       if (normG.length > 1) setRouteGeometry(normG);
     });
 
-    fetchRouteEmergency(routeGeometry.length > 0 ? routeGeometry : [originCoords, destinationCoords]).then(({ hospitals, police }) => {
-      setAllHospitals(refreshUserDistances(hospitals, originCoords.lat, originCoords.lon));
-      setAllPolice(refreshUserDistances(police, originCoords.lat, originCoords.lon));
+    fetchNearestEmergencyPOIs(
+      routeGeometry.length > 0 ? routeGeometry : [originCoords, destinationCoords],
+      originCoords,
+      destinationCoords
+    ).then(({ hospitals, police }) => {
+      setAllHospitals(hospitals);
+      setAllPolice(police);
     });
   }, []);
 
@@ -339,8 +362,9 @@ const NavigationScreen = () => {
         <div className="flex items-center gap-2">
           <button
             type="button"
-            onClick={() => navigate(-1)}
-            className="w-9 h-9 rounded-xl bg-gray-50 border border-gray-200 hover:bg-gray-100 flex items-center justify-center text-gray-700 transition-colors"
+            onClick={handleGoBack}
+            className="w-9 h-9 rounded-xl bg-gray-50 border border-gray-200 hover:bg-gray-100 flex items-center justify-center text-gray-700 transition-colors shadow-xs"
+            title="Go Back to Routes"
           >
             <ArrowLeft className="w-4 h-4" />
           </button>
@@ -355,7 +379,7 @@ const NavigationScreen = () => {
               </span>
               <button
                 type="button"
-                onClick={() => navigate(-1)}
+                onClick={handleGoBack}
                 className="text-xs font-bold text-red-500 hover:text-red-600 border border-red-200 hover:border-red-300 bg-red-50/50 rounded-lg px-2.5 py-1.5 transition-colors"
               >
                 End
@@ -459,7 +483,7 @@ const NavigationScreen = () => {
 
               <button
                 type="button"
-                onClick={() => navigate("/routes")}
+                onClick={handleGoBack}
                 className="w-full h-11 bg-gray-50 hover:bg-gray-100 border border-gray-200 text-gray-700 font-bold rounded-xl flex items-center justify-center gap-2 text-xs uppercase tracking-wider transition-all"
               >
                 <ArrowLeft className="w-4 h-4" />
@@ -767,30 +791,69 @@ const NavigationScreen = () => {
             </div>
           </div>
 
-          {/* 3. Emergency Quick Access */}
-          <div className="bg-white border border-gray-200 rounded-2xl p-4 shadow-sm space-y-2.5">
-            <h4 className="text-xs font-black text-red-600 uppercase tracking-wider">Emergency Quick Access</h4>
-
-            <div className="p-2.5 border border-gray-200 hover:border-red-300 rounded-xl flex items-center justify-between text-xs font-bold text-gray-800 hover:bg-red-50/50 cursor-pointer transition-colors">
-              <div className="flex items-center gap-2">
-                <span className="text-base">🏥</span>
-                <div>
-                  <span className="block font-black">{allHospitals[0]?.name || "Nearest Hospital"}</span>
-                  <span className="block text-[10px] text-gray-400 font-medium">Distance: {allHospitals[0] ? fmtDist(allHospitals[0].userDist) : "1.2 km"}</span>
-                </div>
-              </div>
-              <ChevronRight className="w-4 h-4 text-gray-400" />
+          {/* 3. Emergency Quick Access (Top 10 Hospitals & Police Stations) */}
+          <div className="bg-white border border-gray-200 rounded-2xl p-4 shadow-sm space-y-3">
+            <div className="flex items-center justify-between">
+              <h4 className="text-xs font-black text-red-600 uppercase tracking-wider flex items-center gap-1.5">
+                <ShieldCheck className="w-4 h-4 text-red-500" />
+                <span>Emergency Hub (Top 10)</span>
+              </h4>
+              <span className="text-[10px] font-bold text-gray-400">Click to Focus</span>
             </div>
 
-            <div className="p-2.5 border border-gray-200 hover:border-blue-300 rounded-xl flex items-center justify-between text-xs font-bold text-gray-800 hover:bg-blue-50/50 cursor-pointer transition-colors">
-              <div className="flex items-center gap-2">
-                <span className="text-base">🛡️</span>
-                <div>
-                  <span className="block font-black">{allPolice[0]?.name || "Nearest Police Station"}</span>
-                  <span className="block text-[10px] text-gray-400 font-medium">Distance: {allPolice[0] ? fmtDist(allPolice[0].userDist) : "800 m"}</span>
+            {/* Quick Toggle Tabs */}
+            <div className="flex gap-1 p-1 bg-gray-100 rounded-xl text-xs font-bold">
+              <button
+                type="button"
+                onClick={() => setEmergencyTab("hospitals")}
+                className={`flex-1 py-1.5 px-2 rounded-lg transition-all text-center ${
+                  emergencyTab === "hospitals"
+                    ? "bg-white text-red-600 shadow-xs font-black"
+                    : "text-gray-600 hover:text-gray-900"
+                }`}
+              >
+                🏥 Hospitals ({allHospitals.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setEmergencyTab("police")}
+                className={`flex-1 py-1.5 px-2 rounded-lg transition-all text-center ${
+                  emergencyTab === "police"
+                    ? "bg-white text-blue-600 shadow-xs font-black"
+                    : "text-gray-600 hover:text-gray-900"
+                }`}
+              >
+                🛡️ Police ({allPolice.length})
+              </button>
+            </div>
+
+            {/* List */}
+            <div className="space-y-1.5 max-h-56 overflow-y-auto pr-0.5 custom-scrollbar">
+              {(emergencyTab === "hospitals" ? allHospitals : allPolice).map((item, idx) => (
+                <div
+                  key={item.id || idx}
+                  onClick={() => {
+                    setDisplayPos([item.lat, item.lon]);
+                    setFollowUser(true);
+                  }}
+                  className="p-2 border border-gray-100 hover:border-emerald-300 rounded-xl flex items-center justify-between text-xs font-bold text-gray-800 hover:bg-emerald-50/50 cursor-pointer transition-colors group"
+                >
+                  <div className="flex items-center gap-2 min-w-0 pr-1">
+                    <span className={`w-5 h-5 rounded flex items-center justify-center text-[10px] font-black shrink-0 ${
+                      emergencyTab === "hospitals" ? "bg-red-100 text-red-700" : "bg-blue-100 text-blue-700"
+                    }`}>
+                      #{idx + 1}
+                    </span>
+                    <div className="min-w-0">
+                      <span className="block font-black truncate group-hover:text-emerald-700">{item.name}</span>
+                      <span className="block text-[9px] text-gray-400 font-medium truncate">
+                        {item.distFromStart ? fmtDist(item.distFromStart) : (item.userDist ? fmtDist(item.userDist) : "Along route")}
+                      </span>
+                    </div>
+                  </div>
+                  <Crosshair className="w-3.5 h-3.5 text-gray-400 group-hover:text-emerald-600 shrink-0" />
                 </div>
-              </div>
-              <ChevronRight className="w-4 h-4 text-gray-400" />
+              ))}
             </div>
           </div>
 
