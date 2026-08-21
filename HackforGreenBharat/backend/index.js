@@ -1,3 +1,4 @@
+import "dotenv/config";
 import "./config/dns.js"; // Force Google DNS before any network calls
 import https from "https";
 import axios from "axios";
@@ -6,7 +7,6 @@ import axios from "axios";
 axios.defaults.httpsAgent = new https.Agent({ rejectUnauthorized: false });
 
 import express from "express";
-import dotenv from "dotenv";
 import database from "./utils/database.js";
 import userRouter from "./route/UserRoute.js";
 import cookieParser from "cookie-parser";
@@ -27,8 +27,6 @@ import animalRouter from "./route/animalRoutes.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-
-dotenv.config();
 
 const app = express();
 

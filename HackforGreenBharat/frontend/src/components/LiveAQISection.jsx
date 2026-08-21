@@ -97,35 +97,9 @@ const AQIGaugeMeter = ({ aqi }) => {
 
 const LiveAQISection = () => {
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [lastUpdated, setLastUpdated] = useState(new Date());
   const [data, setData] = useState(null);
-  const [liveAQI, setLiveAQI] = useState(null);
-
-  // Sync initial AQI
-  useEffect(() => {
-    if (data?.aqi) {
-      setLiveAQI(data.aqi);
-    }
-  }, [data]);
-
-  // Handle active live fluctuation (+/- 1-2 points)
-  useEffect(() => {
-    if (loading || !data?.aqi) return;
-    const interval = setInterval(() => {
-      const base = data.aqi;
-      setLiveAQI((prev) => {
-        if (prev === null) return base;
-        const change = (Math.random() > 0.5 ? 1 : -1) * (Math.random() > 0.5 ? 1 : 2);
-        const nextVal = prev + change;
-        // Keep within +/- 5 points from source to stay realistic
-        if (Math.abs(nextVal - base) > 5) {
-          return base;
-        }
-        return Math.max(1, nextVal);
-      });
-    }, 4000);
-    return () => clearInterval(interval);
-  }, [loading, data]);
 
   /* ================= MASK LOGIC ================= */
   const getMaskRecommendation = (aqi) => {
@@ -161,91 +135,50 @@ const LiveAQISection = () => {
     return { text: "Pleasant outdoor weather. Great time to select eco-friendly routes or EVs.", status: "Comfortable Weather ☀️" };
   };
 
+  const fetchLiveAQI = (lat = 30.7333, lon = 76.7794) => {
+    setRefreshing(true);
+    fetch(`/api/v5/live-location?lat=${lat}&lon=${lon}`)
+      .then((res) => res.json())
+      .then((resData) => {
+        if (resData.success) {
+          setData({
+            source: resData.source === "waqi" ? "WAQI Ground Station" : "Copernicus Atmospheric",
+            city: resData.city || "Local Area",
+            lat: resData.lat,
+            lon: resData.lon,
+            aqi: resData.aqi,
+            temperature: resData.temperature,
+            humidity: resData.humidity,
+            windSpeed: resData.windSpeed,
+            station: resData.station,
+          });
+          setLastUpdated(new Date());
+        }
+      })
+      .catch((err) => {
+        console.error("Live AQI fetch error:", err);
+      })
+      .finally(() => {
+        setLoading(false);
+        setRefreshing(false);
+      });
+  };
+
   /* ================= FETCH LIVE DATA ================= */
   useEffect(() => {
-    const fetchWithFallback = async (latitude, longitude) => {
-      try {
-        let city = "Chandigarh";
-        let aqi = 145;
-        let temperature = 29;
-        let humidity = 65;
-        let windSpeed = 8;
-
-        // 1. Try to fetch city name (OpenWeather reverse geocode)
-        if (OPENWEATHER_KEY) {
-          try {
-            const geoRes = await fetch(
-              `https://api.openweathermap.org/geo/1.0/reverse?lat=${latitude}&lon=${longitude}&limit=1&appid=${OPENWEATHER_KEY}`
-            );
-            const geoJson = await geoRes.json();
-            if (Array.isArray(geoJson) && geoJson.length > 0) {
-              city = geoJson[0].name;
-            }
-          } catch (e) {
-            console.warn("Geo reverse fetch failed, using fallback:", e);
-          }
-        }
-
-        // 2. Try to fetch WAQI
-        if (WAQI_TOKEN) {
-          try {
-            const waqiRes = await fetch(
-              `https://api.waqi.info/feed/geo:${latitude};${longitude}/?token=${WAQI_TOKEN}`
-            );
-            const waqiJson = await waqiRes.json();
-            if (waqiJson.status === "ok" && waqiJson.data?.aqi !== undefined) {
-              aqi = waqiJson.data.aqi;
-            }
-          } catch (e) {
-            console.warn("WAQI fetch failed, using fallback:", e);
-          }
-        }
-
-        // 3. Try to fetch Weather (OpenWeather)
-        if (OPENWEATHER_KEY) {
-          try {
-            const weatherRes = await fetch(
-              `https://api.openweathermap.org/data/2.5/weather?lat=${latitude}&lon=${longitude}&units=metric&appid=${OPENWEATHER_KEY}`
-            );
-            const weather = await weatherRes.json();
-            if (weather.main?.temp !== undefined) {
-              temperature = Math.round(weather.main.temp);
-              humidity = weather.main.humidity;
-              windSpeed = Math.round(weather.wind?.speed || 8);
-            }
-          } catch (e) {
-            console.warn("Weather fetch failed, using fallback:", e);
-          }
-        }
-
-        setData({
-          source: 'Station',
-          city,
-          lat: latitude,
-          lon: longitude,
-          aqi,
-          temperature,
-          humidity,
-          windSpeed,
-        });
-
-        setLastUpdated(new Date());
-      } catch (err) {
-        console.error("Live AQI compile error:", err);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        fetchWithFallback(pos.coords.latitude, pos.coords.longitude);
-      },
-      () => {
-        console.warn("Geolocation blocked/failed. Using Chandigarh fallback.");
-        fetchWithFallback(30.7333, 76.7794);
-      }
-    );
+    if ("geolocation" in navigator) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          fetchLiveAQI(pos.coords.latitude, pos.coords.longitude);
+        },
+        () => {
+          fetchLiveAQI(30.7333, 76.7794);
+        },
+        { timeout: 5000 }
+      );
+    } else {
+      fetchLiveAQI(30.7333, 76.7794);
+    }
   }, []);
 
   /* ================= LOADER ================= */
@@ -353,14 +286,15 @@ const LiveAQISection = () => {
 
             <div className="flex items-center justify-between border-t border-gray-50 pt-6 mt-auto">
               <span className="text-xs text-gray-400">
-                Data Source: <strong className="text-emerald-500">WAQI Global Network</strong>
+                Station: <strong className="text-emerald-600 font-semibold">{data.station || data.source}</strong>
               </span>
               <button 
-                onClick={() => window.location.reload()}
-                className="flex items-center gap-2 text-xs font-semibold text-emerald-600 hover:text-emerald-700 bg-emerald-50 hover:bg-emerald-100/80 px-4 py-2 rounded-xl transition-all"
+                onClick={() => fetchLiveAQI(data.lat, data.lon)}
+                disabled={refreshing}
+                className="flex items-center gap-2 text-xs font-semibold text-emerald-600 hover:text-emerald-700 bg-emerald-50 hover:bg-emerald-100/80 px-4 py-2 rounded-xl transition-all disabled:opacity-50"
               >
-                <RefreshCw className="w-3.5 h-3.5" />
-                Refresh
+                <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? "animate-spin" : ""}`} />
+                {refreshing ? "Updating..." : "Refresh Live"}
               </button>
             </div>
           </div>

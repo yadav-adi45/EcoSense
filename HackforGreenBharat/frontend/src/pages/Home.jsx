@@ -78,29 +78,38 @@ const Home = () => {
     },
   ];
 
-  const aqiStates = [
-    {
-      state: "Delhi",
-      aqi: 142,
-      max: 300,
-      status: "Unhealthy for Sensitive",
-      color: "text-amber-500",
-    },
-    {
-      state: "Maharashtra",
-      aqi: 88,
-      max: 300,
-      status: "Moderate",
-      color: "text-emerald-500",
-    },
-    {
-      state: "Karnataka",
-      aqi: 54,
-      max: 300,
-      status: "Good",
-      color: "text-teal-500",
-    },
-  ];
+  const [statesList, setStatesList] = React.useState([]);
+  const [loadingStates, setLoadingStates] = React.useState(true);
+  const [stateSearch, setStateSearch] = React.useState("");
+  const [statesRefreshing, setStatesRefreshing] = React.useState(false);
+
+  const fetchStatesAQI = () => {
+    setStatesRefreshing(true);
+    fetch("/api/v5/states-aqi")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success && Array.isArray(data.states)) {
+          setStatesList(data.states);
+        }
+      })
+      .catch((err) => {
+        console.error("Failed to fetch states AQI:", err);
+      })
+      .finally(() => {
+        setLoadingStates(false);
+        setStatesRefreshing(false);
+      });
+  };
+
+  React.useEffect(() => {
+    fetchStatesAQI();
+  }, []);
+
+  const filteredStates = statesList.filter(
+    (item) =>
+      item.state.toLowerCase().includes(stateSearch.toLowerCase()) ||
+      item.city?.toLowerCase().includes(stateSearch.toLowerCase())
+  );
 
   return (
     <>
@@ -155,79 +164,130 @@ const Home = () => {
 
         {/* 🔹 LIVE STATE AQI SECTION */}
         <LiveAQISection />
-        <section className="py-24 px-8">
-          <h2 className="text-3xl font-bold text-center text-emerald-600 mb-16">
-            Live State AQI Overview 🌍
-          </h2>
+        <section className="py-24 px-8 max-w-7xl mx-auto">
+          <div className="flex flex-col md:flex-row md:items-end justify-between mb-12 gap-6">
+            <div>
+              <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-50 border border-emerald-100 text-emerald-600 text-xs font-semibold uppercase tracking-wider mb-3">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
+                Live Ground Telemetry
+              </div>
+              <h2 className="text-3xl font-bold text-gray-800">
+                Live State <span className="text-emerald-500">AQI Overview</span> 🌍
+              </h2>
+              <p className="text-gray-500 text-sm mt-1">
+                Real-time ground station air quality across major Indian states.
+              </p>
+            </div>
 
-          <div className="grid gap-10 sm:grid-cols-2 lg:grid-cols-3 max-w-6xl mx-auto">
-            {aqiStates.map((item, index) => {
-              const percentage = (item.aqi / item.max) * 100;
+            {/* Controls */}
+            <div className="flex items-center gap-3">
+              <input
+                type="text"
+                placeholder="Search state or city..."
+                value={stateSearch}
+                onChange={(e) => setStateSearch(e.target.value)}
+                className="px-4 py-2 text-sm rounded-xl border border-gray-200 bg-white focus:outline-none focus:border-emerald-500 shadow-sm w-48 sm:w-60"
+              />
+              <button
+                onClick={fetchStatesAQI}
+                disabled={statesRefreshing}
+                className="px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-semibold shadow-sm transition disabled:opacity-50 flex items-center gap-1.5"
+              >
+                <span className={statesRefreshing ? "animate-spin" : ""}>🔄</span>
+                {statesRefreshing ? "Updating" : "Refresh"}
+              </button>
+            </div>
+          </div>
 
-              return (
-                <div
-                  key={index}
-                  className="relative bg-white rounded-3xl p-8 border border-emerald-100 border-emerald-50 text-center"
-                  style={{ animation: "scaleIn 0.6s ease forwards" }}
-                >
-                  {/* Glow */}
-                  <div className="absolute inset-0 bg-[radial-gradient(circle,rgba(16,185,129,0.05),transparent_70%)] rounded-3xl blur-xl"></div>
+          {loadingStates ? (
+            <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
+              {[1, 2, 3, 4, 5, 6].map((idx) => (
+                <div key={idx} className="bg-white rounded-3xl p-8 border border-gray-100 shadow-sm animate-pulse flex flex-col items-center">
+                  <div className="w-32 h-4 bg-gray-200 rounded-full mb-6"></div>
+                  <div className="w-36 h-36 rounded-full bg-gray-100 mb-6"></div>
+                  <div className="w-24 h-6 bg-gray-200 rounded-full"></div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
+              {filteredStates.map((item, index) => {
+                const percentage = Math.min(100, (item.aqi / item.max) * 100);
 
-                  <div className="relative z-10">
-                    <p className="text-gray-500 text-sm mb-4">
-                      Current {item.state} AQI
-                    </p>
+                return (
+                  <div
+                    key={index}
+                    className="relative bg-white rounded-3xl p-8 border border-gray-100 shadow-sm hover:shadow-md transition text-center flex flex-col justify-between"
+                    style={{ animation: "scaleIn 0.5s ease forwards" }}
+                  >
+                    {/* Glow */}
+                    <div className="absolute inset-0 bg-[radial-gradient(circle,rgba(16,185,129,0.04),transparent_70%)] rounded-3xl blur-xl"></div>
 
-                    {/* Circular AQI Ring */}
-                    <div className="relative w-40 h-40 mx-auto mb-6">
-                      <svg className="w-full h-full rotate-[-90deg]">
-                        <circle
-                          cx="80"
-                          cy="80"
-                          r="70"
-                          stroke="#f1f5f9"
-                          strokeWidth="10"
-                          fill="none"
-                        />
-                        <circle
-                          cx="80"
-                          cy="80"
-                          r="70"
-                          stroke="currentColor"
-                          strokeWidth="10"
-                          fill="none"
-                          className={item.color}
-                          strokeDasharray="440"
-                          strokeDashoffset={440 - (440 * percentage) / 100}
-                          strokeLinecap="round"
-                        />
-                        <defs>
-                          <linearGradient id="grad">
-                            <stop offset="0%" stopColor="#22c55e" />
-                            <stop offset="100%" stopColor="#10b981" />
-                          </linearGradient>
-                        </defs>
-                      </svg>
-
-                      <div className="absolute inset-0 flex flex-col items-center justify-center">
-                        <span className="text-3xl font-bold text-emerald-600">
-                          {item.aqi}
+                    <div className="relative z-10">
+                      <div className="flex items-center justify-between mb-4">
+                        <span className="text-xs font-semibold text-gray-400">
+                          {item.city}
                         </span>
-                        <span className="text-xs text-gray-500">
-                          / {item.max}
+                        <span className="text-[10px] uppercase font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-100">
+                          LIVE
+                        </span>
+                      </div>
+
+                      <h3 className="text-xl font-bold text-gray-800 mb-4">
+                        {item.state}
+                      </h3>
+
+                      {/* Circular AQI Ring */}
+                      <div className="relative w-36 h-36 mx-auto mb-6">
+                        <svg className="w-full h-full rotate-[-90deg]">
+                          <circle
+                            cx="72"
+                            cy="72"
+                            r="60"
+                            stroke="#f1f5f9"
+                            strokeWidth="9"
+                            fill="none"
+                          />
+                          <circle
+                            cx="72"
+                            cy="72"
+                            r="60"
+                            stroke="currentColor"
+                            strokeWidth="9"
+                            fill="none"
+                            className={item.color}
+                            strokeDasharray="377"
+                            strokeDashoffset={377 - (377 * percentage) / 100}
+                            strokeLinecap="round"
+                            style={{ transition: "stroke-dashoffset 0.8s ease" }}
+                          />
+                        </svg>
+
+                        <div className="absolute inset-0 flex flex-col items-center justify-center">
+                          <span className="text-3xl font-black text-gray-800">
+                            {item.aqi}
+                          </span>
+                          <span className="text-[10px] text-gray-400 font-bold uppercase">
+                            AQI / {item.max}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Status */}
+                      <div className="flex flex-col items-center gap-1.5">
+                        <span className={`inline-block px-3.5 py-1.5 rounded-full text-xs font-semibold ${item.bg} border ${item.border} ${item.color}`}>
+                          {item.status}
+                        </span>
+                        <span className="text-[10px] text-gray-400 line-clamp-1 max-w-[220px]" title={item.station}>
+                          {item.station}
                         </span>
                       </div>
                     </div>
-
-                    {/* Status */}
-                    <span className="inline-block px-4 py-2 rounded-full text-sm bg-emerald-50 border border-emerald-100 text-emerald-700">
-                      {item.status}
-                    </span>
                   </div>
-                </div>
-              );
-            })}
-          </div>
+                );
+              })}
+            </div>
+          )}
         </section>
         
 

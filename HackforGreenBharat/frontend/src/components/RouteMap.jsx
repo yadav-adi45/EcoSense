@@ -160,6 +160,33 @@ const RouteMap = ({ routes = [], selectedRouteId = 0, origin, destination, onSel
   const [selectedState, setSelectedState] = useState(null);
   const [pathData, setPathData] = useState(null);
   const [hoveredState, setHoveredState] = useState(null);
+  const [liveStateData, setLiveStateData] = useState(STATE_ENV_DATA);
+
+  // Load live state AQI data
+  useEffect(() => {
+    fetch("/api/v5/states-aqi")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success && Array.isArray(data.states)) {
+          const newData = { ...STATE_ENV_DATA };
+          data.states.forEach((st) => {
+            const code = Object.keys(STATE_NAME_TO_CODE).find(
+              (name) => name.toLowerCase() === st.state.toLowerCase()
+            );
+            if (code && STATE_NAME_TO_CODE[code]) {
+              const stateCode = STATE_NAME_TO_CODE[code];
+              newData[stateCode] = {
+                ...newData[stateCode],
+                aqi: st.aqi,
+                status: st.status,
+              };
+            }
+          });
+          setLiveStateData(newData);
+        }
+      })
+      .catch((err) => console.error("Failed to fetch states AQI:", err));
+  }, []);
 
   // Load India SVG paths for Heatmap view
   useEffect(() => {
@@ -172,8 +199,8 @@ const RouteMap = ({ routes = [], selectedRouteId = 0, origin, destination, onSel
   const handleStateHover = useCallback((stateName) => {
     const code = STATE_NAME_TO_CODE[stateName];
     if (!code) return;
-    setHoveredState({ name: stateName, code, data: STATE_ENV_DATA[code] });
-  }, []);
+    setHoveredState({ name: stateName, code, data: liveStateData[code] });
+  }, [liveStateData]);
 
   const handleStateClick = (stateName) => {
     const code = STATE_NAME_TO_CODE[stateName];
@@ -538,7 +565,7 @@ const RouteMap = ({ routes = [], selectedRouteId = 0, origin, destination, onSel
         {selectedState ? (
           <StateMap
             stateCode={selectedState}
-            stateData={STATE_ENV_DATA[selectedState]}
+            stateData={liveStateData[selectedState]}
             stateName={STATE_CODE_TO_NAME[selectedState]}
             onBack={() => setSelectedState(null)}
           />
@@ -584,7 +611,7 @@ const RouteMap = ({ routes = [], selectedRouteId = 0, origin, destination, onSel
                   >
                     {Object.entries(pathData).map(([stateName, d]) => {
                       const code = STATE_NAME_TO_CODE[stateName];
-                      const stateData = STATE_ENV_DATA[code];
+                      const stateData = liveStateData[code];
                       const fillColor = stateData
                         ? getAQIColor(stateData.aqi)
                         : "rgba(200, 200, 200, 0.4)";
