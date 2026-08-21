@@ -1024,25 +1024,7 @@ const Routes = () => {
                                 destinationCoords={destinationCoords}
                               />
 
-                              {/* 🐾 Premium Animal Danger Zone Dashboard Card */}
-                              {(route.animalRisk?.maxRisk > 25 || route.maxAnimalRisk > 25 || route.animalWarning || route.animalRiskLevel === "High" || route.animalRiskLevel === "Severe" || route.animalRisk > 25) && (
-                                <AnimalDangerZoneCard
-                                  route={route}
-                                  onChooseSaferRoute={() => {
-                                    const saferRoute = routes.find(
-                                      (r) => r.id !== route.id && (r.animalRisk < route.animalRisk || r.maxAnimalRisk < (route.maxAnimalRisk || 100))
-                                    );
-                                    if (saferRoute) {
-                                      setSelectedRoute(saferRoute.id);
-                                      toast.success(`Switched to safer corridor: ${saferRoute.name}`);
-                                    } else {
-                                      // If no safer route, inform the user or handle appropriately
-                                      toast.info("Wildlife Corridor Avoidance mode enabled! Recalculating route...");
-                                      setTimeout(() => handleSearch(), 200);
-                                    }
-                                  }}
-                                />
-                              )}
+
 
                               {/* EV stations breakdown */}
                               {route.evStations?.length > 0 && (

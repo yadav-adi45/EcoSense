@@ -79,17 +79,7 @@ const originIcon = L.divIcon({
   iconAnchor: [14, 14],
 });
 
-// 3. Animal / Wildlife Danger Zone Pin
-const animalHazardIcon = L.divIcon({
-  className: "wildlife-hazard-marker",
-  html: `
-    <div style="background: #dc2626; color: white; width: 26px; height: 26px; border-radius: 50%; display: flex; align-items: center; justify-content: center; border: 2px solid #fff; box-shadow: 0 2px 8px rgba(220,38,38,0.5); font-size: 13px;">
-      🐾
-    </div>
-  `,
-  iconSize: [26, 26],
-  iconAnchor: [13, 13],
-});
+
 
 /* ===== STATE MAP LOOKUPS ===== */
 const STATE_NAME_TO_CODE = {
@@ -190,9 +180,7 @@ const RouteMap = ({
   const tileLayerRef = useRef(null);
   const emergencyMarkersRef = useRef({});
 
-  // Map style state (Google Maps: roadmap, satellite, terrain)
   const [mapStyle, setMapStyle] = useState("roadmap");
-  const [showWildlifeLayer, setShowWildlifeLayer] = useState(true);
 
   // Determine active view: If routes exist, show "map" by default. Otherwise show "heatmap".
   const hasRoutes = routes && routes.length > 0;
@@ -384,19 +372,7 @@ const RouteMap = ({
           }
         });
 
-        // Add Animal / Wildlife Hazard markers
-        if (showWildlifeLayer && (activeRoute.animalRisk?.maxRisk > 25 || activeRoute.maxAnimalRisk > 25 || activeRoute.animalRiskLevel === "High" || activeRoute.animalRiskLevel === "Severe" || activeRoute.animalRisk > 25)) {
-          (activeRoute.pollutionSegments || [])
-            .filter((seg) => seg && seg.lat && seg.lon)
-            .slice(0, 3)
-            .forEach((seg) => {
-              const hazardMarker = L.marker([seg.lat, seg.lon], { icon: animalHazardIcon }).bindPopup(`
-                <div style="font-weight:800; color:#dc2626; text-transform:uppercase;">🐾 Wildlife Danger Zone</div>
-                <div style="font-size:11px; color:#444;">High animal crossing risk (${activeRoute.animalRisk?.riskLevel || 'High'} Hazard)</div>
-              `);
-              layerGroup.addLayer(hazardMarker);
-            });
-        }
+
 
         // 1. Google Maps style Outer Casing (Dark contrast blue casing)
         const fullCoords = segments.map((s) => [s.lat, s.lon]);
@@ -641,19 +617,7 @@ const RouteMap = ({
                 Terrain
               </button>
 
-              <button
-                type="button"
-                onClick={() => setShowWildlifeLayer((v) => !v)}
-                className={`flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-black transition-all border ${
-                  showWildlifeLayer
-                    ? "bg-amber-500 text-white border-amber-600 shadow-sm"
-                    : "bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100"
-                }`}
-                title="Toggle Wildlife Hazard Overlay"
-              >
-                <span>🐾</span>
-                <span>Wildlife</span>
-              </button>
+
             </div>
           )}
         </div>
