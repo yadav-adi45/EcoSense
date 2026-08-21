@@ -2,18 +2,19 @@ import React, { useState, useEffect, useContext, useRef } from "react";
 import axios from "axios";
 import { AuthContext } from "../components/context/context";
 import { serverUrl } from "../config";
+import { getAuthHeaders } from "../utils/auth";
 import { toast } from "react-toastify";
 import Navbar from "../components/Navbar";
 import {
   Heart, MessageCircle, Trash2, Send, Plus, X,
   Car, Lightbulb, ChevronDown, ChevronUp, MapPin, Calendar, Users, Globe, Sparkles,
-  Camera, Upload, Image as ImageIcon, AlertTriangle, Shield, Eye
+  Camera, Upload, Image as ImageIcon, AlertTriangle, Shield, Eye, Coins
 } from "lucide-react";
 import Footer from "./Footer";
+import EcoCoinIcon from "../components/ui/EcoCoinIcon";
 
 const API = `${serverUrl}/api/v11`;
-const getToken = () => { const u = JSON.parse(localStorage.getItem("user")); return u?.token || u?.accessToken || null; };
-const authHeaders = () => ({ Authorization: `Bearer ${getToken()}` });
+const authHeaders = () => getAuthHeaders();
 const timeAgo = (date) => {
   const diff = (Date.now() - new Date(date)) / 1000;
   if (diff < 60) return `${Math.floor(diff)}s ago`;
@@ -44,7 +45,7 @@ const Avatar = ({ src, name, size = 40 }) =>
   );
 
 const RideBadge = () => (
-  <span style={{ display:"inline-flex", alignItems:"center", gap:4, background:"rgba(59,130,246,0.1)", border:"1px solid rgba(59,130,246,0.1)", color:"#3b82f6", padding:"4px 12px", borderRadius:12, fontSize:10, fontWeight:800, textTransform:"uppercase", letterSpacing:"0.05em", marginBottom:12 }}>
+  <span style={{ display:"inline-flex", alignItems:"center", gap:4, background:"rgba(59,130,246,0.1)", border:"1px solid rgba(59,130,246,0.2)", color:"#3b82f6", padding:"4px 12px", borderRadius:12, fontSize:10, fontWeight:800, textTransform:"uppercase", letterSpacing:"0.05em", marginBottom:12 }}>
     <Car size={12} /> Ride Share
   </span>
 );
@@ -58,9 +59,15 @@ const ProofBadge = ({ issueType }) => {
   );
 };
 
+const CoinRewardBadge = ({ amount, reason }) => (
+  <span style={{ display:"inline-flex", alignItems:"center", gap:5, background:"linear-gradient(135deg, rgba(245,158,11,0.12), rgba(234,179,8,0.12))", border:"1px solid rgba(245,158,11,0.3)", color:"#b45309", padding:"4px 10px", borderRadius:12, fontSize:11, fontWeight:800, letterSpacing:"0.02em", marginBottom:12, marginLeft:8 }}>
+    <EcoCoinIcon size={14} /> +{amount} EcoCoins {reason || "Earned"}
+  </span>
+);
+
 // ─── CreatePostModal ─────────────────────────────────────────────────────────
 
-const CreatePostModal = ({ user, onCreated, onClose }) => {
+const CreatePostModal = ({ user, setUser, onCreated, onClose }) => {
   const [text, setText] = useState("");
   const [postType, setPostType] = useState("thought");
   const [rideFrom, setRideFrom] = useState("");
@@ -201,28 +208,32 @@ const CreatePostModal = ({ user, onCreated, onClose }) => {
     };
 
     try {
-      let res;
-      try {
-        res = await axios.post(`${API}/post`, payload, { headers: authHeaders() });
-      } catch (firstErr) {
-        // Fallback for servers running older postType schema enum constraint
-        if (postType === "proof") {
-          const fallbackPayload = { ...payload, postType: "thought" };
-          res = await axios.post(`${API}/post`, fallbackPayload, { headers: authHeaders() });
-          res.data.post.postType = "proof";
-          res.data.post.proofDetails = { issueType, location: proofLocation };
-        } else {
-          throw firstErr;
-        }
-      }
+      const res = await axios.post(`${API}/post`, payload, {
+        headers: authHeaders(),
+        withCredentials: true,
+      });
 
-      onCreated(res.data.post);
-      toast.success(postType === "proof" ? "Proof reported! 📸 Community notified." : "Post shared! 🌿");
-      onClose();
+      if (res.data?.success && res.data?.post) {
+        onCreated(res.data.post);
+        const earned = res.data.earnedCoins || 0;
+        if (earned > 0) {
+          toast.success(`🎉 +${earned} EcoCoins earned for your ${postType === "proof" ? "issue report" : "rideshare"}! 🪙`);
+          if (setUser) {
+            setUser((prev) => prev ? { ...prev, ecoCoins: (prev.ecoCoins || 0) + earned } : prev);
+          }
+        } else {
+          toast.success("Post published to community! 🌿");
+        }
+        onClose();
+      } else {
+        throw new Error(res.data?.message || "Failed to create post");
+      }
     } catch (err) {
       const errMsg = err.response?.data?.message || err.message || "Failed to post";
       toast.error(errMsg);
-    } finally { setLoading(false); }
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -364,11 +375,18 @@ const CommentSection = ({ postId, initialComments, user }) => {
     if (!text.trim()) return;
     setLoading(true);
     try {
-      const res = await axios.post(`${API}/comment/${postId}`, { text }, { headers: authHeaders() });
+      const res = await axios.post(
+        `${API}/comment/${postId}`,
+        { text },
+        { headers: authHeaders(), withCredentials: true }
+      );
       setComments(res.data.comments);
       setText("");
-    } catch { toast.error("Login to comment"); }
-    finally { setLoading(false); }
+    } catch {
+      toast.error("Login to comment");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -413,19 +431,36 @@ const PostCard = ({ post, user, onDelete }) => {
   const toggleLike = async () => {
     if (!user) return toast.error("Login to like posts");
     try {
-      const res = await axios.put(`${API}/like/${post._id}`, {}, { headers: authHeaders() });
-      setLiked(res.data.liked); setLikeCount(res.data.likes);
-    } catch { toast.error("Failed to like"); }
+      const res = await axios.put(`${API}/like/${post._id}`, {}, { headers: authHeaders(), withCredentials: true });
+      setLiked(res.data.liked);
+      setLikeCount(res.data.likes);
+      if (res.data.liked) {
+        if (res.data.authorRewarded) {
+          toast.info("❤️ Post appreciated! Author earned +2 EcoCoins 🪙");
+        } else {
+          toast.success("Liked post! 💚");
+        }
+      }
+    } catch {
+      toast.error("Failed to like");
+    }
   };
 
   const handleDelete = async () => {
     if (!window.confirm("Delete this post?")) return;
     setDeleting(true);
-    try { await axios.delete(`${API}/post/${post._id}`, { headers: authHeaders() }); onDelete(post._id); toast.success("Post deleted"); }
-    catch { toast.error("Failed to delete"); setDeleting(false); }
+    try {
+      await axios.delete(`${API}/post/${post._id}`, { headers: authHeaders(), withCredentials: true });
+      onDelete(post._id);
+      toast.success("Post deleted");
+    } catch {
+      toast.error("Failed to delete");
+      setDeleting(false);
+    }
   };
 
   const isProof = post.postType === "proof";
+  const isRideShare = post.postType === "rideshare";
   const proofMeta = isProof ? getIssueMeta(post.proofDetails?.issueType) : null;
 
   return (
@@ -439,7 +474,7 @@ const PostCard = ({ post, user, onDelete }) => {
         <div style={{ display:"flex", alignItems:"center", gap:10 }}>
           {isProof ? (
             <div style={{ background:"#fef2f2", padding:6, borderRadius:10 }}><AlertTriangle size={18} color="#ef4444" /></div>
-          ) : post.postType==="rideshare" ? (
+          ) : isRideShare ? (
             <div style={{ background:"#eff6ff", padding:6, borderRadius:10 }}><Car size={18} color="#3b82f6" /></div>
           ) : (
             <div style={{ background:"#ecfdf5", padding:6, borderRadius:10 }}><Globe size={18} color="#10b981" /></div>
@@ -448,8 +483,12 @@ const PostCard = ({ post, user, onDelete }) => {
         </div>
       </div>
       
-      {post.postType === "rideshare" && <RideBadge />}
-      {isProof && <ProofBadge issueType={post.proofDetails?.issueType} />}
+      <div style={{ display:"flex", alignItems:"center", flexWrap:"wrap", gap:4 }}>
+        {isRideShare && <RideBadge />}
+        {isProof && <ProofBadge issueType={post.proofDetails?.issueType} />}
+        {isProof && <CoinRewardBadge amount={15} reason="Proof Reward" />}
+        {isRideShare && <CoinRewardBadge amount={10} reason="Ride Share" />}
+      </div>
       
       <p style={{ color:"#374151", fontSize:16, fontWeight:500, lineHeight:1.7, margin:"0 0 16px" }}>{post.text}</p>
       
@@ -489,7 +528,7 @@ const PostCard = ({ post, user, onDelete }) => {
       )}
 
       {/* Ride Details */}
-      {post.postType==="rideshare" && post.rideDetails?.from && (
+      {isRideShare && post.rideDetails?.from && (
         <div style={{ background:"#f8fafc", border:"1px solid #f1f5f9", borderRadius:20, padding:"16px 20px", marginBottom:16, display:"flex", flexDirection:"column", gap:10 }}>
           {[{ icon:<MapPin size={14} color="#10b981" />, label:"Starting", val:post.rideDetails.from }, { icon:<MapPin size={14} color="#14b8a6" />, label:"Destination", val:post.rideDetails.to }].map(({ icon, label, val }, i) => (
             <div key={i} style={{ display:"flex", alignItems:"center", gap:10 }}>{icon}<span style={{ color:"#1e293b", fontSize:14, fontWeight:600 }}><b style={{ color:"#94a3b8", fontSize:11, textTransform:"uppercase", marginRight:6 }}>{label}:</b> {val}</span></div>
@@ -519,7 +558,7 @@ const PostCard = ({ post, user, onDelete }) => {
 // ─── Main Page ───────────────────────────────────────────────────────────────
 
 const Community = () => {
-  const { user } = useContext(AuthContext);
+  const { user, setUser } = useContext(AuthContext);
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState("all");
@@ -527,12 +566,23 @@ const Community = () => {
 
   const fetchPosts = async (type = "all") => {
     setLoading(true);
-    try { const res = await axios.get(`${API}/posts`, { params: { type } }); setPosts(res.data.posts || []); }
-    catch { toast.error("Failed to load posts"); }
-    finally { setLoading(false); }
+    try {
+      const res = await axios.get(`${API}/posts`, {
+        params: { type },
+        withCredentials: true,
+      });
+      setPosts(res.data.posts || []);
+    } catch {
+      toast.error("Failed to load posts");
+    } finally {
+      setLoading(false);
+    }
   };
 
-  useEffect(() => { fetchPosts(filter); }, [filter]);
+  useEffect(() => {
+    fetchPosts(filter);
+  }, [filter]);
+
   const handleCreated = (newPost) => setPosts((prev) => [newPost, ...prev]);
   const handleDelete = (id) => setPosts((prev) => prev.filter((p) => p._id !== id));
 
@@ -543,7 +593,7 @@ const Community = () => {
         <div style={S.hero}>
           <div style={S.heroBadge}><Sparkles size={14} style={{ marginRight:6 }} /> EcoSense Community</div>
           <h1 style={S.heroTitle}>Earth's <span style={{ color:"#10b981" }}>Social Network</span></h1>
-          <p style={S.heroSub}>Share your sustainable journey, report environmental issues with proof, and find ride partners to slash emissions together.</p>
+          <p style={S.heroSub}>Share your sustainable journey, report environmental issues with proof to earn EcoCoins, and find ride partners to slash emissions together.</p>
         </div>
 
         <div style={S.toolbar}>
@@ -583,7 +633,7 @@ const Community = () => {
         <Footer />
       </div>
       
-      {showModal && <CreatePostModal user={user} onCreated={handleCreated} onClose={() => setShowModal(false)} />}
+      {showModal && <CreatePostModal user={user} setUser={setUser} onCreated={handleCreated} onClose={() => setShowModal(false)} />}
     </div>
   );
 };

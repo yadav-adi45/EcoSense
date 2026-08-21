@@ -4,8 +4,11 @@
  */
 export const getToken = () => {
   try {
-    const user = JSON.parse(localStorage.getItem("user"));
-    return user?.token || null;
+    const raw = localStorage.getItem("user");
+    if (!raw) return null;
+    const user = JSON.parse(raw);
+    const token = user?.token || user?.accessToken || null;
+    return token && token !== "null" && token !== "undefined" ? token : null;
   } catch {
     return null;
   }

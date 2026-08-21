@@ -9,11 +9,14 @@ const isAuthenticated = (req, res, next) => {
       req.headers.authorization &&
       req.headers.authorization.startsWith("Bearer ")
     ) {
-      token = req.headers.authorization.split(" ")[1];
+      const rawToken = req.headers.authorization.split(" ")[1];
+      if (rawToken && rawToken !== "null" && rawToken !== "undefined") {
+        token = rawToken;
+      }
     }
 
-    // ✅ 2. Fallback: read from cookies (optional)
-    else if (req.cookies?.token) {
+    // ✅ 2. Fallback: read from cookies
+    if (!token && req.cookies?.token) {
       token = req.cookies.token;
     }
 
@@ -21,7 +24,7 @@ const isAuthenticated = (req, res, next) => {
     if (!token) {
       return res.status(401).json({
         success: false,
-        message: "Authentication token not found",
+        message: "Please login to perform this action",
       });
     }
 
@@ -35,7 +38,7 @@ const isAuthenticated = (req, res, next) => {
   } catch (error) {
     return res.status(401).json({
       success: false,
-      message: "Invalid or expired token",
+      message: "Session expired or invalid. Please login again.",
     });
   }
 };

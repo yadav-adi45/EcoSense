@@ -112,6 +112,7 @@ export const login = async (req, res) => {
       name: user.name,
       email: user.email,
       profile: user.profile,
+      ecoCoins: user.ecoCoins || 0,
       token: token,
     };
 

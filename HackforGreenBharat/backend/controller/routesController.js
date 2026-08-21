@@ -1,10 +1,24 @@
 import axios from "axios";
+import fs from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
 import aqiCache from "../utils/aqiCache.js";
 import { geocodeCity } from "../utils/geocodeCity.js";
 import { getAQIByCoords } from "../utils/getAQI.js";
 import { reverseGeocode } from "../utils/reverseGeocode.js";
 import { getEVStations } from "../utils/getEVStations.js";
 import { getRoadAttributes } from "../utils/overpassService.js";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const DISTRICTS_PATH = path.resolve(__dirname, "../../frontend/public/india-districts-aqi.json");
+
+let districtsList = [];
+try {
+  districtsList = JSON.parse(fs.readFileSync(DISTRICTS_PATH, "utf-8"));
+} catch (e) {
+  console.warn("Could not read india-districts-aqi.json for fallback:", e.message);
+}
 
 /* ============ CONSTANTS ============ */
 const osrmCache = new Map();
@@ -63,8 +77,32 @@ const getTrafficLevel = (speedKmph) => {
   return "Light";
 };
 
+const getFallbackAQIByName = (name) => {
+  if (!name || name === "Along Route" || districtsList.length === 0) return null;
+  const clean = name.trim().toLowerCase();
+  
+  // Try direct case-insensitive match on district name
+  let match = districtsList.find(
+    (d) =>
+      d.district?.toLowerCase() === clean ||
+      clean.includes(d.district?.toLowerCase()) ||
+      d.district?.toLowerCase().includes(clean)
+  );
+  if (match) return match.aqi;
+
+  // Try match on state name
+  match = districtsList.find(
+    (d) =>
+      d.state?.toLowerCase() === clean ||
+      clean.includes(d.state?.toLowerCase())
+  );
+  if (match) return match.aqi;
+
+  return null;
+};
+
 /** Fetch AQI with a hard per-call timeout */
-const fetchAQI = async (lat, lon) => {
+const fetchAQI = async (lat, lon, areaName = "") => {
   const aqiKey = `aqi:${lat.toFixed(3)},${lon.toFixed(3)}`;
   let aqi = aqiCache.get(aqiKey);
   if (aqi !== undefined) return aqi;
@@ -77,6 +115,11 @@ const fetchAQI = async (lat, lon) => {
     aqi = result?.aqi ?? null;
   } catch {
     aqi = null;
+  }
+
+  // Fallback to local district baseline if external WAQI failed
+  if (aqi === null && areaName) {
+    aqi = getFallbackAQIByName(areaName);
   }
 
   aqiCache.set(aqiKey, aqi);
@@ -150,6 +193,10 @@ export const routeController = async (req, res) => {
     const destination = (req.body.destinationCoords?.lat && req.body.destinationCoords?.lon)
       ? { name: destinationCity, lat: req.body.destinationCoords.lat, lon: req.body.destinationCoords.lon }
       : (await geocodeCity(destinationCity)) || { name: destinationCity, lat: 26.9124, lon: 75.7873 };
+
+    // Resolve origin & destination baseline AQIs using geocoded inventory
+    const baseOriginAQI = getFallbackAQIByName(originCity) || 150;
+    const baseDestAQI = getFallbackAQIByName(destinationCity) || 150;
 
     /* 🛣️ OSRM with in-memory cache, multi-mirror retry, and synthetic fallback */
     const osrmKey = `${osrmProfile}:${origin.lon},${origin.lat};${destination.lon},${destination.lat}`;
@@ -306,13 +353,21 @@ export const routeController = async (req, res) => {
       const sampledPoints = sampleRoutePoints(fullGeometry);
 
       /* ⏱️ Fetch all segment AQI + area + road attributes in parallel with a global budget timeout */
-      const segmentPromises = sampledPoints.map(async (p) => {
-        const [aqi, area, roadAttributes] = await Promise.all([
-          fetchAQI(p.lat, p.lon),
-          fetchArea(p.lat, p.lon),
+      const segmentPromises = sampledPoints.map(async (p, idx) => {
+        const area = await fetchArea(p.lat, p.lon);
+        const [aqiResult, roadAttributes] = await Promise.all([
+          fetchAQI(p.lat, p.lon, area),
           getRoadAttributes(p.lat, p.lon)
         ]);
-        return { lat: p.lat, lon: p.lon, aqi, zone: getZone(aqi), area, roadAttributes };
+
+        let finalAQI = aqiResult;
+        if (finalAQI === null) {
+          // If both WAQI and local district lookup failed, interpolate between origin and destination
+          const factor = idx / (sampledPoints.length - 1 || 1);
+          finalAQI = Math.round(baseOriginAQI + factor * (baseDestAQI - baseOriginAQI));
+        }
+
+        return { lat: p.lat, lon: p.lon, aqi: finalAQI, zone: getZone(finalAQI), area, roadAttributes };
       });
 
       /* 🔋 Also kick off EV stations fetch */
@@ -325,14 +380,18 @@ export const routeController = async (req, res) => {
           setTimeout(() => {
             console.warn(`[TIMEOUT] Route ${i} — returning partial AQI and attributes`);
             resolve([
-              sampledPoints.map((p) => ({
-                lat: p.lat,
-                lon: p.lon,
-                aqi: null,
-                zone: "Unknown",
-                area: "Along Route",
-                roadAttributes: { hasLit: true, smoothnessScore: 6, isPaved: true, greenCover: 0 }
-              })),
+              sampledPoints.map((p, idx) => {
+                const factor = idx / (sampledPoints.length - 1 || 1);
+                const fallbackAQI = Math.round(baseOriginAQI + factor * (baseDestAQI - baseOriginAQI));
+                return {
+                  lat: p.lat,
+                  lon: p.lon,
+                  aqi: fallbackAQI,
+                  zone: getZone(fallbackAQI),
+                  area: "Along Route",
+                  roadAttributes: { hasLit: true, smoothnessScore: 6, isPaved: true, greenCover: 0 }
+                };
+              }),
               []
             ]);
           }, ROUTE_BUDGET_MS)

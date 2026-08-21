@@ -31,6 +31,7 @@ import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import axios from "axios";
 import { toast } from "react-toastify";
 import { serverUrl } from "@/main";
+import EcoCoinIcon from "@/components/ui/EcoCoinIcon";
 
 const Navbar = () => {
   const location = useLocation();
@@ -47,7 +48,7 @@ const Navbar = () => {
   const mainNavLinks = [
     { path: "/bill-scanner", label: "Scanner", icon: LayoutDashboard },
     { path: "/dashboard", label: "Dashboard", icon: Database },
-    { path: "/environment-reports", label: "Reports", icon: Inspect },
+    { path: "/community", label: "Community", icon: Users },
     { path: "/recommendations", label: "Eco Products", icon: Gamepad2 },
     { path: "/routes", label: "Routes", icon: Presentation },
     { path: "/pollution", label: "Pollution", icon: Factory },
@@ -66,13 +67,18 @@ const Navbar = () => {
             >
               {isMobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
             </button>
-            <Link to="/" className="flex items-center gap-2.5 shrink-0">
-              <div className="w-10 h-10 rounded-xl bg-emerald-500 flex items-center justify-center shadow-md shadow-emerald-200">
-                <Leaf className="w-5 h-5 text-white" />
+            <Link to="/" className="flex items-center gap-2.5 shrink-0 group">
+              <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-emerald-600 via-emerald-500 to-teal-400 flex items-center justify-center shadow-lg shadow-emerald-500/25 group-hover:scale-105 transition-all duration-300 border border-emerald-300/40">
+                <Leaf className="w-5 h-5 text-white stroke-[2.5]" />
               </div>
-              <span className="font-bold text-xl text-emerald-600 font-space-grotesk tracking-tight">
-                EcoSense
-              </span>
+              <div className="flex flex-col">
+                <span className="font-extrabold text-xl tracking-tight text-gray-900 leading-none">
+                  Eco<span className="text-emerald-600 font-black">Sense</span>
+                </span>
+                <span className="text-[9px] font-bold text-emerald-600/80 uppercase tracking-widest leading-tight mt-0.5">
+                  Green Bharat
+                </span>
+              </div>
             </Link>
           </div>
 
@@ -95,22 +101,33 @@ const Navbar = () => {
           </div>
 
           {/* Right Side */}
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3">
             {user ? (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <button className="relative hover:scale-105 transition-transform">
-                    <Avatar className="w-10 h-10 border-2 border-emerald-100 shadow-sm">
-                      {user?.profile?.profilePhoto ? (
-                        <AvatarImage src={user.profile.profilePhoto} />
-                      ) : (
-                        <AvatarFallback className="bg-emerald-500 text-white text-sm font-semibold flex items-center justify-center">
-                          {user?.name ? user.name.charAt(0).toUpperCase() : <User className="w-5 h-5 text-white" />}
-                        </AvatarFallback>
-                      )}
-                    </Avatar>
-                  </button>
-                </DropdownMenuTrigger>
+              <>
+                {/* EcoCoins Quick Badge */}
+                <Link
+                  to="/dashboard"
+                  className="hidden sm:flex items-center gap-2 px-3.5 py-1.5 bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-200/80 rounded-full shadow-xs hover:shadow-md hover:border-emerald-300 transition-all text-xs font-black text-emerald-900"
+                >
+                  <EcoCoinIcon size={18} />
+                  <span>{user?.ecoCoins ?? 0}</span>
+                  <span className="text-[10px] text-emerald-700 font-bold uppercase">Coins</span>
+                </Link>
+
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button className="relative hover:scale-105 transition-transform">
+                      <Avatar className="w-10 h-10 border-2 border-emerald-200/60 shadow-sm">
+                        {user?.profile?.profilePhoto ? (
+                          <AvatarImage src={user.profile.profilePhoto} />
+                        ) : (
+                          <AvatarFallback className="bg-gradient-to-tr from-emerald-600 to-teal-500 text-white text-sm font-semibold flex items-center justify-center">
+                            {user?.name ? user.name.charAt(0).toUpperCase() : <User className="w-5 h-5 text-white" />}
+                          </AvatarFallback>
+                        )}
+                      </Avatar>
+                    </button>
+                  </DropdownMenuTrigger>
 
                 <DropdownMenuContent
                   align="end"
@@ -167,6 +184,7 @@ const Navbar = () => {
                   </button>
                 </DropdownMenuContent>
               </DropdownMenu>
+              </>
             ) : (
               <Link to="/login">
                 <button className="px-6 py-2.5 text-[15px] font-semibold text-white bg-emerald-500 hover:bg-emerald-600 rounded-full shadow-md shadow-emerald-200 transition-all duration-200 hover:scale-105">
