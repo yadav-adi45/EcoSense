@@ -132,6 +132,17 @@ const makeNavIcon = (heading = 0) =>
     iconAnchor: [14, 14],
   });
 
+const wildlifeHazardIcon = L.divIcon({
+  className: "uber-hazard-marker",
+  html: `
+    <div style="background: #dc2626; color: white; width: 26px; height: 26px; border-radius: 50%; display: flex; align-items: center; justify-content: center; border: 2px solid #fff; box-shadow: 0 2px 8px rgba(220,38,38,0.5); font-size: 13px; animation: pulse 2s infinite;">
+      🐾
+    </div>
+  `,
+  iconSize: [26, 26],
+  iconAnchor: [13, 13],
+});
+
 /* ─── Formatters ─────────────────────────────────────────── */
 const fmtDist = (km) =>
   km < 1 ? `${Math.round(km * 1000)} m` : `${km.toFixed(1)} km`;
@@ -633,6 +644,19 @@ const NavigationScreen = () => {
               allPolice.map((p) => (
                 <Marker key={p.id} position={[p.lat, p.lon]} icon={policeIcon}>
                   <Popup>🛡️ {p.name}</Popup>
+                </Marker>
+              ))}
+
+            {/* Wildlife Hazard Checkpoints */}
+            {(route.pollutionSegments || [])
+              .filter((seg) => (route.animalRisk?.maxRisk > 40 || route.maxAnimalRisk > 40) && seg.lat && seg.lon)
+              .slice(0, 3)
+              .map((seg, idx) => (
+                <Marker key={`hazard-${idx}`} position={[seg.lat, seg.lon]} icon={wildlifeHazardIcon}>
+                  <Popup>
+                    <div className="text-xs font-black text-red-600">🐾 Wildlife Danger Zone</div>
+                    <div className="text-[10px] text-gray-600">High animal accident risk recorded</div>
+                  </Popup>
                 </Marker>
               ))}
           </MapContainer>
