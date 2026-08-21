@@ -264,7 +264,7 @@ const CreatePostModal = ({ user, onCreated, onClose }) => {
         
         {/* Ride Share Fields */}
         {postType === "rideshare" && (
-          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12, marginBottom:20 }}>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-5">
             {[{ icon:<MapPin size={14} color="#10b981" />, ph:"Starting Point", val:rideFrom, set:setRideFrom }, { icon:<MapPin size={14} color="#14b8a6" />, ph:"Destination", val:rideTo, set:setRideTo }].map(({ icon, ph, val, set }, i) => (
               <div key={i} style={S.fieldWrap}>{icon}<input placeholder={ph} value={val} onChange={(e) => set(e.target.value)} style={S.fieldInput} /></div>
             ))}
@@ -277,7 +277,7 @@ const CreatePostModal = ({ user, onCreated, onClose }) => {
         {postType === "proof" && (
           <div style={{ marginBottom:20 }}>
             {/* Issue Type + Location */}
-            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12, marginBottom:16 }}>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
               <div style={S.fieldWrap}>
                 <AlertTriangle size={14} color="#ef4444" />
                 <select value={issueType} onChange={(e) => setIssueType(e.target.value)} style={{ ...S.fieldInput, cursor:"pointer", appearance:"none" }}>

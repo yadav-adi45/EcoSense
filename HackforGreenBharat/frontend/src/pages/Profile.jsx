@@ -300,7 +300,7 @@ const Profile = () => {
         {/* ════════════════════════════════
             BOTTOM ROW — Activity · Sidebar
         ════════════════════════════════ */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 320px", gap: "16px", alignItems: "start" }}>
+        <div className="grid grid-cols-1 md:grid-cols-[1fr_320px] gap-4 items-start">
 
           {/* Recent Activity */}
           <div style={{ ...card, padding: "24px" }}>

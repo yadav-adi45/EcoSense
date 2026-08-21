@@ -1,4 +1,4 @@
-import React, { useContext } from "react";
+import React, { useContext, useState } from "react";
 import { useLocation, Link } from "react-router-dom";
 import {
   Database,
@@ -14,6 +14,8 @@ import {
   Inspect,
   Store,
   Users,
+  Menu,
+  X,
 } from "lucide-react";
 
 import { Button } from "./ui/button";
@@ -34,6 +36,7 @@ const Navbar = () => {
   const location = useLocation();
   const isActive = (path) => location.pathname === path;
   const { user, setUser } = useContext(AuthContext);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   const handleLogout = async () => {
     const res = await axios.get(`${serverUrl}/api/v1/logout`, { withCredentials: true });
@@ -55,15 +58,23 @@ const Navbar = () => {
       <div className="max-w-[1400px] mx-auto px-8">
         <div className="flex justify-between items-center h-20">
 
-          {/* Logo */}
-          <Link to="/" className="flex items-center gap-2.5 shrink-0">
-            <div className="w-10 h-10 rounded-xl bg-emerald-500 flex items-center justify-center shadow-md shadow-emerald-200">
-              <Leaf className="w-5 h-5 text-white" />
-            </div>
-            <span className="font-bold text-xl text-emerald-600 font-space-grotesk tracking-tight">
-              EcoSense
-            </span>
-          </Link>
+          {/* Logo & Mobile Menu Toggle */}
+          <div className="flex items-center gap-3">
+            <button
+              className="md:hidden p-2 text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"
+              onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+            >
+              {isMobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+            </button>
+            <Link to="/" className="flex items-center gap-2.5 shrink-0">
+              <div className="w-10 h-10 rounded-xl bg-emerald-500 flex items-center justify-center shadow-md shadow-emerald-200">
+                <Leaf className="w-5 h-5 text-white" />
+              </div>
+              <span className="font-bold text-xl text-emerald-600 font-space-grotesk tracking-tight">
+                EcoSense
+              </span>
+            </Link>
+          </div>
 
           {/* Nav Links */}
           <div className="hidden md:flex items-center gap-0.5">
@@ -165,6 +176,27 @@ const Navbar = () => {
             )}
           </div>
         </div>
+
+        {/* Mobile Navigation Menu */}
+        {isMobileMenuOpen && (
+          <div className="md:hidden py-4 border-t border-emerald-100/50 flex flex-col gap-2">
+            {mainNavLinks.map((link) => (
+              <Link
+                key={link.path}
+                to={link.path}
+                onClick={() => setIsMobileMenuOpen(false)}
+                className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold transition-colors
+                  ${isActive(link.path)
+                    ? "bg-emerald-50 text-emerald-600"
+                    : "text-gray-600 hover:bg-gray-50"
+                  }`}
+              >
+                <link.icon className="w-4 h-4" />
+                {link.label}
+              </Link>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
