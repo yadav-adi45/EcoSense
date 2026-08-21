@@ -4,7 +4,7 @@ import Navbar from "@/components/Navbar";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Scan, Upload, Search, Loader2, Sparkles } from "lucide-react";
+import { Scan, Upload, Search, Loader2, Sparkles, Camera, X } from "lucide-react";
 
 const getDynamicProductResult = (selectedFile) => {
   const fileName = selectedFile?.name || "Scanned Product";
@@ -249,6 +249,57 @@ const BillScanner = () => {
 
   const fileInputRef = useRef(null);
   const imageInputRef = useRef(null);
+  const videoRef = useRef(null);
+
+  const [isCameraActive, setIsCameraActive] = useState(false);
+  const [streamVal, setStreamVal] = useState(null);
+
+  const startCamera = async () => {
+    try {
+      setIsCameraActive(true);
+      const mediaStream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: "environment" },
+      });
+      setStreamVal(mediaStream);
+      setTimeout(() => {
+        if (videoRef.current) {
+          videoRef.current.srcObject = mediaStream;
+        }
+      }, 150);
+    } catch (err) {
+      console.error("Camera access failed:", err);
+      alert("Could not access your camera. Please ensure permissions are granted.");
+      setIsCameraActive(false);
+    }
+  };
+
+  const stopCamera = () => {
+    if (streamVal) {
+      streamVal.getTracks().forEach((track) => track.stop());
+    }
+    setStreamVal(null);
+    setIsCameraActive(false);
+  };
+
+  const capturePhoto = () => {
+    if (videoRef.current) {
+      const video = videoRef.current;
+      const canvas = document.createElement("canvas");
+      canvas.width = video.videoWidth || 640;
+      canvas.height = video.videoHeight || 480;
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+      canvas.toBlob((blob) => {
+        if (blob) {
+          const capturedFile = new File([blob], "LiveScanCapture.png", { type: "image/png" });
+          setFile(capturedFile);
+          stopCamera();
+          handleAnalyze(capturedFile);
+        }
+      }, "image/png");
+    }
+  };
 
   const handleFileSelect = (e) => {
     const selectedFile = e.target.files?.[0];
@@ -345,7 +396,7 @@ const BillScanner = () => {
             <div className="grid md:grid-cols-2 gap-8 mb-10">
               {/* Scan Product */}
               <div
-                onClick={() => fileInputRef.current.click()}
+                onClick={startCamera}
                 className="group border-2 border-dashed border-emerald-200 rounded-3xl p-10 flex flex-col items-center justify-center cursor-pointer hover:border-emerald-500 hover:bg-emerald-50/50 transition-all duration-300"
               >
                 <div className="w-16 h-16 rounded-2xl bg-emerald-50 flex items-center justify-center mb-5 group-hover:scale-110 transition-transform">
@@ -495,6 +546,82 @@ const BillScanner = () => {
               <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
                 Deep Neural Carbon Lifecycle Analysis
               </span>
+            </div>
+          </div>
+        )}
+
+        {/* 📸 Live Webcam Camera Scanner Modal Overlay */}
+        {isCameraActive && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-4">
+            <style>{`
+              @keyframes scanLine {
+                0% { top: 0%; }
+                50% { top: 100%; }
+                100% { top: 0%; }
+              }
+              .animate-scan-line {
+                animation: scanLine 3s linear infinite;
+              }
+            `}</style>
+
+            <div className="bg-zinc-900 border border-zinc-800 rounded-[2.5rem] w-full max-w-xl overflow-hidden shadow-2xl relative">
+              {/* Header */}
+              <div className="p-6 border-b border-zinc-800 flex items-center justify-between text-white">
+                <h3 className="text-xl font-bold flex items-center gap-2.5">
+                  <Camera className="w-5 h-5 text-emerald-400 animate-pulse" />
+                  <span>Live Product Scanner</span>
+                </h3>
+                <button
+                  type="button"
+                  onClick={stopCamera}
+                  className="w-8 h-8 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white flex items-center justify-center transition-colors"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Live Video Preview Box */}
+              <div className="relative bg-black aspect-video flex items-center justify-center overflow-hidden">
+                <video
+                  ref={videoRef}
+                  autoPlay
+                  playsInline
+                  className="w-full h-full object-cover"
+                />
+
+                {/* Targeting Scope HUD */}
+                <div className="absolute inset-8 border border-dashed border-emerald-400/40 rounded-3xl pointer-events-none">
+                  {/* Corner brackets */}
+                  <div className="w-8 h-8 border-t-4 border-l-4 border-emerald-400 absolute top-0 left-0 rounded-tl-xl" />
+                  <div className="w-8 h-8 border-t-4 border-r-4 border-emerald-400 absolute top-0 right-0 rounded-tr-xl" />
+                  <div className="w-8 h-8 border-b-4 border-l-4 border-emerald-400 absolute bottom-0 left-0 rounded-bl-xl" />
+                  <div className="w-8 h-8 border-b-4 border-r-4 border-emerald-400 absolute bottom-0 right-0 rounded-br-xl" />
+
+                  {/* Dynamic laser line scanning effect */}
+                  <div className="w-full h-1 bg-gradient-to-r from-transparent via-emerald-400 to-transparent shadow-[0_0_12px_rgba(52,211,153,0.8)] absolute top-0 animate-scan-line" />
+                </div>
+
+                <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-black/60 px-4 py-1.5 rounded-full border border-white/10 text-[10px] font-bold text-gray-300 uppercase tracking-widest">
+                  Align product within target area
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="p-6 bg-zinc-950/80 border-t border-zinc-800 flex items-center justify-center gap-4">
+                <Button
+                  onClick={capturePhoto}
+                  className="bg-emerald-500 hover:bg-emerald-600 text-white font-bold px-8 py-6 rounded-2xl flex items-center gap-2 shadow-lg shadow-emerald-950/30 transition-transform active:scale-95"
+                >
+                  <Camera className="w-5 h-5" />
+                  Capture Photo
+                </Button>
+                <Button
+                  onClick={stopCamera}
+                  className="bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white font-bold px-6 py-6 rounded-2xl border border-zinc-700 transition"
+                >
+                  Cancel
+                </Button>
+              </div>
             </div>
           </div>
         )}
