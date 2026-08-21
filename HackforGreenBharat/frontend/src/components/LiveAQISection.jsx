@@ -193,7 +193,7 @@ const LiveAQISection = () => {
     );
   }
 
-  const currentAQI = liveAQI || data.aqi;
+  const currentAQI = data.aqi;
   const mask = getMaskRecommendation(currentAQI);
   const advisory = getWeatherTip(data.temperature, data.humidity, data.windSpeed);
 

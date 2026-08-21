@@ -54,6 +54,41 @@ const haversine = (lat1, lon1, lat2, lon2) => {
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 };
 
+
+
+/* ─── Fetch weather from Open-Meteo (free, no key) ─────── */
+const fetchWeather = async (lat, lon) => {
+  try {
+    const res = await axios.get(
+      `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}` +
+      `&current=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m&timezone=auto`,
+      { timeout: 6000 }
+    );
+    const c = res.data?.current;
+    if (!c) return null;
+    return {
+      temp:     c.temperature_2m,
+      humidity: c.relative_humidity_2m,
+      wind:     c.wind_speed_10m,
+      code:     c.weather_code,
+    };
+  } catch {
+    return null;
+  }
+};
+
+/* ─── WMO weather-code → emoji label ────────────────────── */
+const weatherEmoji = (code) => {
+  if (code === 0)          return "☀️ Clear";
+  if (code <= 3)           return "🌤 Partly Cloudy";
+  if (code <= 48)          return "🌫 Foggy";
+  if (code <= 67)          return "🌧 Rainy";
+  if (code <= 77)          return "❄️ Snowy";
+  if (code <= 82)          return "🌦 Showers";
+  if (code <= 99)          return "⛈ Thunderstorm";
+  return "🌡 Unknown";
+};
+
 /* ─── Fetch emergency facilities along route ──────────────── */
 const fetchRouteEmergency = async (geometry) => {
   if (!geometry || geometry.length === 0) return { hospitals: [], police: [] };
