@@ -524,6 +524,28 @@ const Routes = () => {
     setTimeout(() => {
       setLaunchingMode(null);
       setIsNavigating(true);
+      
+      // Save to route history
+      try {
+        const historyRaw = localStorage.getItem("ecosense_route_history");
+        const history = historyRaw ? JSON.parse(historyRaw) : [];
+        const isEcoRoute = activeRoute.tag === "eco" || activeRoute.id === 0 || activeRoute.isEco;
+        history.push({
+          id: Date.now().toString(),
+          date: new Date().toISOString(),
+          origin: typeof origin === "object" ? origin.name || "Origin" : origin,
+          destination: typeof destination === "object" ? destination.name || "Destination" : destination,
+          distance: activeRoute.distance || "0 km",
+          duration: activeRoute.duration || "0 min",
+          avgAQI: activeRoute.avgAQI || 112,
+          isEco: isEcoRoute,
+          pollutionReduced: isEcoRoute ? 22 : 0,
+        });
+        localStorage.setItem("ecosense_route_history", JSON.stringify(history));
+      } catch (err) {
+        console.error("Failed to save route history:", err);
+      }
+
       navigate(`/navigation?mode=${mode}`, {
         state: {
           route: activeRoute,

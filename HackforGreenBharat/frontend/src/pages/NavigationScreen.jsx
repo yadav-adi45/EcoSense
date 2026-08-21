@@ -13,95 +13,13 @@ import {
 } from "lucide-react";
 import { fetchNearestEmergencyPOIs } from "@/services/emergencyService";
 
-/* ─── Overpass URL ────────────────────────────────────────── */
-const OVERPASS_URL = "https://overpass.openstreetmap.fr/api/interpreter";
-
-/* ─── Normalize geometry ─────────────────────────────────── */
-const normalizeGeometry = (geom) => {
-  if (!Array.isArray(geom) || geom.length === 0) return [];
-  return geom
-    .map((p) => {
-      if (Array.isArray(p) && p.length >= 2) return { lat: Number(p[0]), lon: Number(p[1]) };
-      if (p && typeof p === "object" && "lat" in p && "lon" in p)
-        return { lat: Number(p.lat), lon: Number(p.lon) };
-      return null;
-    })
-    .filter(Boolean);
-};
-
-/* ─── Sample geometry ────────────────────────────────────── */
-const sampleGeometry = (geometry, maxPoints = 10) => {
-  const norm = normalizeGeometry(geometry);
-  if (norm.length === 0) return [];
-  if (norm.length <= maxPoints) return norm;
-  const step = Math.floor(norm.length / (maxPoints - 1));
-  const pts = [];
-  for (let i = 0; i < maxPoints - 1; i++) pts.push(norm[i * step]);
-  pts.push(norm[norm.length - 1]);
-  return pts;
-};
-
-/* ─── Haversine distance (km) ────────────────────────────── */
-const haversine = (lat1, lon1, lat2, lon2) => {
-  const R = 6371;
-  const dLat = ((lat2 - lat1) * Math.PI) / 180;
-  const dLon = ((lon2 - lon1) * Math.PI) / 180;
-  const a =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos((lat1 * Math.PI) / 180) *
-      Math.cos((lat2 * Math.PI) / 180) *
-      Math.sin(dLon / 2) ** 2;
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-};
-
-/* ─── Fetch emergency facilities along route ──────────────── */
-const fetchRouteEmergency = async (geometry) => {
-  if (!geometry || geometry.length === 0) return { hospitals: [], police: [] };
-  const anchors = sampleGeometry(geometry, 10);
-  const radiusM = 8000;
-
-  let queryStr = `[out:json][timeout:25];\n(\n`;
-  anchors.forEach(({ lat, lon }) => {
-    queryStr += `  node["amenity"="hospital"](around:${radiusM},${lat},${lon});\n`;
-    queryStr += `  node["amenity"="police"](around:${radiusM},${lat},${lon});\n`;
-  });
-  queryStr += `);\nout body;`;
-
-  try {
-    const res = await axios.post(OVERPASS_URL, queryStr, {
-      headers: { "Content-Type": "text/plain" },
-      timeout: 15000,
-    });
-    const elements = res.data?.elements || [];
-    const seenIds = new Set();
-    const hospitals = [];
-    const police = [];
-
-    elements.forEach((el) => {
-      if (!el.lat || !el.lon || seenIds.has(el.id)) return;
-      seenIds.add(el.id);
-      const name = el.tags?.name || el.tags?.["name:en"] || "Emergency Facility";
-      let minRouteDist = Infinity;
-      anchors.forEach(({ lat, lon }) => {
-        const d = haversine(lat, lon, el.lat, el.lon);
-        if (d < minRouteDist) minRouteDist = d;
-      });
-      const item = { id: el.id, name, lat: el.lat, lon: el.lon, routeDist: minRouteDist, userDist: null };
-      const a = el.tags?.amenity;
-      if (a === "hospital") hospitals.push(item);
-      else if (a === "police") police.push(item);
-    });
-
-    return { hospitals, police };
-  } catch {
-    return { hospitals: [], police: [] };
-  }
-};
-
-const refreshUserDistances = (items, userLat, userLon) =>
-  items
-    .map((item) => ({ ...item, userDist: haversine(userLat, userLon, item.lat, item.lon) }))
-    .sort((a, b) => a.userDist - b.userDist);
+import {
+  fetchRouteEmergency,
+  refreshUserDistances,
+  haversine,
+  OVERPASS_URL,
+  normalizeGeometry
+} from "@/services/nearbyServices";
 
 /* ─── Leaflet icons ──────────────────────────────────────── */
 const hospitalIcon = L.divIcon({
@@ -202,6 +120,36 @@ const FitRouteBounds = ({ geometry, enabled }) => {
   return null;
 };
 
+const HospitalMarker = ({ h, isFocused }) => {
+  const markerRef = useRef(null);
+  useEffect(() => {
+    if (isFocused && markerRef.current) {
+      markerRef.current.openPopup();
+    }
+  }, [isFocused]);
+
+  return (
+    <Marker ref={markerRef} position={[h.lat, h.lon]} icon={hospitalIcon}>
+      <Popup>🏥 {h.name}</Popup>
+    </Marker>
+  );
+};
+
+const PoliceMarker = ({ p, isFocused }) => {
+  const markerRef = useRef(null);
+  useEffect(() => {
+    if (isFocused && markerRef.current) {
+      markerRef.current.openPopup();
+    }
+  }, [isFocused]);
+
+  return (
+    <Marker ref={markerRef} position={[p.lat, p.lon]} icon={policeIcon}>
+      <Popup>🛡️ {p.name}</Popup>
+    </Marker>
+  );
+};
+
 /* ════════════════════════════════════════════════════════════
    MAIN NAVIGATION COMPONENT
 ════════════════════════════════════════════════════════════ */
@@ -217,14 +165,18 @@ const NavigationScreen = () => {
     destinationCoords = { lat: 19.0760, lon: 72.8777 },
     travelMode = "driving",
     navigationMode: stateMode = null,
+    focusedFacility = null,
   } = location.state || {};
 
   const navigationMode = queryMode || stateMode || "live";
 
-  const [displayPos, setDisplayPos] = useState([originCoords.lat, originCoords.lon]);
+  const [displayPos, setDisplayPos] = useState(
+    focusedFacility ? [focusedFacility.lat, focusedFacility.lon] : [originCoords.lat, originCoords.lon]
+  );
   const [realPos, setRealPos] = useState([originCoords.lat, originCoords.lon]);
   const [heading, setHeading] = useState(0);
-  const [followUser, setFollowUser] = useState(navigationMode === "live");
+  const [followUser, setFollowUser] = useState(focusedFacility ? false : (navigationMode === "live"));
+  const [focusedFacilityId, setFocusedFacilityId] = useState(focusedFacility?.id || null);
   const [voiceEnabled, setVoiceEnabled] = useState(navigationMode === "live");
 
   const [steps, setSteps] = useState([]);
@@ -647,17 +599,13 @@ const NavigationScreen = () => {
             {/* Hospital Markers */}
             {showHospitalsOnMap &&
               allHospitals.map((h) => (
-                <Marker key={h.id} position={[h.lat, h.lon]} icon={hospitalIcon}>
-                  <Popup>🏥 {h.name}</Popup>
-                </Marker>
+                <HospitalMarker key={h.id} h={h} isFocused={focusedFacilityId === h.id} />
               ))}
 
             {/* Police Markers */}
             {showPoliceOnMap &&
               allPolice.map((p) => (
-                <Marker key={p.id} position={[p.lat, p.lon]} icon={policeIcon}>
-                  <Popup>🛡️ {p.name}</Popup>
-                </Marker>
+                <PoliceMarker key={p.id} p={p} isFocused={focusedFacilityId === p.id} />
               ))}
           </MapContainer>
 
