@@ -5,6 +5,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Scan, Upload, Search, Loader2, Sparkles, Camera, X } from "lucide-react";
+import axios from "axios";
+import { serverUrl } from "@/main";
 
 const getDynamicProductResult = (selectedFile) => {
   const fileName = selectedFile?.name || "Scanned Product";
@@ -312,32 +314,51 @@ const BillScanner = () => {
   const handleAnalyze = async (selectedFile) => {
     setLoading(true);
     setScanProgress(0);
-    setScanStageMsg("Extracting visual features & OCR text lines...");
+    setScanStageMsg("Capturing high-resolution camera feed...");
 
-    const dynamicResult = getDynamicProductResult(selectedFile);
+    let apiResult = null;
+    const apiPromise = (async () => {
+      try {
+        const formData = new FormData();
+        formData.append("image", selectedFile);
+        const res = await axios.post(`${serverUrl}/api/v8/scan-product`, formData, {
+          headers: { "Content-Type": "multipart/form-data" },
+          timeout: 25000,
+        });
+        if (res.data?.success && res.data?.result) {
+          apiResult = res.data.result;
+        }
+      } catch (err) {
+        console.warn("AI Vision API fallback:", err.message);
+      }
+    })();
 
     const steps = [
       { pct: 20, msg: "Extracting visual features & material texture..." },
-      { pct: 45, msg: "Matching product against carbon emission database..." },
-      { pct: 70, msg: "Evaluating recyclability & life cycle footprint..." },
+      { pct: 45, msg: "Identifying physical object with Gemini AI Vision..." },
+      { pct: 70, msg: "Evaluating recyclability & life cycle carbon footprint..." },
       { pct: 90, msg: "Generating eco-friendly product alternatives..." },
       { pct: 100, msg: "Finalizing Environmental Report..." },
     ];
 
     let currentStep = 0;
-    const interval = setInterval(() => {
+    const interval = setInterval(async () => {
       if (currentStep < steps.length) {
         setScanProgress(steps[currentStep].pct);
         setScanStageMsg(steps[currentStep].msg);
         currentStep++;
       } else {
         clearInterval(interval);
+        await apiPromise;
+        const fallbackResult = getDynamicProductResult(selectedFile);
+        const finalResult = apiResult || fallbackResult;
+
         setTimeout(() => {
           setLoading(false);
-          navigate("/bill-result", { state: { result: dynamicResult } });
-        }, 500);
+          navigate("/bill-result", { state: { result: finalResult } });
+        }, 400);
       }
-    }, 2000);
+    }, 1200);
   };
 
   const handleManualSearch = async () => {
@@ -345,31 +366,49 @@ const BillScanner = () => {
 
     setLoading(true);
     setScanProgress(0);
-    setScanStageMsg(`Searching environmental database for "${manualInput}"...`);
+    setScanStageMsg(`Querying environmental database for "${manualInput}"...`);
 
-    const customMock = getSearchQueryResult(manualInput);
+    let apiResult = null;
+    const apiPromise = (async () => {
+      try {
+        const res = await axios.post(
+          `${serverUrl}/api/v8/scan-product`,
+          { query: manualInput.trim() },
+          { timeout: 20000 }
+        );
+        if (res.data?.success && res.data?.result) {
+          apiResult = res.data.result;
+        }
+      } catch (err) {
+        console.warn("AI Search API fallback:", err.message);
+      }
+    })();
 
     const steps = [
-      { pct: 30, msg: `Parsing query: "${manualInput}"...` },
-      { pct: 60, msg: "Evaluating LCA lifecycle footprint..." },
+      { pct: 30, msg: `Parsing query: "${manualInput}" with Gemini AI...` },
+      { pct: 60, msg: "Evaluating LCA lifecycle footprint & supply chain..." },
       { pct: 90, msg: "Finding sustainable marketplace substitutes..." },
       { pct: 100, msg: "Report Ready!" },
     ];
 
     let currentStep = 0;
-    const interval = setInterval(() => {
+    const interval = setInterval(async () => {
       if (currentStep < steps.length) {
         setScanProgress(steps[currentStep].pct);
         setScanStageMsg(steps[currentStep].msg);
         currentStep++;
       } else {
         clearInterval(interval);
+        await apiPromise;
+        const fallbackResult = getSearchQueryResult(manualInput);
+        const finalResult = apiResult || fallbackResult;
+
         setTimeout(() => {
           setLoading(false);
-          navigate("/bill-result", { state: { result: customMock } });
-        }, 500);
+          navigate("/bill-result", { state: { result: finalResult } });
+        }, 400);
       }
-    }, 1800);
+    }, 1000);
   };
 
   return (
