@@ -24,6 +24,7 @@ import pathwayRouter from "./route/pathwayRoute.js";
 import storeRouter from "./route/storeRoute.js";
 import communityRouter from "./route/communityRoutes.js";
 import animalRouter from "./route/animalRoutes.js";
+import ecoCoinRouter from "./route/ecoCoinRoutes.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -62,7 +63,9 @@ app.use("/api/v8", billrouter);
 app.use("/api/v9", pathwayRouter);
 app.use("/api/v10", storeRouter);
 app.use("/api/v11", communityRouter);
+app.use("/api/v12", ecoCoinRouter);
 app.use("/api/v12", animalRouter);
+app.use("/api/v13", animalRouter);
 
 /* PORT (Render compatible) */
 

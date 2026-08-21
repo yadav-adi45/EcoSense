@@ -22,6 +22,17 @@ const userSchema = new mongoose.Schema(
         default: "",
       },
     },
+
+    ecoCoins: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+
+    lastLoginReward: {
+      type: Date,
+      default: null,
+    },
   },
   { timestamps: true }
 );

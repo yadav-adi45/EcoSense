@@ -1,12 +1,16 @@
-import React, { useMemo, useState, useEffect } from "react";
+import React, { useMemo, useState, useEffect, useContext } from "react";
 import Navbar from "../components/Navbar";
 import { Button } from "../components/ui/button";
 import { Card } from "../components/ui/card";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "../components/ui/dialog";
-import { Leaf, Recycle, ShoppingCart, Sparkles, Star, Filter, ExternalLink, Heart, Plus, Trash2, Search } from "lucide-react";
+import { Leaf, Recycle, ShoppingCart, Sparkles, Star, Filter, ExternalLink, Heart, Plus, Trash2, Search, Coins, Zap, Check, Gift } from "lucide-react";
 import Footer from "./Footer";
+import { AuthContext } from "../components/context/context";
+import { ecoCoinService } from "../services/ecoCoinService";
+import { toast } from "react-toastify";
+import EcoCoinIcon from "../components/ui/EcoCoinIcon";
 
 const CATEGORIES = [
   "Home Energy",
@@ -56,7 +60,7 @@ const PRODUCTS = [
     co2SavedKg: 1.2,
     rating: 4.2,
     price: 149,
-    link: "",
+    link: "https://www.amazon.in/s?k=bamboo+toothbrush",
     image: "https://img.freepik.com/premium-photo/eco-friendly-bamboo-toothbrushes-with-natural-background_648871-8075.jpg",
     badges: ["Biodegradable", "Plastic-Free"],
     whyBetter:
@@ -211,52 +215,148 @@ const Rating = ({ value }) => {
   );
 };
 
-const ProductCard = ({ p, onAdd, onDelete }) => {
+const ProductCard = ({ p, onAdd, onDelete, userCoins, onRedeemDiscount }) => {
+  const [applyCoins, setApplyCoins] = useState(false);
+  const [purchasing, setPurchasing] = useState(false);
+
+  // Max 30% discount allowed or user's coin balance (1 coin = ₹1)
+  const maxDiscountAllowed = Math.floor(p.price * 0.3);
+  const discountAmount = Math.min(maxDiscountAllowed, userCoins);
+  const finalPrice = applyCoins ? Math.max(0, p.price - discountAmount) : p.price;
+
+  const handleBuyWithDiscount = async () => {
+    if (applyCoins && discountAmount > 0) {
+      setPurchasing(true);
+      try {
+        const res = await onRedeemDiscount(discountAmount, p);
+        if (res?.success) {
+          toast.success(`🎉 You saved ₹${discountAmount} using ${discountAmount} EcoCoins!`);
+          if (p.link) {
+            window.open(p.link, "_blank");
+          }
+        }
+      } catch (err) {
+        toast.error(err.message || "Failed to redeem EcoCoins");
+      } finally {
+        setPurchasing(false);
+      }
+    } else {
+      if (p.link) window.open(p.link, "_blank");
+    }
+  };
+
   return (
-    <Card className="bg-white border border-gray-100 overflow-hidden hover:shadow-xl hover:shadow-emerald-900/5 transition-all duration-500 relative group rounded-2xl">
-      <div className="relative h-40 w-full overflow-hidden">
-        <img src={p.image} alt={p.name} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" />
-        <div className="absolute top-4 left-4 flex flex-wrap gap-1">
-          {p.badges.map((b) => (
-            <Tag key={b}>{b}</Tag>
-          ))}
-        </div>
-        <button 
-          onClick={() => onDelete(p.id)}
-          className="absolute top-4 right-4 p-2 rounded-2xl bg-white/80 backdrop-blur-sm text-red-500 hover:bg-red-500 hover:text-white transition-all opacity-0 group-hover:opacity-100 shadow-sm"
-          title="Delete Product"
-        >
-          <Trash2 className="w-4 h-4" />
-        </button>
-      </div>
-      <div className="p-6 space-y-4">
-        <div className="flex items-start justify-between gap-2">
-          <div>
-            <h3 className="text-lg font-semibold text-gray-900">{p.name}</h3>
-            <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mt-1">{p.brand} • {p.category}</p>
+    <Card className="bg-white border border-gray-100 overflow-hidden hover:shadow-xl hover:shadow-emerald-900/5 transition-all duration-500 relative group rounded-3xl flex flex-col justify-between">
+      <div>
+        <div className="relative h-44 w-full overflow-hidden">
+          <img src={p.image} alt={p.name} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" />
+          <div className="absolute top-4 left-4 flex flex-wrap gap-1">
+            {p.badges.map((b) => (
+              <Tag key={b}>{b}</Tag>
+            ))}
           </div>
-          <Rating value={p.rating} />
-        </div>
-        <p className="text-sm font-medium text-gray-500 leading-relaxed line-clamp-2">{p.whyBetter}</p>
-        
-        <div className="flex items-center justify-between pt-2 border-t border-gray-50">
-          <span className="text-2xl font-bold text-emerald-600 tracking-tighter">₹{p.price}</span>
-          <div className="text-right">
-             <span className="text-[10px] font-bold text-gray-400 uppercase block mb-0.5">Impact Score</span>
-             <span className="text-xs font-bold text-emerald-500 flex items-center gap-1 justify-end"><Leaf className="w-3 h-3"/> {p.co2SavedKg}kg CO₂/yr</span>
-          </div>
+          <button 
+            onClick={() => onDelete(p.id)}
+            className="absolute top-4 right-4 p-2 rounded-2xl bg-white/80 backdrop-blur-sm text-red-500 hover:bg-red-500 hover:text-white transition-all opacity-0 group-hover:opacity-100 shadow-sm"
+            title="Delete Product"
+          >
+            <Trash2 className="w-4 h-4" />
+          </button>
         </div>
 
-        <div className="grid grid-cols-2 gap-3 pt-2">
-          <Button onClick={() => onAdd(p)} className="bg-emerald-500 hover:bg-emerald-600 text-white font-bold rounded-2xl h-12 shadow-sm text-sm transition-all active:scale-95">
-            <ShoppingCart className="w-4 h-4 mr-2" /> Add
-          </Button>
-          <a href={p.link} target="_blank" rel="noreferrer" className="h-12 inline-flex items-center justify-center gap-2 rounded-2xl bg-gray-50 border border-gray-100 text-gray-700 font-bold hover:bg-white hover:border-emerald-200 transition-all text-sm">
-            <ExternalLink className="w-4 h-4"/> Buy Item
-          </a>
+        <div className="p-6 space-y-3">
+          <div className="flex items-start justify-between gap-2">
+            <div>
+              <h3 className="text-lg font-bold text-gray-900">{p.name}</h3>
+              <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mt-0.5">{p.brand} • {p.category}</p>
+            </div>
+            <Rating value={p.rating} />
+          </div>
+          <p className="text-xs font-medium text-gray-500 leading-relaxed line-clamp-2">{p.whyBetter}</p>
+          
+          {/* Price and CO2 Impact */}
+          <div className="flex items-center justify-between pt-3 border-t border-gray-50">
+            <div>
+              {applyCoins && discountAmount > 0 ? (
+                <div className="flex items-baseline gap-2">
+                  <span className="text-2xl font-black text-emerald-600 tracking-tight">₹{finalPrice}</span>
+                  <span className="text-sm font-bold text-gray-400 line-through">₹{p.price}</span>
+                  <span className="px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 text-[10px] font-black">
+                    -₹{discountAmount}
+                  </span>
+                </div>
+              ) : (
+                <span className="text-2xl font-black text-emerald-600 tracking-tight">₹{p.price}</span>
+              )}
+            </div>
+            <div className="text-right">
+               <span className="text-[9px] font-bold text-gray-400 uppercase block">Impact</span>
+               <span className="text-xs font-bold text-emerald-600 flex items-center gap-1 justify-end">
+                 <Leaf className="w-3 h-3"/> {p.co2SavedKg}kg CO₂/yr
+               </span>
+            </div>
+          </div>
+
+          {/* EcoCoins Discount Toggle */}
+          {userCoins > 0 && maxDiscountAllowed > 0 && (
+            <div
+              onClick={() => setApplyCoins(!applyCoins)}
+              className={`p-2.5 rounded-2xl border transition-all cursor-pointer flex items-center justify-between gap-2 ${
+                applyCoins
+                  ? "bg-amber-500/10 border-amber-300 text-amber-900 shadow-xs"
+                  : "bg-gray-50 border-gray-100 text-gray-600 hover:bg-amber-50/50"
+              }`}
+            >
+              <div className="flex items-center gap-2 min-w-0">
+                <div className={`w-5 h-5 rounded-lg flex items-center justify-center shrink-0 ${applyCoins ? "bg-emerald-600 text-white" : "bg-gray-100 text-gray-500"}`}>
+                  {applyCoins ? <Check size={12} strokeWidth={3} /> : <EcoCoinIcon size={14} />}
+                </div>
+                <div className="truncate">
+                  <p className="text-[11px] font-black truncate">
+                    {applyCoins ? `EcoCoins Applied (-₹${discountAmount})` : `Apply EcoCoins (Save ₹${discountAmount})`}
+                  </p>
+                </div>
+              </div>
+              <span className="text-[10px] font-extrabold text-emerald-700 shrink-0">
+                {applyCoins ? "Active" : "Use"}
+              </span>
+            </div>
+          )}
         </div>
+      </div>
+
+      <div className="p-6 pt-0 space-y-3">
+        <div className="grid grid-cols-2 gap-3">
+          <Button onClick={() => onAdd(p)} className="bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold rounded-2xl h-11 text-xs shadow-none transition-all active:scale-95">
+            <ShoppingCart className="w-3.5 h-3.5 mr-1.5" /> Save
+          </Button>
+          <button
+            onClick={handleBuyWithDiscount}
+            disabled={purchasing}
+            className={`h-11 inline-flex items-center justify-center gap-1.5 rounded-2xl font-bold text-xs shadow-sm transition-all active:scale-95 ${
+              applyCoins
+                ? "bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 hover:from-emerald-700 hover:to-teal-800 text-white"
+                : "bg-emerald-600 hover:bg-emerald-700 text-white"
+            }`}
+          >
+            {purchasing ? (
+              "Redeeming..."
+            ) : applyCoins ? (
+              <>
+                <EcoCoinIcon size={16} /> Buy for ₹{finalPrice}
+              </>
+            ) : (
+              <>
+                <ExternalLink className="w-3.5 h-3.5" /> Buy Item
+              </>
+            )}
+          </button>
+        </div>
+
         <div className="flex justify-center">
-            <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-widest flex items-center gap-1.5 bg-emerald-50/50 px-3 py-1 rounded-full"><Recycle className="w-3 h-3"/> AQI Exposure Impact: {p.aqiImpact}</span>
+          <span className="text-[9px] font-extrabold text-emerald-500 uppercase tracking-widest flex items-center gap-1 bg-emerald-50/60 px-3 py-0.5 rounded-full">
+            <Recycle className="w-3 h-3"/> AQI Guard: {p.aqiImpact}
+          </span>
         </div>
       </div>
     </Card>
@@ -264,10 +364,28 @@ const ProductCard = ({ p, onAdd, onDelete }) => {
 };
 
 const EcoProducts = () => {
+  const { user } = useContext(AuthContext);
+  const [userCoins, setUserCoins] = useState(user?.ecoCoins || 0);
+
   const [products, setProducts] = useState(() => {
     const saved = localStorage.getItem("eco_products_v12");
     return saved ? JSON.parse(saved) : PRODUCTS;
   });
+
+  // Fetch updated coin balance on mount
+  const refreshCoins = async () => {
+    if (!user) return;
+    try {
+      const data = await ecoCoinService.getBalance();
+      if (data?.success) {
+        setUserCoins(data.balance);
+      }
+    } catch (e) {}
+  };
+
+  useEffect(() => {
+    refreshCoins();
+  }, [user]);
 
   useEffect(() => {
     localStorage.setItem("eco_products_v12", JSON.stringify(products));
@@ -295,6 +413,18 @@ const EcoProducts = () => {
     link: ""
   });
 
+  const handleRedeemDiscount = async (amount, product) => {
+    if (!user) {
+      toast.info("Please sign in to redeem your EcoCoins discount!");
+      throw new Error("Authentication required");
+    }
+    const res = await ecoCoinService.spendCoins(amount, product.id, product.name, product.price);
+    if (res.success) {
+      setUserCoins(res.balance);
+    }
+    return res;
+  };
+
   const handleAddProduct = () => {
     if (!newProduct.name || !newProduct.price) return;
     const p = {
@@ -302,7 +432,7 @@ const EcoProducts = () => {
       id: "p" + (products.length + 1) + Date.now(),
       rating: 4.0,
       aqiImpact: "Low",
-      badges: ["Community Peak"],
+      badges: ["Community Pick"],
       co2SavedKg: Number(newProduct.co2SavedKg) || 0,
       price: Number(newProduct.price)
     };
@@ -333,48 +463,77 @@ const EcoProducts = () => {
   }, [query, cat, sort, products]);
 
   const addWishlist = (p) => {
-    if (!wishlist.find((w) => w.id === p.id)) setWishlist([...wishlist, p]);
+    if (!wishlist.find((w) => w.id === p.id)) {
+      setWishlist([...wishlist, p]);
+      toast.success(`Saved "${p.name}" to favorites!`);
+    }
   };
 
   return (
-    <div className="min-h-screen bg-[#f0faf5] pb-24">
+    <div className="min-h-screen bg-[#f4f9f6] pb-24 font-sans">
       <Navbar />
 
-      <section className="pt-32 pb-12 text-center relative overflow-hidden">
+      <section className="pt-32 pb-8 text-center relative overflow-hidden">
         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-[300px] bg-gradient-to-b from-emerald-50/50 to-transparent pointer-events-none"></div>
         <div className="max-w-[1200px] mx-auto px-6 relative z-10">
-          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-emerald-500/10 border border-gray-1000/20 mb-6">
+          
+          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 mb-4">
             <Sparkles className="w-4 h-4 text-emerald-600" />
-            <span className="text-sm font-semibold text-emerald-600">Premium Eco Marketplace</span>
+            <span className="text-xs font-bold text-emerald-700 uppercase tracking-wider">Premium Eco Marketplace</span>
           </div>
-          <h1 className="text-[clamp(2.5rem,6vw,4.5rem)] font-bold text-gray-900 tracking-tight leading-[0.9]">
-            Sustainable <span className="text-emerald-500">Living</span> Starts Here.
+
+          <h1 className="text-[clamp(2.2rem,5vw,3.8rem)] font-black text-gray-900 tracking-tight leading-tight">
+            Sustainable <span className="text-emerald-600">Living</span> & Rewards.
           </h1>
-          <p className="mt-6 text-gray-500 text-lg font-medium max-w-2xl mx-auto">
-            Discover products that reduce carbon emissions and protect you from high pollution exposure. Curated for impact and quality.
+          <p className="mt-4 text-gray-500 text-base md:text-lg font-medium max-w-2xl mx-auto">
+            Discover vetted products that reduce carbon emissions. Redeem your hard-earned <strong className="text-amber-600">EcoCoins</strong> for instant price discounts!
           </p>
+
+          {/* 🪙 User EcoCoins Balance Banner in Store */}
+          <div className="mt-8 max-w-xl mx-auto p-4 rounded-3xl bg-gradient-to-r from-[#0c2e22] via-[#103d2d] to-[#082017] text-white shadow-lg border border-emerald-500/30 flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3.5">
+              <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-emerald-800 to-emerald-950 flex items-center justify-center shrink-0 shadow-md border border-emerald-400/30 p-1">
+                <EcoCoinIcon size={36} animated />
+              </div>
+              <div className="text-left">
+                <span className="text-[10px] font-black uppercase tracking-widest text-amber-300 block">
+                  Your Redeemable EcoCoins
+                </span>
+                <span className="text-2xl font-black text-white">
+                  {userCoins} <span className="text-xs font-bold text-emerald-200">Coins (≈ ₹{userCoins}.00 Off)</span>
+                </span>
+              </div>
+            </div>
+
+            <div className="text-right">
+              <span className="px-3 py-1.5 rounded-xl bg-emerald-500/20 border border-emerald-400/30 text-emerald-200 text-xs font-bold block">
+                Up to 30% Off
+              </span>
+            </div>
+          </div>
+
         </div>
       </section>
 
       <div className="max-w-[1240px] mx-auto px-6">
         {/* FILTERS & SEARCH */}
-        <div className="bg-white/80 backdrop-blur-xl border border-gray-100 rounded-2xl p-6 shadow-sm mb-12">
-          <div className="flex flex-col lg:flex-row gap-6 items-center">
+        <div className="bg-white/80 backdrop-blur-xl border border-gray-100 rounded-3xl p-6 shadow-sm mb-12">
+          <div className="flex flex-col lg:flex-row gap-4 items-center">
             <div className="flex-1 w-full relative">
               <Search className="absolute left-5 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
               <Input 
                 value={query} 
                 onChange={(e) => setQuery(e.target.value)} 
-                placeholder="Search premium eco-friendly alternatives..." 
-                className="pl-14 pr-6 h-16 rounded-[2rem] bg-gray-50/50 border-gray-100 text-lg font-medium focus:bg-white focus:border-emerald-400 transition-all shadow-inner"
+                placeholder="Search eco-friendly products..." 
+                className="pl-14 pr-6 h-14 rounded-2xl bg-gray-50/50 border-gray-100 text-base font-medium focus:bg-white focus:border-emerald-400 transition-all shadow-inner"
               />
             </div>
 
-            <div className="flex flex-wrap items-center gap-4 w-full lg:w-auto">
+            <div className="flex flex-wrap items-center gap-3 w-full lg:w-auto">
                 <select 
                   value={cat} 
                   onChange={(e) => setCat(e.target.value)} 
-                  className="h-14 px-6 rounded-2xl bg-white border border-gray-100 text-gray-700 font-bold text-sm shadow-sm hover:border-emerald-200 outline-none transition-all"
+                  className="h-14 px-5 rounded-2xl bg-white border border-gray-100 text-gray-700 font-bold text-xs shadow-sm hover:border-emerald-200 outline-none transition-all cursor-pointer"
                 >
                   <option>All Categories</option>
                   {CATEGORIES.map((c) => (
@@ -385,106 +544,113 @@ const EcoProducts = () => {
                 <select 
                   value={sort} 
                   onChange={(e) => setSort(e.target.value)} 
-                  className="h-14 px-6 rounded-2xl bg-white border border-gray-100 text-gray-700 font-bold text-sm shadow-sm hover:border-emerald-200 outline-none transition-all"
+                  className="h-14 px-5 rounded-2xl bg-white border border-gray-100 text-gray-700 font-bold text-xs shadow-sm hover:border-emerald-200 outline-none transition-all cursor-pointer"
                 >
-                  <option value="impact">Sort by: CO₂ Impact</option>
-                  <option value="price">Sort by: Price</option>
-                  <option value="rating">Sort by: User Rating</option>
+                  <option value="impact">Sort: CO₂ Impact</option>
+                  <option value="price">Sort: Price</option>
+                  <option value="rating">Sort: User Rating</option>
                 </select>
 
                 <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
                   <DialogTrigger asChild>
-                    <Button className="bg-emerald-500 hover:bg-emerald-600 text-white font-bold h-14 px-8 rounded-2xl shadow-sm">
-                      <Plus className="w-5 h-5 mr-2"/> Share Product
+                    <Button className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold h-14 px-6 rounded-2xl shadow-sm text-xs">
+                      <Plus className="w-4 h-4 mr-1.5"/> Suggest Item
                     </Button>
                   </DialogTrigger>
-                  <DialogContent className="bg-white border-none rounded-2xl p-10 max-w-2xl shadow-2xl">
+                  <DialogContent className="bg-white border-none rounded-3xl p-8 max-w-2xl shadow-2xl">
                     <DialogHeader>
-                      <DialogTitle className="text-3xl font-bold text-gray-900">Add Eco Product</DialogTitle>
-                      <DialogDescription className="text-gray-500 font-medium text-lg">Suggest a sustainable alternative to the community.</DialogDescription>
+                      <DialogTitle className="text-2xl font-black text-gray-900">Add Eco Alternative</DialogTitle>
+                      <DialogDescription className="text-gray-500 font-medium text-sm">Suggest a sustainable green alternative to the community.</DialogDescription>
                     </DialogHeader>
-                    <div className="grid gap-6 py-6">
-                      <div className="grid grid-cols-2 gap-6">
-                        <div className="space-y-2">
-                          <Label className="font-bold text-gray-700 ml-2">Product Name</Label>
-                          <Input value={newProduct.name} onChange={e => setNewProduct({...newProduct, name: e.target.value})} className="h-14 rounded-2xl bg-gray-50 border-gray-100"/>
+                    <div className="grid gap-4 py-4">
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-1.5">
+                          <Label className="font-bold text-gray-700 text-xs">Product Name</Label>
+                          <Input value={newProduct.name} onChange={e => setNewProduct({...newProduct, name: e.target.value})} className="h-12 rounded-xl bg-gray-50 border-gray-100 text-xs"/>
                         </div>
-                        <div className="space-y-2">
-                          <Label className="font-bold text-gray-700 ml-2">Brand / Maker</Label>
-                          <Input value={newProduct.brand} onChange={e => setNewProduct({...newProduct, brand: e.target.value})} className="h-14 rounded-2xl bg-gray-50 border-gray-100"/>
+                        <div className="space-y-1.5">
+                          <Label className="font-bold text-gray-700 text-xs">Brand / Maker</Label>
+                          <Input value={newProduct.brand} onChange={e => setNewProduct({...newProduct, brand: e.target.value})} className="h-12 rounded-xl bg-gray-50 border-gray-100 text-xs"/>
                         </div>
                       </div>
-                      <div className="grid grid-cols-2 gap-6">
-                        <div className="space-y-2">
-                          <Label className="font-bold text-gray-700 ml-2">Price (₹)</Label>
-                          <Input type="number" value={newProduct.price} onChange={e => setNewProduct({...newProduct, price: e.target.value})} className="h-14 rounded-2xl bg-gray-50 border-gray-100"/>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-1.5">
+                          <Label className="font-bold text-gray-700 text-xs">Price (₹)</Label>
+                          <Input type="number" value={newProduct.price} onChange={e => setNewProduct({...newProduct, price: e.target.value})} className="h-12 rounded-xl bg-gray-50 border-gray-100 text-xs"/>
                         </div>
-                        <div className="space-y-2">
-                           <Label className="font-bold text-gray-700 ml-2">Category</Label>
+                        <div className="space-y-1.5">
+                           <Label className="font-bold text-gray-700 text-xs">Category</Label>
                            <select 
                               value={newProduct.category} 
                               onChange={e => setNewProduct({...newProduct, category: e.target.value})}
-                              className="w-full h-14 rounded-2xl bg-gray-50 border-gray-100 px-6 text-sm font-bold text-gray-700 outline-none"
+                              className="w-full h-12 rounded-xl bg-gray-50 border-gray-100 px-4 text-xs font-bold text-gray-700 outline-none"
                             >
                              {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
                            </select>
                         </div>
                       </div>
-                       <div className="space-y-2">
-                          <Label className="font-bold text-gray-700 ml-2">Product Image (URL)</Label>
-                          <Input value={newProduct.image} onChange={e => setNewProduct({...newProduct, image: e.target.value})} className="h-14 rounded-2xl bg-gray-50 border-gray-100" placeholder="https://unsplash.com/..."/>
+                       <div className="space-y-1.5">
+                          <Label className="font-bold text-gray-700 text-xs">Product Image (URL)</Label>
+                          <Input value={newProduct.image} onChange={e => setNewProduct({...newProduct, image: e.target.value})} className="h-12 rounded-xl bg-gray-50 border-gray-100 text-xs" placeholder="https://..."/>
                         </div>
-                         <div className="space-y-2">
-                          <Label className="font-bold text-gray-700 ml-2">Marketplace Link</Label>
-                          <Input value={newProduct.link} onChange={e => setNewProduct({...newProduct, link: e.target.value})} className="h-14 rounded-2xl bg-gray-50 border-gray-100" placeholder="https://amazon.in/..."/>
+                         <div className="space-y-1.5">
+                          <Label className="font-bold text-gray-700 text-xs">Marketplace Link</Label>
+                          <Input value={newProduct.link} onChange={e => setNewProduct({...newProduct, link: e.target.value})} className="h-12 rounded-xl bg-gray-50 border-gray-100 text-xs" placeholder="https://amazon.in/..."/>
                         </div>
                     </div>
                     <DialogFooter>
-                      <Button onClick={handleAddProduct} className="h-14 w-full bg-emerald-500 text-white font-bold text-lg rounded-2xl shadow-sm">Catalog Product</Button>
+                      <Button onClick={handleAddProduct} className="h-12 w-full bg-emerald-600 text-white font-bold text-sm rounded-xl shadow-sm">Catalog Product</Button>
                     </DialogFooter>
                   </DialogContent>
                 </Dialog>
             </div>
           </div>
 
-          <div className="mt-8 grid grid-cols-2 md:grid-cols-4 gap-4">
-            {[{k:"Avg. CO₂ saved/yr",v:"+32 kg"},{k:"Plastic avoided",v:"~180 bags"},{k:"Exposure drop",v:"-15% AQI"},{k:"Green score boost",v:"+90 pts"}].map(x=> (
-              <div key={x.k} className="bg-emerald-50/50 rounded-2xl p-4 border border-emerald-100/50">
-                <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest mb-1">{x.k}</p>
-                <p className="text-xl font-bold text-gray-800">{x.v}</p>
+          <div className="mt-6 grid grid-cols-2 md:grid-cols-4 gap-3">
+            {[{k:"Avg. CO₂ saved/yr",v:"+32 kg"},{k:"Plastic avoided",v:"~180 bags"},{k:"Exposure drop",v:"-15% AQI"},{k:"Discount Power",v:"1 Coin = ₹1"}].map(x=> (
+              <div key={x.k} className="bg-emerald-50/50 rounded-2xl p-3.5 border border-emerald-100/50">
+                <p className="text-[9px] font-black text-emerald-700 uppercase tracking-widest mb-0.5">{x.k}</p>
+                <p className="text-lg font-black text-gray-900">{x.v}</p>
               </div>
             ))}
           </div>
         </div>
 
         {/* PRODUCT GRID */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
           {list.map((p) => (
-            <ProductCard key={p.id} p={p} onAdd={addWishlist} onDelete={handleDeleteProduct} />
+            <ProductCard 
+              key={p.id} 
+              p={p} 
+              onAdd={addWishlist} 
+              onDelete={handleDeleteProduct}
+              userCoins={userCoins}
+              onRedeemDiscount={handleRedeemDiscount}
+            />
           ))}
         </div>
 
         {/* WISHLIST */}
         {wishlist.length > 0 && (
-          <div className="mt-24">
-            <div className="flex items-center gap-4 mb-8">
-               <div className="w-12 h-12 rounded-2xl bg-emerald-50 flex items-center justify-center border border-emerald-100">
-                  <Heart className="w-6 h-6 text-emerald-500 fill-emerald-500" />
+          <div className="mt-20">
+            <div className="flex items-center gap-3 mb-6">
+               <div className="w-10 h-10 rounded-2xl bg-emerald-50 flex items-center justify-center border border-emerald-100">
+                  <Heart className="w-5 h-5 text-emerald-500 fill-emerald-500" />
                </div>
-               <h2 className="text-3xl font-bold text-gray-900 tracking-tight">Saved Favorites</h2>
+               <h2 className="text-2xl font-black text-gray-900 tracking-tight">Saved Favorites</h2>
             </div>
             
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {wishlist.map((w) => (
-                <Card key={w.id} className="bg-white border border-gray-100 p-4 flex items-center gap-4 rounded-[1.5rem] shadow-sm">
-                  <div className="w-20 h-20 rounded-xl overflow-hidden bg-gray-50 group">
+                <Card key={w.id} className="bg-white border border-gray-100 p-4 flex items-center gap-4 rounded-2xl shadow-sm">
+                  <div className="w-16 h-16 rounded-xl overflow-hidden bg-gray-50 group shrink-0">
                     <img src={w.image} alt={w.name} className="w-full h-full object-cover transition-transform group-hover:scale-110"/>
                   </div>
-                  <div className="flex-1">
-                    <p className="font-bold text-gray-800 leading-tight">{w.name}</p>
-                    <p className="text-xs font-bold text-emerald-500 mt-1">₹{w.price} • {w.co2SavedKg}kg Saved</p>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-bold text-gray-900 text-sm truncate">{w.name}</p>
+                    <p className="text-xs font-black text-emerald-600 mt-0.5">₹{w.price} • {w.co2SavedKg}kg Saved</p>
                   </div>
-                  <a href={w.link} target="_blank" rel="noreferrer" className="p-3 rounded-xl bg-gray-50 border border-gray-100 text-gray-400 hover:text-emerald-500 hover:bg-emerald-50 transition-all">
+                  <a href={w.link} target="_blank" rel="noreferrer" className="p-2.5 rounded-xl bg-gray-50 border border-gray-100 text-gray-500 hover:text-emerald-600 hover:bg-emerald-50 transition-all shrink-0">
                     <ExternalLink className="w-4 h-4"/>
                   </a>
                 </Card>
@@ -493,27 +659,6 @@ const EcoProducts = () => {
           </div>
         )}
 
-        {/* TIPS */}
-        <div className="mt-24 grid grid-cols-1 md:grid-cols-3 gap-6">
-          {[{
-            title:"Switch 5 bulbs to LED",
-            desc:"Saves ~75% energy per bulb and pays back within 4 months.",
-          },{
-            title:"Plastic-Free Commute",
-            desc:"Shifting to Metro on high-AQI days reduces both exposure and emissions.",
-          },{
-            title:"Compost Kitchen Waste",
-            desc:"Reduces landfill methane by 60% and creates natural fertilizer.",
-          }].map((t, i) => (
-            <div key={i} className="p-10 rounded-2xl bg-white border border-gray-100 shadow-sm hover:shadow-md transition-shadow">
-              <div className="w-12 h-12 rounded-2xl bg-emerald-50 flex items-center justify-center border border-emerald-100 mb-6">
-                <Filter className="w-5 h-5 text-emerald-500" />
-              </div>
-              <h3 className="text-xl font-bold text-gray-900 tracking-tight mb-3">{t.title}</h3>
-              <p className="text-gray-500 font-medium leading-relaxed">{t.desc}</p>
-            </div>
-          ))}
-        </div>
       </div>
       
       <div className="mt-24">
