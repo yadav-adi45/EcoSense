@@ -215,7 +215,19 @@ const PollutionSources = () => {
                 <div className={`px-8 py-5 rounded-2xl text-center font-semibold ${getAQIColorClass(data.aqi)}`}>
                   <p className="text-xs uppercase opacity-80">Current AQI</p>
                   <p className="text-4xl font-bold">{data.aqi}</p>
-                  <p className="text-sm">Very Unhealthy</p>
+                  <p className="text-sm">
+                    {data.aqi <= 50
+                      ? "Good 🟢"
+                      : data.aqi <= 100
+                      ? "Moderate 🟡"
+                      : data.aqi <= 150
+                      ? "Unhealthy for Sensitive 🟠"
+                      : data.aqi <= 200
+                      ? "Unhealthy 🔴"
+                      : data.aqi <= 300
+                      ? "Very Unhealthy 🟣"
+                      : "Hazardous 🟤"}
+                  </p>
                 </div>
               </div>
               <h3 className="text-gray-400 uppercase tracking-wide text-xs font-semibold mb-5">Pollution Contribution by Sector</h3>
