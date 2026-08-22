@@ -8,10 +8,12 @@ import Navbar from "../components/Navbar";
 import {
   Heart, MessageCircle, Trash2, Send, Plus, X,
   Car, Lightbulb, ChevronDown, ChevronUp, MapPin, Calendar, Users, Globe, Sparkles,
-  Camera, Upload, Image as ImageIcon, AlertTriangle, Shield, Eye, Coins
+  Camera, Upload, Image as ImageIcon, AlertTriangle, Shield, Eye, Coins, Bot, MessageSquare
 } from "lucide-react";
 import Footer from "./Footer";
 import EcoCoinIcon from "../components/ui/EcoCoinIcon";
+import AIWritingAssistant from "../components/ui/AIWritingAssistant";
+import ChatInterface from "../components/ChatInterface";
 
 const API = `${serverUrl}/api/v11`;
 const authHeaders = () => getAuthHeaders();
@@ -59,84 +61,78 @@ const ProofBadge = ({ issueType }) => {
   );
 };
 
+// 🪙 Rewards Visual Notification Chip
 const CoinRewardBadge = ({ amount, reason }) => (
-  <span style={{ display:"inline-flex", alignItems:"center", gap:5, background:"linear-gradient(135deg, rgba(245,158,11,0.12), rgba(234,179,8,0.12))", border:"1px solid rgba(245,158,11,0.3)", color:"#b45309", padding:"4px 10px", borderRadius:12, fontSize:11, fontWeight:800, letterSpacing:"0.02em", marginBottom:12, marginLeft:8 }}>
-    <EcoCoinIcon size={14} /> +{amount} EcoCoins {reason || "Earned"}
+  <span style={{ display:"inline-flex", alignItems:"center", gap:5, background:"rgba(16,185,129,0.12)", border:"1px solid rgba(16,185,129,0.3)", color:"#059669", padding:"4px 12px", borderRadius:12, fontSize:11, fontWeight:800, marginBottom:12, textTransform:"uppercase", letterSpacing:"0.04em" }}>
+    <EcoCoinIcon size={14} animated /> +{amount} EcoCoins {reason ? `• ${reason}` : ""}
   </span>
 );
 
-// ─── CreatePostModal ─────────────────────────────────────────────────────────
+// ─── Modal ───────────────────────────────────────────────────────────────────
 
 const CreatePostModal = ({ user, setUser, onCreated, onClose }) => {
   const [text, setText] = useState("");
   const [postType, setPostType] = useState("thought");
+  const [loading, setLoading] = useState(false);
+  const textRef = useRef(null);
+
+  // Rideshare state
   const [rideFrom, setRideFrom] = useState("");
   const [rideTo, setRideTo] = useState("");
   const [rideDate, setRideDate] = useState("");
-  const [seats, setSeats] = useState(1);
-  const [loading, setLoading] = useState(false);
-  
-  // Proof-specific state
-  const [proofImage, setProofImage] = useState(null);
-  const [proofPreview, setProofPreview] = useState(null);
+  const [seats, setSeats] = useState(2);
+
+  // Proof state
   const [issueType, setIssueType] = useState("pothole");
   const [proofLocation, setProofLocation] = useState("");
+  const [proofImage, setProofImage] = useState(null);
+  const [proofPreview, setProofPreview] = useState(null);
   const [showCamera, setShowCamera] = useState(false);
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
-  const streamRef = useRef(null);
   const fileInputRef = useRef(null);
-  
-  const textRef = useRef(null);
-  useEffect(() => textRef.current?.focus(), []);
+  const streamRef = useRef(null);
 
-  // Cleanup camera stream on unmount
-  useEffect(() => {
-    return () => {
-      if (streamRef.current) {
-        streamRef.current.getTracks().forEach(track => track.stop());
-      }
-    };
-  }, []);
-
-  const compressImage = (dataUrl, callback) => {
+  const compressImage = (base64Str, callback) => {
     const img = new Image();
+    img.src = base64Str;
     img.onload = () => {
       const canvas = document.createElement("canvas");
+      const MAX_WIDTH = 1200;
+      const MAX_HEIGHT = 1200;
       let width = img.width;
       let height = img.height;
-      const MAX_SIZE = 600;
+
       if (width > height) {
-        if (width > MAX_SIZE) {
-          height = Math.round((height * MAX_SIZE) / width);
-          width = MAX_SIZE;
+        if (width > MAX_WIDTH) {
+          height *= MAX_WIDTH / width;
+          width = MAX_WIDTH;
         }
       } else {
-        if (height > MAX_SIZE) {
-          width = Math.round((width * MAX_SIZE) / height);
-          height = MAX_SIZE;
+        if (height > MAX_HEIGHT) {
+          width *= MAX_HEIGHT / height;
+          height = MAX_HEIGHT;
         }
       }
+
       canvas.width = width;
       canvas.height = height;
       const ctx = canvas.getContext("2d");
       ctx.drawImage(img, 0, 0, width, height);
-      const compressed = canvas.toDataURL("image/jpeg", 0.5);
+      const compressed = canvas.toDataURL("image/jpeg", 0.75);
       callback(compressed);
     };
-    img.onerror = () => callback(dataUrl);
-    img.src = dataUrl;
   };
 
   const handleFileUpload = (e) => {
     const file = e.target.files[0];
     if (!file) return;
-    if (file.size > 10 * 1024 * 1024) return toast.error("Image must be under 10MB");
-    if (!file.type.startsWith("image/")) return toast.error("Please upload an image file");
-    
+    if (file.size > 8 * 1024 * 1024) {
+      return toast.error("Image too large (Max 8MB)");
+    }
     const reader = new FileReader();
-    reader.onload = (ev) => {
-      compressImage(ev.target.result, (compressed) => {
+    reader.onloadend = () => {
+      compressImage(reader.result, (compressed) => {
         setProofImage(compressed);
         setProofPreview(compressed);
       });
@@ -193,7 +189,7 @@ const CreatePostModal = ({ user, setUser, onCreated, onClose }) => {
   };
 
   const handleSubmit = async () => {
-    if (!text.trim()) return toast.error("Please write something!");
+    if (!text.trim()) return toast.error("Please write something first!");
     if (postType === "proof" && !proofImage) return toast.error("Please upload or capture a proof image!");
     setLoading(true);
     
@@ -238,16 +234,18 @@ const CreatePostModal = ({ user, setUser, onCreated, onClose }) => {
 
   return (
     <div style={S.overlay}>
-      <div style={{...S.modalBox, maxWidth: postType === "proof" ? 620 : 560 }}>
-        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:24 }}>
+      <div style={{...S.modalBox, maxWidth: postType === "proof" ? 640 : 580 }}>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:20 }}>
           <h2 style={{ margin:0, color:"#111827", fontSize:24, fontWeight:900 }}>Create Post</h2>
           <button onClick={() => { stopCamera(); onClose(); }} style={S.iconBtn}><X size={20} /></button>
         </div>
-        <div style={{ display:"flex", gap:10, marginBottom:24, flexWrap: "wrap" }}>
+
+        {/* Post Type Selector */}
+        <div style={{ display:"flex", gap:10, marginBottom:20, flexWrap: "wrap" }}>
           {[
             { val:"thought", label:"💬 Thought" }, 
-            { val:"rideshare", label:"🚗 Ride Share" },
-            { val:"proof", label:"📸 Report Proof" }
+            { val:"rideshare", label:"🚗 Ride Share (+10 Coins)" }, 
+            { val:"proof", label:"📸 Report Proof (+15 Coins)" }
           ].map(({ val, label }) => (
             <button key={val} onClick={() => { setPostType(val); if (val !== "proof") stopCamera(); }} style={{ ...S.typeBtn, background: postType===val ? (val==="proof" ? "rgba(239,68,68,0.08)" : "rgba(16,185,129,0.1)") : "#f9fafb", border: postType===val ? (val==="proof" ? "2px solid #ef4444" : "2px solid #10b981") : "2px solid transparent", color: postType===val ? (val==="proof" ? "#dc2626" : "#059669") : "#9ca3af" }}>
               {label}
@@ -255,21 +253,28 @@ const CreatePostModal = ({ user, setUser, onCreated, onClose }) => {
           ))}
         </div>
 
-        <div style={{ display:"flex", gap:12, alignItems:"center", marginBottom:20 }}>
+        <div style={{ display:"flex", gap:12, alignItems:"center", marginBottom:16 }}>
           <Avatar src={user?.profile?.profilePhoto} name={user?.name} size={44} />
           <div>
             <span style={{ color:"#111827", fontWeight:700, fontSize:15, display:"block" }}>{user?.name}</span>
             <span style={{ color:"#9ca3af", fontSize:11, fontWeight:600, textTransform:"uppercase", letterSpacing:"0.05em" }}>
-              {postType === "proof" ? "Reporting an Issue" : "Sharing as Champion"}
+              {postType === "proof" ? "Reporting an Issue" : "Sharing with Community"}
             </span>
           </div>
         </div>
+
+        {/* 🤖 AI Writing Assistant Bar */}
+        <AIWritingAssistant
+          text={text}
+          onEnhance={(enhanced) => setText(enhanced)}
+          context={postType}
+        />
         
         <textarea ref={textRef} value={text} onChange={(e) => setText(e.target.value)}
           placeholder={
-            postType==="rideshare" ? "Where are you heading? Mention routes…" : 
-            postType==="proof" ? "Describe the issue you found (e.g. large pothole near main road, garbage dump behind park)…" :
-            "What's on your eco-mind today?"
+            postType==="rideshare" ? "Where are you heading? Mention routes, timings or preferences…" : 
+            postType==="proof" ? "Describe the environmental issue found (e.g. huge pothole on main road, overflowing garbage bin)…" :
+            "Share your green thoughts, daily habits or sustainable tips…"
           } maxLength={1000} style={S.textArea} />
         <div style={{ textAlign:"right", fontSize:11, fontWeight:700, color:"#d1d5db", marginBottom:12, marginTop:4 }}>{text.length}/1000</div>
         
@@ -328,36 +333,35 @@ const CreatePostModal = ({ user, setUser, onCreated, onClose }) => {
             {showCamera && (
               <div style={{ marginBottom:16, borderRadius:20, overflow:"hidden", border:"2px solid #93c5fd", position:"relative" }}>
                 <video ref={videoRef} autoPlay playsInline muted style={{ width:"100%", display:"block", borderRadius:18 }} />
-                <div style={{ position:"absolute", bottom:16, left:"50%", transform:"translateX(-50%)", display:"flex", gap:12 }}>
-                  <button onClick={capturePhoto} style={{ width:64, height:64, borderRadius:"50%", background:"#ef4444", border:"4px solid white", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", boxShadow:"0 4px 20px rgba(239,68,68,0.4)" }}>
-                    <Camera size={24} color="white" />
+                <div style={{ position:"absolute", bottom:16, left:0, right:0, display:"flex", justifyContent:"center", gap:12, zIndex:10 }}>
+                  <button onClick={capturePhoto} style={{ background:"#2563eb", color:"#fff", border:"none", borderRadius:24, padding:"10px 24px", fontWeight:800, fontSize:14, cursor:"pointer", display:"flex", alignItems:"center", gap:8, boxShadow:"0 4px 12px rgba(37,99,235,0.4)" }}>
+                    <Camera size={16} /> Snap Photo
                   </button>
-                  <button onClick={stopCamera} style={{ width:48, height:48, borderRadius:"50%", background:"rgba(0,0,0,0.5)", border:"2px solid white", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", alignSelf:"center" }}>
-                    <X size={20} color="white" />
+                  <button onClick={stopCamera} style={{ background:"rgba(0,0,0,0.6)", color:"#fff", border:"none", borderRadius:24, padding:"10px 16px", fontWeight:700, fontSize:13, cursor:"pointer" }}>
+                    Cancel
                   </button>
                 </div>
                 <canvas ref={canvasRef} style={{ display:"none" }} />
               </div>
             )}
 
-            {/* Image Preview */}
+            {/* Preview View */}
             {proofPreview && (
-              <div style={{ marginBottom:16, position:"relative", borderRadius:20, overflow:"hidden", border:"2px solid #fca5a5" }}>
-                <img src={proofPreview} alt="Proof preview" style={{ width:"100%", maxHeight:300, objectFit:"cover", display:"block" }} />
-                <button onClick={removeImage} style={{ position:"absolute", top:10, right:10, width:36, height:36, borderRadius:"50%", background:"rgba(239,68,68,0.9)", border:"none", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", boxShadow:"0 2px 8px rgba(0,0,0,0.2)" }}>
-                  <X size={18} color="white" />
+              <div style={{ position:"relative", marginBottom:16, borderRadius:20, overflow:"hidden", border:"2px solid #e2e8f0" }}>
+                <img src={proofPreview} alt="Preview" style={{ width:"100%", maxHeight:260, objectFit:"cover", display:"block" }} />
+                <button onClick={removeImage} style={{ position:"absolute", top:10, right:10, background:"rgba(0,0,0,0.6)", color:"#fff", border:"none", borderRadius:"50%", width:32, height:32, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center" }}>
+                  <X size={16} />
                 </button>
-                <div style={{ position:"absolute", bottom:0, left:0, right:0, background:"linear-gradient(transparent, rgba(0,0,0,0.7))", padding:"20px 16px 12px", display:"flex", alignItems:"center", gap:8 }}>
-                  <Shield size={14} color="#10b981" />
-                  <span style={{ color:"white", fontSize:11, fontWeight:700 }}>Proof image attached — ready to report</span>
+                <div style={{ position:"absolute", bottom:8, left:8, background:"rgba(16,185,129,0.9)", backdropFilter:"blur(4px)", color:"#fff", fontSize:11, fontWeight:800, padding:"4px 10px", borderRadius:10 }}>
+                  ✓ Proof Attached (+15 EcoCoins on submit)
                 </div>
               </div>
             )}
           </div>
         )}
 
-        <button onClick={handleSubmit} disabled={loading} style={{ ...S.primaryBtn, width:"100%", height:56, fontSize:16, borderRadius:16, opacity: loading ? 0.7:1, cursor: loading ? "not-allowed":"pointer", background: postType === "proof" ? "#ef4444" : "#10b981" }}>
-          {loading ? "Processing..." : postType === "proof" ? "Submit Proof Report 📸" : "Publish Post 🌿"}
+        <button onClick={handleSubmit} disabled={loading} style={{ ...S.primaryBtn, width:"100%", height:52, borderRadius:18, justifyContent:"center" }}>
+          {loading ? "Publishing..." : postType === "proof" ? "Submit Issue Proof (+15 Coins) 🚀" : postType === "rideshare" ? "Post Ride Offer (+10 Coins) 🚗" : "Post to Community 🌱"}
         </button>
       </div>
     </div>
@@ -367,7 +371,7 @@ const CreatePostModal = ({ user, setUser, onCreated, onClose }) => {
 // ─── CommentSection ──────────────────────────────────────────────────────────
 
 const CommentSection = ({ postId, initialComments, user }) => {
-  const [comments, setComments] = useState(initialComments || []);
+  const [comments, setComments] = useState(initialComments);
   const [text, setText] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -401,16 +405,26 @@ const CommentSection = ({ postId, initialComments, user }) => {
         </div>
       ))}
       {user && (
-        <div style={{ display:"flex", gap:10, alignItems:"center", marginTop:12 }}>
-          <Avatar src={user?.profile?.profilePhoto} name={user?.name} size={32} />
-          <div style={{ flex:1, position:"relative" }}>
-            <input value={text} onChange={(e) => setText(e.target.value)} onKeyDown={(e) => e.key==="Enter" && submit()}
-                placeholder="Share your thoughts..." style={{ width:"100%", background:"#f9fafb", border:"1px solid #e5e7eb", borderRadius:24, padding:"10px 48px 10px 20px", color:"#111827", fontSize:14, outline:"none", transition:"border-color 0.2s" }} 
+        <div style={{ marginTop:12 }}>
+          <div className="mb-2">
+            <AIWritingAssistant
+              text={text}
+              onEnhance={(enhanced) => setText(enhanced)}
+              compact={true}
+              context="comment"
             />
-            <button onClick={submit} disabled={loading}
-                style={{ position:"absolute", right:6, top:6, background:"#10b981", border:"none", borderRadius:20, width:32, height:32, display:"flex", alignItems:"center", justifyContent:"center", cursor:"pointer", flexShrink:0, shadow:"0 4px 12px rgba(16,185,129,0.2)" }}>
-                <Send size={14} color="#fff" />
-            </button>
+          </div>
+          <div style={{ display:"flex", gap:10, alignItems:"center" }}>
+            <Avatar src={user?.profile?.profilePhoto} name={user?.name} size={32} />
+            <div style={{ flex:1, position:"relative" }}>
+              <input value={text} onChange={(e) => setText(e.target.value)} onKeyDown={(e) => e.key==="Enter" && submit()}
+                  placeholder="Share your thoughts or reply..." style={{ width:"100%", background:"#f9fafb", border:"1px solid #e5e7eb", borderRadius:24, padding:"10px 48px 10px 20px", color:"#111827", fontSize:14, outline:"none", transition:"border-color 0.2s" }} 
+              />
+              <button onClick={submit} disabled={loading}
+                  style={{ position:"absolute", right:6, top:6, background:"#10b981", border:"none", borderRadius:20, width:32, height:32, display:"flex", alignItems:"center", justifyContent:"center", cursor:"pointer", flexShrink:0, shadow:"0 4px 12px rgba(16,185,129,0.2)" }}>
+                  <Send size={14} color="#fff" />
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -452,19 +466,18 @@ const PostCard = ({ post, user, onDelete }) => {
     try {
       await axios.delete(`${API}/post/${post._id}`, { headers: authHeaders(), withCredentials: true });
       onDelete(post._id);
-      toast.success("Post deleted");
+      toast.success("Post removed");
     } catch {
       toast.error("Failed to delete");
       setDeleting(false);
     }
   };
 
-  const isProof = post.postType === "proof";
-  const isRideShare = post.postType === "rideshare";
-  const proofMeta = isProof ? getIssueMeta(post.proofDetails?.issueType) : null;
+  const isRideShare = post.postType === "rideshare" || !!post.rideDetails;
+  const isProof = post.postType === "proof" || !!post.proofDetails;
 
   return (
-    <div style={{ ...S.card, borderLeft: isProof ? `4px solid ${proofMeta?.color || "#ef4444"}` : undefined }}>
+    <div style={S.card}>
       <div style={{ display:"flex", alignItems:"center", gap:14, marginBottom:16 }}>
         <Avatar src={post.author?.profile?.profilePhoto} name={post.author?.name} size={48} />
         <div style={{ flex:1 }}>
@@ -563,6 +576,7 @@ const Community = () => {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState("all");
   const [showModal, setShowModal] = useState(false);
+  const [showEcoBotWidget, setShowEcoBotWidget] = useState(false);
 
   const fetchPosts = async (type = "all") => {
     setLoading(true);
@@ -609,24 +623,48 @@ const Community = () => {
               </button>
             ))}
           </div>
-          {user && <button onClick={() => setShowModal(true)} style={S.primaryBtn}><Plus size={18} /> New Post</button>}
+          <div style={{ display:"flex", gap:10, alignItems:"center" }}>
+            <button 
+              onClick={() => setShowEcoBotWidget((prev) => !prev)} 
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-white hover:bg-emerald-50 text-emerald-800 border border-emerald-200 font-extrabold text-xs shadow-xs transition-all active:scale-95"
+            >
+              <Bot size={16} className="text-[#10b981]" />
+              <span>{showEcoBotWidget ? "Hide EcoBot" : "Open EcoBot"}</span>
+            </button>
+            {user && <button onClick={() => setShowModal(true)} style={S.primaryBtn}><Plus size={18} /> New Post</button>}
+          </div>
         </div>
 
-        {loading ? (
-          <div style={S.centerMsg}>
-              <div style={{ width:48, height:48, borderRadius:"50%", border:"4px solid #f0faf5", borderTopColor:"#10b981", animation:"spin 1s linear infinite" }} />
-              <p style={{ color:"#94a3b8", marginTop:20, fontWeight:700, textTransform:"uppercase", letterSpacing:"0.1em", fontSize:11 }}>Loading Feed</p>
+        {/* 🌿 Main Community Feed & Side EcoBot Assistant Layout */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+          {/* Feed Column */}
+          <div className={`${showEcoBotWidget ? "lg:col-span-7" : "lg:col-span-12"} transition-all duration-300`}>
+            {loading ? (
+              <div style={S.centerMsg}>
+                  <div style={{ width:48, height:48, borderRadius:"50%", border:"4px solid #f0faf5", borderTopColor:"#10b981", animation:"spin 1s linear infinite" }} />
+                  <p style={{ color:"#94a3b8", marginTop:20, fontWeight:700, textTransform:"uppercase", letterSpacing:"0.1em", fontSize:11 }}>Loading Feed</p>
+              </div>
+            ) : posts.length === 0 ? (
+              <div style={S.centerMsg}>
+                <div style={{ fontSize:64, marginBottom:20 }}>🌱</div>
+                <p style={{ color:"#1f2937", fontSize:20, fontWeight:900 }}>The feed is freshly planted.</p>
+                <p style={{ color:"#94a3b8", marginTop:8, fontSize:15, fontWeight:500 }}>Be the first to share an eco-thought or report an issue!</p>
+                {user && <button onClick={() => setShowModal(true)} style={{ ...S.primaryBtn, marginTop:24, height:54, borderRadius:16 }}><Plus size={18} /> Create First Post</button>}
+              </div>
+            ) : (
+              <div style={S.feed}>{posts.map((p) => <PostCard key={p._id} post={p} user={user} onDelete={handleDelete} />)}</div>
+            )}
           </div>
-        ) : posts.length === 0 ? (
-          <div style={S.centerMsg}>
-            <div style={{ fontSize:64, marginBottom:20 }}>🌱</div>
-            <p style={{ color:"#1f2937", fontSize:20, fontWeight:900 }}>The feed is freshly planted.</p>
-            <p style={{ color:"#94a3b8", marginTop:8, fontSize:15, fontWeight:500 }}>Be the first to share an eco-thought or report an issue!</p>
-            {user && <button onClick={() => setShowModal(true)} style={{ ...S.primaryBtn, marginTop:24, height:54, borderRadius:16 }}><Plus size={18} /> Create First Post</button>}
-          </div>
-        ) : (
-          <div style={S.feed}>{posts.map((p) => <PostCard key={p._id} post={p} user={user} onDelete={handleDelete} />)}</div>
-        )}
+
+          {/* 🤖 Side EcoBot Assistant Column */}
+          {showEcoBotWidget && (
+            <div className="lg:col-span-5 sticky top-28 space-y-4">
+              <div className="bg-white rounded-3xl p-1 shadow-md border border-emerald-100/90">
+                <ChatInterface embedded={true} />
+              </div>
+            </div>
+          )}
+        </div>
       </div>
       
       <div style={{ marginTop:80 }}>
@@ -644,12 +682,12 @@ export default Community;
 
 const S = {
   pageWrap: { minHeight:"100vh", background:"#f0faf5", fontFamily:"'Inter','Segoe UI',sans-serif", color:"#1f2937" },
-  pageInner: { maxWidth:720, margin:"0 auto", padding:"140px 16px 80px" },
+  pageInner: { maxWidth:1180, margin:"0 auto", padding:"140px 16px 80px" },
   hero: { textAlign:"center", marginBottom:56, position:"relative" },
   heroBadge: { display:"inline-flex", alignItems:"center", background:"rgba(16,185,129,0.1)", border:"1px solid rgba(16,185,129,0.2)", borderRadius:20, padding:"6px 16px", fontSize:11, color:"#059669", fontWeight:800, marginBottom:20, textTransform:"uppercase", letterSpacing:"0.05em" },
   heroTitle: { margin:"0 0 16px", fontSize:"clamp(32px,7vw,52px)", fontWeight:900, color:"#111827" },
-  heroSub: { margin:0, color:"#6b7280", fontSize:18, fontWeight:500, lineHeight:1.6, maxWidth:540, marginInline:"auto" },
-  toolbar: { display:"flex", alignItems:"center", justifyContent:"space-between", gap:16, flexWrap:"wrap", marginBottom:40, background:"rgba(255,255,255,0.4)", backdropFilter:"blur(10px)", padding:"12px 20px", borderRadius:24, border:"1px solid rgba(16,185,129,0.1)" },
+  heroSub: { margin:0, color:"#6b7280", fontSize:18, fontWeight:500, lineHeight:1.6, maxWidth:580, marginInline:"auto" },
+  toolbar: { display:"flex", alignItems:"center", justifyContent:"space-between", gap:16, flexWrap:"wrap", marginBottom:40, background:"rgba(255,255,255,0.7)", backdropFilter:"blur(10px)", padding:"12px 20px", borderRadius:24, border:"1px solid rgba(16,185,129,0.15)" },
   filterChip: { borderRadius:16, padding:"10px 20px", fontSize:13, cursor:"pointer", transition:"all 0.3s" , display:"flex", alignItems:"center" },
   primaryBtn: { display:"inline-flex", alignItems:"center", gap:8, background:"#10b981", border:"none", borderRadius:14, padding:"0 24px", height:48, color:"#fff", fontWeight:800, fontSize:14, cursor:"pointer", whiteSpace:"nowrap", transition:"transform 0.2s" },
   feed: { display:"flex", flexDirection:"column", gap:24 },
@@ -657,9 +695,9 @@ const S = {
   actionBtn: { display:"inline-flex", alignItems:"center", gap:8, border:"none", cursor:"pointer", fontSize:14, padding:"10px 18px", borderRadius:16, transition:"all 0.2s" },
   iconBtn: { background:"none", border:"none", cursor:"pointer", color:"#9ca3af", display:"flex", alignItems:"center", padding:8, borderRadius:12, transition:"all 0.2s" },
   overlay: { position:"fixed", inset:0, background:"rgba(5,10,8,0.4)", backdropFilter:"blur(12px)", zIndex:1000, display:"flex", alignItems:"center", justifyContent:"center", padding:20 },
-  modalBox: { background:"#fff", borderRadius:40, padding:40, width:"100%", maxWidth:560, maxHeight:"90vh", overflowY:"auto", position:"relative" },
+  modalBox: { background:"#fff", borderRadius:40, padding:36, width:"100%", maxWidth:600, maxHeight:"90vh", overflowY:"auto", position:"relative" },
   textArea: { width:"100%", minHeight:130, background:"#f8fafc", border:"1px solid #f1f5f9", borderRadius:24, padding:"20px", color:"#1e293b", fontSize:16, fontWeight:500, lineHeight:1.6, resize:"vertical", outline:"none", boxSizing:"border-box", transition:"border-color 0.2s" },
-  typeBtn: { flex:1, borderRadius:16, padding:"14px", fontSize:14, fontWeight:800, cursor:"pointer", transition:"all 0.2s" , border:"2px solid transparent" },
+  typeBtn: { flex:1, borderRadius:16, padding:"12px 14px", fontSize:13, fontWeight:800, cursor:"pointer", transition:"all 0.2s" , border:"2px solid transparent" },
   fieldWrap: { display:"flex", alignItems:"center", gap:10, background:"#f8fafc", border:"1px solid #f1f5f9", borderRadius:16, padding:"12px 16px" },
   fieldInput: { background:"none", border:"none", outline:"none", color:"#1e293b", fontSize:14, fontWeight:600, width:"100%" },
   centerMsg: { display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", padding:"100px 20px", textAlign:"center" },

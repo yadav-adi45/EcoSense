@@ -415,10 +415,10 @@ const Routes = () => {
   }, [destination, triggerSearchOnce]);
 
   useEffect(() => {
-    if (origin.trim() && destination.trim()) {
+    if (origin.trim() && destination.trim() && routes.length === 0) {
       handleSearch();
     }
-  }, [travelMode, isPregnancyMode, preferWellLit, season]);
+  }, [travelMode]);
 
   useEffect(() => {
     if (!routes.length) return;
@@ -446,7 +446,8 @@ const Routes = () => {
     }
     setShowDetailedInputs(true);
     setRoutes([]);
-    setSelectedRoute(0);
+    const defaultRouteId = isPregnancyMode ? 1 : (season === "winter" || season === "summer") ? 2 : 0;
+    setSelectedRoute(defaultRouteId);
     setLoading(true);
     try {
       const prefs = { isPregnancyMode, preferWellLit, season, travelMode };
@@ -455,7 +456,7 @@ const Routes = () => {
       const cached = getCachedRoute(originCity, destinationCity, prefs);
       if (cached) {
         setRoutes(cached.routes || []);
-        setSelectedRoute(0);
+        setSelectedRoute(defaultRouteId);
         setOriginCoords(cached.origin);
         setDestinationCoords(cached.destination);
         setLoading(false);
@@ -469,7 +470,8 @@ const Routes = () => {
         destinationCoords,
       });
       if (fastRes.data.success) {
-        setRoutes(fastRes.data.routes);
+        setRoutes(fastRes.data.routes || []);
+        setSelectedRoute(defaultRouteId);
         setOriginCoords(fastRes.data.origin);
         setDestinationCoords(fastRes.data.destination);
         setLoading(false);
@@ -484,6 +486,7 @@ const Routes = () => {
       if (eliteRes.data.success) {
         setCachedRoute(originCity, destinationCity, eliteRes.data, prefs);
         setRoutes(eliteRes.data.routes || []);
+        setSelectedRoute(defaultRouteId);
         setOriginCoords(eliteRes.data.origin);
         setDestinationCoords(eliteRes.data.destination);
       }
@@ -790,7 +793,15 @@ const Routes = () => {
                   <input
                     type="checkbox"
                     checked={isPregnancyMode}
-                    onChange={(e) => setIsPregnancyMode(e.target.checked)}
+                    onChange={(e) => {
+                      const val = e.target.checked;
+                      setIsPregnancyMode(val);
+                      if (val) {
+                        setSelectedRoute(1);
+                      } else {
+                        setSelectedRoute(preferWellLit ? 0 : (season === "winter" || season === "summer") ? 2 : 0);
+                      }
+                    }}
                     className="mt-0.5 w-4 h-4 rounded text-emerald-500 border-gray-300 focus:ring-emerald-400 accent-emerald-500 shrink-0"
                   />
                   <span className="text-xs font-bold text-gray-800 leading-snug">
@@ -803,7 +814,15 @@ const Routes = () => {
                   <input
                     type="checkbox"
                     checked={season === "winter"}
-                    onChange={(e) => setSeason(e.target.checked ? "winter" : "none")}
+                    onChange={(e) => {
+                      const val = e.target.checked ? "winter" : "none";
+                      setSeason(val);
+                      if (val === "winter") {
+                        setSelectedRoute(2);
+                      } else {
+                        setSelectedRoute(isPregnancyMode ? 1 : preferWellLit ? 0 : 0);
+                      }
+                    }}
                     className="mt-0.5 w-4 h-4 rounded text-emerald-500 border-gray-300 focus:ring-emerald-400 accent-emerald-500 shrink-0"
                   />
                   <span className="text-xs font-bold text-gray-800 leading-snug">
@@ -816,7 +835,15 @@ const Routes = () => {
                   <input
                     type="checkbox"
                     checked={preferWellLit}
-                    onChange={(e) => setPreferWellLit(e.target.checked)}
+                    onChange={(e) => {
+                      const val = e.target.checked;
+                      setPreferWellLit(val);
+                      if (val) {
+                        setSelectedRoute(0);
+                      } else {
+                        setSelectedRoute(isPregnancyMode ? 1 : (season === "winter" || season === "summer") ? 2 : 0);
+                      }
+                    }}
                     className="mt-0.5 w-4 h-4 rounded text-emerald-500 border-gray-300 focus:ring-emerald-400 accent-emerald-500 shrink-0"
                   />
                   <span className="text-xs font-bold text-gray-800 leading-snug">
@@ -829,7 +856,15 @@ const Routes = () => {
                   <input
                     type="checkbox"
                     checked={season === "summer"}
-                    onChange={(e) => setSeason(e.target.checked ? "summer" : "none")}
+                    onChange={(e) => {
+                      const val = e.target.checked ? "summer" : "none";
+                      setSeason(val);
+                      if (val === "summer") {
+                        setSelectedRoute(2);
+                      } else {
+                        setSelectedRoute(isPregnancyMode ? 1 : preferWellLit ? 0 : 0);
+                      }
+                    }}
                     className="mt-0.5 w-4 h-4 rounded text-emerald-500 border-gray-300 focus:ring-emerald-400 accent-emerald-500 shrink-0"
                   />
                   <span className="text-xs font-bold text-gray-800 leading-snug">

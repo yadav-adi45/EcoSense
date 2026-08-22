@@ -16,6 +16,7 @@ import {
   Users,
   Menu,
   X,
+  Bot,
 } from "lucide-react";
 
 import { Button } from "./ui/button";
@@ -40,9 +41,16 @@ const Navbar = () => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   const handleLogout = async () => {
-    const res = await axios.get(`${serverUrl}/api/v1/logout`, { withCredentials: true });
-    setUser(null);
-    toast.success(res.data.message);
+    try {
+      await axios.post(`${serverUrl}/api/v1/logout`, {}, { withCredentials: true });
+    } catch (e) {
+      console.warn("Backend logout response warning:", e.message);
+    } finally {
+      localStorage.removeItem("user");
+      localStorage.removeItem("token");
+      setUser(null);
+      toast.success("Logged Out Successfully");
+    }
   };
 
   const mainNavLinks = [
@@ -155,6 +163,7 @@ const Navbar = () => {
                   <div className="py-1">
                     {[
                       { to: "/profile", icon: User, label: "My Profile" },
+                      { to: "/chat", icon: Bot, label: "EcoBot AI" },
                       { to: "/leaderboard", icon: Trophy, label: "Leaderboard" },
                       { to: "/send", icon: ChartBar, label: "Challenge" },
                       { to: "/insights", icon: Inspect, label: "Insights" },
