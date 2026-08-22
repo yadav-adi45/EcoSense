@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import Navbar from "@/components/Navbar";
 import { Card, CardContent } from "@/components/ui/card";
@@ -13,12 +13,11 @@ import {
   TrendingDown,
   Info,
   ExternalLink,
-  FileText,
-  Upload,
-  Trash2,
-  Paperclip,
-  X,
-  ZoomIn
+  Store,
+  ArrowRight,
+  Sparkles,
+  ShoppingBag,
+  Package,
 } from "lucide-react";
 import Footer from "@/pages/Footer";
 
@@ -28,66 +27,13 @@ const BillResult = () => {
   const rawResult = location.state?.result;
 
   const result = rawResult ? {
+    productTitle: rawResult.productTitle,
     productsDetected: rawResult.productsDetected || rawResult.analysis?.length || rawResult.breakdown?.length || 0,
     inputType: rawResult.inputType || "Receipt Scan",
     summary: rawResult.summary || "Itemized carbon footprint and eco-impact analysis based on scanned purchase receipt.",
     pollutionScore: rawResult.pollutionScore ?? rawResult.totalPollutionScore ?? 35,
     breakdown: rawResult.breakdown || rawResult.analysis || []
   } : null;
-
-  const fileInputRef = useRef(null);
-  const reportKey = `report_attachment:${result?.inputType || 'Receipt Scan'}:${result?.pollutionScore || 0}`;
-
-  const isHighPollution = (result?.pollutionScore || 0) > 50;
-
-  const [attachment, setAttachment] = useState(() => {
-    const saved = localStorage.getItem(reportKey);
-    if (saved) return JSON.parse(saved);
-
-    const title = result?.productTitle || result?.inputType?.replace(/^(AI Vision Scan:\s*|Search:\s*)/i, "").replace(/["]/g, "") || "Scanned Product";
-    const score = result?.pollutionScore || 70;
-
-    if (isHighPollution) {
-      return {
-        name: `${title.toLowerCase().replace(/[^a-z0-9]/g, "_")}_lifecycle_audit.svg`,
-        type: "image/svg+xml",
-        url: `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="600" height="420" viewBox="0 0 600 420" fill="none"><rect width="600" height="420" rx="16" fill="%23fff1f2"/><rect x="20" y="20" width="560" height="380" rx="12" fill="white" stroke="%23fecdd3" stroke-width="2"/><rect x="20" y="20" width="560" height="60" fill="%23be123c" rx="12"/><text x="40" y="58" fill="white" font-family="sans-serif" font-size="18" font-weight="bold">HIGH POLLUTION LIFECYCLE AUDIT CERTIFICATE</text><text x="40" y="110" fill="%23be123c" font-family="sans-serif" font-size="14" font-weight="bold">AUDIT ID: %23ENV-LCA-78092</text><text x="40" y="132" fill="%23475569" font-family="sans-serif" font-size="12">Scanned Item: ${encodeURIComponent(title)}</text><line x1="40" y1="150" x2="560" y2="150" stroke="%23fecdd3" stroke-width="2"/><text x="40" y="175" fill="%231e293b" font-family="sans-serif" font-size="13" font-weight="bold">Impact Category</text><text x="310" y="175" fill="%231e293b" font-family="sans-serif" font-size="13" font-weight="bold">Pollution Index</text><text x="460" y="175" fill="%231e293b" font-family="sans-serif" font-size="13" font-weight="bold">Severity</text><text x="40" y="205" fill="%23475569" font-family="sans-serif" font-size="12">Non-Biodegradable Material Index</text><text x="310" y="205" fill="%23e11d48" font-family="sans-serif" font-size="12" font-weight="bold">${score}%</text><text x="460" y="205" fill="%23e11d48" font-family="sans-serif" font-size="12" font-weight="bold">HIGH</text><text x="40" y="235" fill="%23475569" font-family="sans-serif" font-size="12">Lifecycle Carbon Footprint</text><text x="310" y="235" fill="%23e11d48" font-family="sans-serif" font-size="12" font-weight="bold">${Math.min(score + 5, 95)}% Risk</text><text x="460" y="235" fill="%23e11d48" font-family="sans-serif" font-size="12" font-weight="bold">ELEVATED</text><text x="40" y="265" fill="%23475569" font-family="sans-serif" font-size="12">Recycling Separation Difficulty</text><text x="310" y="265" fill="%23d97706" font-family="sans-serif" font-size="12" font-weight="bold">Difficult</text><text x="460" y="265" fill="%23d97706" font-family="sans-serif" font-size="12" font-weight="bold">WARNING</text><line x1="40" y1="290" x2="560" y2="290" stroke="%23fecdd3" stroke-width="1"/><rect x="40" y="320" width="220" height="40" rx="8" fill="%23ffe4e6"/><text x="55" y="345" fill="%239f1239" font-family="sans-serif" font-size="12" font-weight="bold">POLLUTION SCORE: ${score}/100</text><circle cx="500" cy="340" r="25" fill="%23e11d48"/><path d="M490 340 L497 347 L512 332" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
-        description: `Certified lifecycle audit verification showing ${score}% environmental impact rating and material lifecycle analysis.`
-      };
-    }
-
-    return {
-      name: "certified_eco_packaging_invoice.svg",
-      type: "image/svg+xml",
-      url: `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="600" height="400" viewBox="0 0 600 400" fill="none"><rect width="600" height="400" rx="16" fill="%23f8fafc"/><rect x="20" y="20" width="560" height="360" rx="12" fill="white" stroke="%23cbd5e1" stroke-width="2"/><rect x="20" y="20" width="560" height="60" fill="%23065f46" rx="12"/><text x="40" y="58" fill="white" font-family="sans-serif" font-size="20" font-weight="bold">ECO-AUDIT VERIFICATION CERTIFICATE</text><text x="40" y="110" fill="%23047857" font-family="sans-serif" font-size="14" font-weight="bold">AUDIT ID: %23ENV-2026-88492</text><text x="40" y="135" fill="%23475569" font-family="sans-serif" font-size="12">Verified Materials: Zero Single-Use Plastic &amp; 100% Recyclable Packaging</text><line x1="40" y1="160" x2="560" y2="160" stroke="%23e2e8f0" stroke-width="2"/><text x="40" y="190" fill="%231e293b" font-family="sans-serif" font-size="13" font-weight="bold">Item Description</text><text x="350" y="190" fill="%231e293b" font-family="sans-serif" font-size="13" font-weight="bold">Material Audit</text><text x="480" y="190" fill="%231e293b" font-family="sans-serif" font-size="13" font-weight="bold">Carbon Impact</text><text x="40" y="220" fill="%23475569" font-family="sans-serif" font-size="12">${encodeURIComponent(title)}</text><text x="350" y="220" fill="%23047857" font-family="sans-serif" font-size="12">Eco-Certified</text><text x="480" y="220" fill="%23047857" font-family="sans-serif" font-size="12">PASS (Low)</text><text x="40" y="250" fill="%23475569" font-family="sans-serif" font-size="12">Packaging Material</text><text x="350" y="250" fill="%23047857" font-family="sans-serif" font-size="12">Recyclable</text><text x="480" y="250" fill="%23047857" font-family="sans-serif" font-size="12">PASS (Low)</text><rect x="40" y="310" width="180" height="40" rx="8" fill="%23d1fae5"/><text x="55" y="335" fill="%23065f46" font-family="sans-serif" font-size="12" font-weight="bold">VERIFIED GREEN</text><circle cx="500" cy="330" r="25" fill="%2310b981"/><path d="M490 330 L497 337 L512 322" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
-      description: "Pre-verified audit certification showing sustainable zero-plastic packaging from the manufacturer."
-    };
-  });
-
-  const handleFileChange = (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      const newAttachment = {
-        name: file.name,
-        type: file.type,
-        url: reader.result,
-        description: `Verified evidence document attached by user: ${file.name}`
-      };
-      setAttachment(newAttachment);
-      localStorage.setItem(reportKey, JSON.stringify(newAttachment));
-    };
-    reader.readAsDataURL(file);
-  };
-
-  const handleRemoveAttachment = () => {
-    setAttachment(null);
-    localStorage.removeItem(reportKey);
-  };
-
-  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
 
   if (!result) {
     return (
@@ -206,87 +152,186 @@ const BillResult = () => {
           </CardContent>
         </Card>
 
-        {/* 📁 Core Bounty Task: Verification Evidence & Attachments */}
-        <Card className="max-w-4xl mx-auto mb-12 border-dashed border-2 border-emerald-300 rounded-[2.5rem] bg-emerald-50/10 overflow-hidden shadow-sm">
-          <CardContent className="p-8">
-            <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
-              <div className="flex-1 w-full">
-                <div className="flex items-center gap-3 mb-2">
-                  <Paperclip className="w-6 h-6 text-emerald-600" />
-                  <h3 className="text-xl font-black text-gray-800 tracking-tight">Report Evidence & Attachments</h3>
+        {/* 🌿 Recommended Sustainable Alternatives & Substitutes */}
+        {(() => {
+          // Collect all alternatives from breakdown or generate smart context-aware suggestions
+          const allAlternatives = [];
+          const seen = new Set();
+
+          const detectedTitle = (
+            result.productTitle ||
+            result.inputType?.replace(/^(AI Vision Scan:\s*|Search:\s*)/i, "").replace(/["]/g, "") ||
+            ""
+          ).toLowerCase();
+
+          // Contextual defaults for plastic bags / bottles if detected
+          if (detectedTitle.includes("bag") || detectedTitle.includes("plastic") || detectedTitle.includes("polythene") || detectedTitle.includes("carry")) {
+            allAlternatives.push(
+              {
+                title: "Unbleached Recycled Kraft Paper Bags",
+                category: "100% Biodegradable & Compostable",
+                savings: "-88% Carbon Footprint",
+                icon: "📜",
+                benefit: "Decomposes in 30 days without toxic microplastics or petroleum residues.",
+                actionUrl: "/recommendations"
+              },
+              {
+                title: "Reusable Organic Cotton Tote Bag",
+                category: "Zero-Waste Lifetime Reusable",
+                savings: "-95% Lifecycle Waste",
+                icon: "🛍️",
+                benefit: "One durable cotton bag replaces over 300+ single-use plastic bags per year.",
+                actionUrl: "/eco-store"
+              },
+              {
+                title: "Natural Jute Fiber Burlap Shopper",
+                category: "Locally Harvested Renewable Fiber",
+                savings: "-82% CO2 Footprint",
+                icon: "🌾",
+                benefit: "Ultra-high tensile strength, heavy-duty grocery capacity, and chemical-free.",
+                actionUrl: "/recommendations"
+              }
+            );
+          } else if (detectedTitle.includes("bottle") || detectedTitle.includes("water") || detectedTitle.includes("drink")) {
+            allAlternatives.push(
+              {
+                title: "Double-Wall Stainless Steel Hydro Flask",
+                category: "Lifetime Reusable Insulated",
+                savings: "-96% Lifecycle Impact",
+                icon: "🧴",
+                benefit: "Keeps drinks cold 24h/hot 12h, zero BPA or microplastic leaching into water.",
+                actionUrl: "/recommendations"
+              },
+              {
+                title: "Borosilicate Glass Bottle with Bamboo Sleeve",
+                category: "100% Infinitely Recyclable Glass",
+                savings: "-90% Microplastics",
+                icon: "🍶",
+                benefit: "Pure taste, non-reactive natural material with shock-absorbent eco bamboo wrap.",
+                actionUrl: "/eco-store"
+              }
+            );
+          }
+
+          // Also pull AI-generated alternatives from breakdown
+          if (result.breakdown && Array.isArray(result.breakdown)) {
+            result.breakdown.forEach((b) => {
+              if (Array.isArray(b.alternatives)) {
+                b.alternatives.forEach((alt) => {
+                  if (alt && !seen.has(alt.toLowerCase()) && allAlternatives.length < 4) {
+                    seen.add(alt.toLowerCase());
+                    allAlternatives.push({
+                      title: alt,
+                      category: b.recyclable ? "Recyclable Sustainable Alternative" : "Zero-Emission Bio-Material",
+                      savings: b.pollution > 60 ? "-75% Toxicity & Emissions" : "-50% Carbon Footprint",
+                      icon: "🌿",
+                      benefit: `Designed to replace ${b.item} with non-toxic, eco-certified materials.`,
+                      actionUrl: "/recommendations"
+                    });
+                  }
+                });
+              }
+            });
+          }
+
+          // Fallback if no specific alternatives found
+          if (allAlternatives.length === 0) {
+            allAlternatives.push(
+              {
+                title: "Eco-Certified Biodegradable Substitute",
+                category: "Plant-Based Polymer Replacement",
+                savings: "-70% Carbon Emissions",
+                icon: "🌱",
+                benefit: "Manufactured from renewable agricultural feedstocks with closed-loop recycling.",
+                actionUrl: "/recommendations"
+              },
+              {
+                title: "Recycled Post-Consumer Material Alternative",
+                category: "Circular Economy Certified",
+                savings: "-65% Resource Depletion",
+                icon: "♻️",
+                benefit: "Diverts landfill waste and utilizes 100% solar-powered clean production.",
+                actionUrl: "/eco-store"
+              }
+            );
+          }
+
+          return (
+            <Card className="max-w-5xl mx-auto mb-12 border border-emerald-100 rounded-[2.5rem] bg-gradient-to-br from-emerald-50/70 via-white to-emerald-50/30 overflow-hidden shadow-lg shadow-emerald-900/5">
+              <CardContent className="p-8 sm:p-10">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-8">
+                  <div>
+                    <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-700 text-xs font-black uppercase tracking-wider mb-2">
+                      <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
+                      <span>Smart Eco-Replacements</span>
+                    </div>
+                    <h3 className="text-2xl sm:text-3xl font-black text-gray-900 tracking-tight">
+                      Recommended Sustainable Alternatives
+                    </h3>
+                    <p className="text-gray-500 text-sm font-medium mt-1">
+                      Replace high-pollution materials with these verified eco-friendly substitutes.
+                    </p>
+                  </div>
+
+                  <Button
+                    onClick={() => navigate("/recommendations")}
+                    className="shrink-0 bg-emerald-600 hover:bg-emerald-700 text-white font-bold h-11 px-5 rounded-2xl flex items-center gap-2 shadow-md shadow-emerald-600/20 transition-all hover:scale-105 active:scale-95"
+                  >
+                    <Store className="w-4 h-4" />
+                    <span>View in Eco Store</span>
+                    <ArrowRight className="w-4 h-4 ml-1" />
+                  </Button>
                 </div>
-                <p className="text-gray-500 text-sm font-medium mb-4">
-                  Upload certificates, recycling receipts, or product labels as evidence of sustainability.
-                </p>
 
-                {attachment ? (
-                  <div className="bg-white rounded-2xl p-4 border border-emerald-100 flex items-center gap-4 shadow-sm">
+                <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
+                  {allAlternatives.map((alt, idx) => (
                     <div
-                      onClick={() => setIsPreviewOpen(true)}
-                      className="relative w-16 h-16 rounded-xl overflow-hidden cursor-pointer group/thumb border border-emerald-50 shadow-inner"
-                      title="Click to view full document"
+                      key={idx}
+                      className="bg-white rounded-3xl p-6 border border-emerald-100/80 shadow-sm hover:shadow-md hover:border-emerald-300 transition-all group flex flex-col justify-between relative overflow-hidden"
                     >
-                      {attachment.type?.startsWith("image/") ? (
-                        <>
-                          <img
-                            src={attachment.url}
-                            alt="Evidence Preview"
-                            className="w-full h-full object-cover group-hover/thumb:scale-110 transition-transform duration-300"
-                          />
-                          <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover/thumb:opacity-100 transition-opacity">
-                            <ZoomIn className="w-5 h-5 text-white" />
-                          </div>
-                        </>
-                      ) : (
-                        <div className="w-full h-full bg-emerald-50 flex items-center justify-center">
-                          <FileText className="w-8 h-8 text-emerald-600" />
-                        </div>
-                      )}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p
-                        onClick={() => setIsPreviewOpen(true)}
-                        className="text-sm font-bold text-gray-800 hover:text-emerald-600 cursor-pointer truncate transition-colors"
-                      >
-                        {attachment.name}
-                      </p>
-                      <p className="text-xs text-emerald-600 font-medium italic mt-1">{attachment.description}</p>
-                    </div>
-                    <Button
-                      onClick={handleRemoveAttachment}
-                      variant="ghost"
-                      className="h-10 w-10 p-0 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-xl"
-                      title="Remove evidence"
-                    >
-                      <Trash2 className="w-5 h-5" />
-                    </Button>
-                  </div>
-                ) : (
-                  <div className="bg-gray-50 rounded-2xl p-6 border border-dashed border-gray-200 text-center">
-                    <p className="text-gray-400 font-bold text-sm">No evidence files attached to this report.</p>
-                  </div>
-                )}
-              </div>
+                      <div className="absolute top-0 right-0 w-24 h-24 bg-emerald-50/50 rounded-full blur-2xl pointer-events-none group-hover:bg-emerald-100/50 transition-colors" />
 
-              <div className="shrink-0">
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/*,application/pdf"
-                  onChange={handleFileChange}
-                  className="hidden"
-                />
-                <Button
-                  onClick={() => fileInputRef.current.click()}
-                  className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold h-12 px-6 rounded-xl flex items-center gap-2 shadow-md"
-                >
-                  <Upload className="w-4 h-4" />
-                  Attach Evidence
-                </Button>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+                      <div>
+                        <div className="flex items-start justify-between gap-3 mb-3">
+                          <span className="text-3xl p-2.5 bg-emerald-50 rounded-2xl group-hover:scale-110 transition-transform">
+                            {alt.icon}
+                          </span>
+                          <span className="px-2.5 py-1 rounded-xl text-[10px] font-black uppercase tracking-wider bg-emerald-500/10 text-emerald-700 border border-emerald-500/20">
+                            {alt.savings}
+                          </span>
+                        </div>
+
+                        <span className="text-[10px] font-black uppercase tracking-widest text-gray-400 block mb-1">
+                          {alt.category}
+                        </span>
+                        <h4 className="text-base font-black text-gray-800 leading-snug group-hover:text-emerald-700 transition-colors mb-2">
+                          {alt.title}
+                        </h4>
+                        <p className="text-xs text-gray-500 font-medium leading-relaxed mb-4">
+                          {alt.benefit}
+                        </p>
+                      </div>
+
+                      <div className="pt-3 border-t border-gray-100 flex items-center justify-between">
+                        <span className="text-[11px] font-bold text-emerald-600 flex items-center gap-1">
+                          <CheckCircle className="w-3.5 h-3.5" /> Eco-Verified
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => navigate(alt.actionUrl)}
+                          className="text-xs font-black text-emerald-700 hover:text-emerald-900 flex items-center gap-1 group-hover:translate-x-0.5 transition-transform cursor-pointer"
+                        >
+                          <span>Explore</span>
+                          <span>➔</span>
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          );
+        })()}
 
         {/* Product Breakdown */}
         <div className="max-w-5xl mx-auto">
@@ -385,51 +430,6 @@ const BillResult = () => {
             Analyze Another Document
           </Button>
         </div>
-        {/* Fullscreen Lightbox Zoom Modal */}
-        {isPreviewOpen && attachment && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-6 animate-in fade-in duration-300">
-            <div className="absolute inset-0 cursor-pointer" onClick={() => setIsPreviewOpen(false)} />
-            <div className="relative max-w-4xl max-h-[85vh] bg-white rounded-3xl overflow-hidden shadow-2xl border border-gray-100 flex flex-col z-10 animate-in zoom-in-95 duration-300 w-full mx-4">
-              {/* Header */}
-              <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 bg-white">
-                <div className="min-w-0">
-                  <h4 className="text-base font-black text-gray-800 truncate">{attachment.name}</h4>
-                  <p className="text-xs text-emerald-600 font-medium italic mt-0.5">{attachment.description}</p>
-                </div>
-                <Button
-                  onClick={() => setIsPreviewOpen(false)}
-                  variant="ghost"
-                  className="h-10 w-10 p-0 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-full flex items-center justify-center"
-                >
-                  <X className="w-6 h-6" />
-                </Button>
-              </div>
-
-              {/* Image Preview Panel */}
-              <div className="flex-1 overflow-auto bg-gray-50 flex items-center justify-center p-6 min-h-[300px]">
-                {attachment.type?.startsWith("image/") ? (
-                  <img
-                    src={attachment.url}
-                    alt="Full Evidence Preview"
-                    className="max-w-full max-h-[60vh] object-contain rounded-xl shadow-md border border-gray-200"
-                  />
-                ) : (
-                  <div className="flex flex-col items-center gap-4 text-center p-12">
-                    <FileText className="w-20 h-20 text-emerald-500 animate-bounce" />
-                    <p className="text-gray-900 font-bold text-lg">Document Attached</p>
-                    <a
-                      href={attachment.url}
-                      download={attachment.name}
-                      className="inline-flex items-center gap-2 px-6 py-3 bg-emerald-500 hover:bg-emerald-600 text-white font-bold rounded-xl shadow-lg shadow-emerald-100"
-                    >
-                      Download Document Link
-                    </a>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
       </div>
       <Footer />
     </div>

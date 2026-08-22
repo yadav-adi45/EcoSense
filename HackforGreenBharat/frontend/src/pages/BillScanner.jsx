@@ -294,7 +294,7 @@ const BillScanner = () => {
 
       canvas.toBlob((blob) => {
         if (blob) {
-          const capturedFile = new File([blob], "LiveScanCapture.png", { type: "image/png" });
+          const capturedFile = new File([blob], `Camera_Capture_${Date.now()}.png`, { type: "image/png" });
           setFile(capturedFile);
           stopCamera();
           handleAnalyze(capturedFile);
@@ -314,7 +314,7 @@ const BillScanner = () => {
   const handleAnalyze = async (selectedFile) => {
     setLoading(true);
     setScanProgress(0);
-    setScanStageMsg("Capturing high-resolution camera feed...");
+    setScanStageMsg("Capturing image & sending to AI Vision...");
 
     let apiResult = null;
     const apiPromise = (async () => {
@@ -334,31 +334,37 @@ const BillScanner = () => {
     })();
 
     const steps = [
-      { pct: 20, msg: "Extracting visual features & material texture..." },
-      { pct: 45, msg: "Identifying physical object with Gemini AI Vision..." },
-      { pct: 70, msg: "Evaluating recyclability & life cycle carbon footprint..." },
-      { pct: 90, msg: "Generating eco-friendly product alternatives..." },
-      { pct: 100, msg: "Finalizing Environmental Report..." },
+      { pct: 25, msg: "Extracting visual features & material texture..." },
+      { pct: 55, msg: "Identifying physical object with Gemini AI Vision..." },
+      { pct: 80, msg: "Evaluating recyclability & life cycle carbon footprint..." },
+      { pct: 95, msg: "Generating eco-friendly product alternatives..." },
     ];
 
-    let currentStep = 0;
-    const interval = setInterval(async () => {
-      if (currentStep < steps.length) {
-        setScanProgress(steps[currentStep].pct);
-        setScanStageMsg(steps[currentStep].msg);
-        currentStep++;
-      } else {
-        clearInterval(interval);
-        await apiPromise;
-        const fallbackResult = getDynamicProductResult(selectedFile);
-        const finalResult = apiResult || fallbackResult;
-
-        setTimeout(() => {
-          setLoading(false);
-          navigate("/bill-result", { state: { result: finalResult } });
-        }, 400);
+    let stepIdx = 0;
+    const timer = setInterval(() => {
+      if (stepIdx < steps.length) {
+        setScanProgress(steps[stepIdx].pct);
+        setScanStageMsg(steps[stepIdx].msg);
+        stepIdx++;
       }
-    }, 1200);
+    }, 600);
+
+    try {
+      await apiPromise;
+    } finally {
+      clearInterval(timer);
+    }
+
+    setScanProgress(100);
+    setScanStageMsg("Finalizing Environmental LCA Report...");
+
+    const fallbackResult = getDynamicProductResult(selectedFile);
+    const finalResult = apiResult || fallbackResult;
+
+    setTimeout(() => {
+      setLoading(false);
+      navigate("/bill-result", { state: { result: finalResult } });
+    }, 400);
   };
 
   const handleManualSearch = async () => {

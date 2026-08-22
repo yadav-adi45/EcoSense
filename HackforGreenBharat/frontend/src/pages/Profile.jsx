@@ -38,9 +38,10 @@ import { serverUrl } from "@/main";
 import { toast } from "react-toastify";
 import { Link, useNavigate } from "react-router-dom";
 import { AuthContext } from "@/components/context/context";
+import EcoCoinIcon from "@/components/ui/EcoCoinIcon";
 
-/* ─── Available Eco Interests Tags ─── */
-const ECO_INTEREST_OPTIONS = [
+/* ─── Sustainability Interest Tags ─── */
+const ALL_INTERESTS = [
   { id: "clean_air", label: "🌿 Clean Air", desc: "Low-AQI commuting" },
   { id: "ev_routes", label: "⚡ EV Routes", desc: "Charging network access" },
   { id: "zero_waste", label: "♻️ Zero Waste", desc: "Plastic-free living" },
@@ -48,10 +49,9 @@ const ECO_INTEREST_OPTIONS = [
   { id: "tree_planting", label: "🌱 Tree Planting", desc: "Urban afforestation" },
   { id: "solar_energy", label: "☀️ Solar Energy", desc: "Renewable power" },
   { id: "water_conservation", label: "💧 Water Conservation", desc: "Rainwater & saving" },
-  { id: "wildlife_safety", label: "🐾 Wildlife Safety", desc: "Animal collision safety" },
-  { id: "plant_diet", label: "🥗 Plant-Based Diet", desc: "Lower carbon footprint" },
   { id: "eco_shopping", label: "📦 Eco Products", desc: "Sustainable shopping" },
 ];
+const ECO_INTEREST_OPTIONS = ALL_INTERESTS;
 
 /* ─── Achievement Badges ─── */
 const BADGES = [
@@ -59,7 +59,7 @@ const BADGES = [
   { id: "streak", name: "Green Streak", description: "Active on EcoSense platform", icon: Zap, earned: true },
   { id: "carbon", name: "Carbon Crusher", description: "Saved >100kg CO₂ emissions", icon: Leaf, earned: true },
   { id: "transit", name: "Clean Commuter", description: "Navigated with low-AQI routes", icon: RouteIcon, earned: true },
-  { id: "coins", name: "Eco Collector", description: "Earned 50+ EcoCoins", icon: Coins, earned: false },
+  { id: "coins", name: "Eco Collector", description: "Earned 50+ EcoCoins", customIcon: true, earned: false },
   { id: "guardian", name: "Air Guardian", description: "Monitored AQI hotspots", icon: ShieldCheck, earned: false },
 ];
 
@@ -501,14 +501,14 @@ const Profile = () => {
                 {/* EcoCoins Wallet */}
                 <Link
                   to="/eco-store"
-                  className="bg-amber-50/90 hover:bg-amber-100 border border-amber-200/80 rounded-2xl px-4 py-2.5 flex items-center gap-2.5 transition-all shadow-xs group"
+                  className="bg-emerald-50/90 hover:bg-emerald-100/90 border border-emerald-200/80 rounded-2xl px-4 py-2.5 flex items-center gap-2.5 transition-all shadow-xs group hover:scale-102"
                 >
-                  <div className="w-8 h-8 rounded-xl bg-amber-500 text-white flex items-center justify-center font-black shadow-xs group-hover:rotate-12 transition-transform">
-                    🪙
+                  <div className="w-8 h-8 rounded-xl bg-emerald-600/10 border border-emerald-200/70 flex items-center justify-center shadow-xs group-hover:rotate-12 transition-transform">
+                    <EcoCoinIcon size={24} animated />
                   </div>
                   <div>
-                    <span className="text-[10px] uppercase font-black text-amber-700 block leading-none">EcoCoins</span>
-                    <span className="text-lg font-black text-amber-900 leading-tight">{userCoins}</span>
+                    <span className="text-[10px] uppercase font-black text-emerald-700 block leading-none">EcoCoins</span>
+                    <span className="text-lg font-black text-emerald-900 leading-tight">{userCoins}</span>
                   </div>
                 </Link>
 
@@ -939,7 +939,11 @@ const Profile = () => {
                     b.earned ? "bg-emerald-500 text-white" : "bg-gray-200 text-gray-400"
                   }`}
                 >
-                  <b.icon className="w-5 h-5" />
+                  {b.customIcon ? (
+                    <EcoCoinIcon size={22} className={b.earned ? "" : "grayscale opacity-60"} />
+                  ) : (
+                    <b.icon className="w-5 h-5" />
+                  )}
                 </div>
                 <span className="text-xs font-black text-gray-800 leading-tight">{b.name}</span>
                 <span className="text-[9px] text-gray-500 line-clamp-2 leading-tight">{b.description}</span>
