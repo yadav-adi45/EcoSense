@@ -21,6 +21,23 @@ const userSchema = new mongoose.Schema(
         type: String,
         default: "",
       },
+      bio: {
+        type: String,
+        default: "",
+        maxlength: 350,
+      },
+      location: {
+        type: String,
+        default: "",
+      },
+      phone: {
+        type: String,
+        default: "",
+      },
+      interests: {
+        type: [String],
+        default: [],
+      },
     },
 
     ecoCoins: {

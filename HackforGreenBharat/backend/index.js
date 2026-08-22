@@ -25,6 +25,7 @@ import storeRouter from "./route/storeRoute.js";
 import communityRouter from "./route/communityRoutes.js";
 import animalRouter from "./route/animalRoutes.js";
 import ecoCoinRouter from "./route/ecoCoinRoutes.js";
+import profileRouter from "./route/profileRoute.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -53,6 +54,7 @@ database();
 
 /* ROUTES */
 app.use("/api/v1", userRouter);
+app.use("/api/v1", profileRouter);
 app.use("/api/v2", geoRouter);
 app.use("/api/v3", chat);
 app.use("/api/v4", eco);
