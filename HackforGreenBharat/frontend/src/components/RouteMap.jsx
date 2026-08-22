@@ -173,6 +173,7 @@ const RouteMap = ({
   showPolice = true,
   focusedLocation = null,
   onSelectFacility = () => {},
+  onClearRoute = () => {},
 }) => {
   const mapContainerRef = useRef(null);
   const mapRef = useRef(null);
@@ -551,9 +552,9 @@ const RouteMap = ({
       
       {/* ── View & Map Style Switcher (Top-Left) ── */}
       {hasRoutes && (
-        <div className="absolute top-4 left-4 z-[400] flex flex-wrap items-center gap-2">
+        <div className="absolute top-4 left-4 z-[500] flex flex-wrap items-center gap-2">
           {/* View Switcher: Route Map vs National AQI */}
-          <div className="bg-white/95 backdrop-blur-md p-1 rounded-2xl shadow-lg border border-gray-200/80 flex items-center gap-1">
+          <div className="bg-white/95 backdrop-blur-md p-1 rounded-2xl shadow-xl border border-gray-200/90 flex items-center gap-1">
             <button
               type="button"
               onClick={() => setUserViewOverride("map")}
@@ -564,7 +565,7 @@ const RouteMap = ({
               }`}
             >
               <MapIcon className="w-3.5 h-3.5" />
-              <span>Route Map</span>
+              <span>🚗 Route Map</span>
             </button>
             <button
               type="button"
@@ -576,9 +577,25 @@ const RouteMap = ({
               }`}
             >
               <Layers className="w-3.5 h-3.5" />
-              <span>National AQI</span>
+              <span>🗺️ National AQI Heatmap</span>
             </button>
           </div>
+
+          {/* If viewing Heatmap while routes are active, show quick exit/reset button */}
+          {currentView === "heatmap" && (
+            <button
+              type="button"
+              onClick={() => {
+                setUserViewOverride(null);
+                onClearRoute();
+              }}
+              className="bg-white/95 backdrop-blur-md px-3 py-1.5 rounded-2xl shadow-lg border border-red-200 text-red-600 hover:bg-red-50 text-xs font-black flex items-center gap-1.5 transition-all"
+              title="Clear searched route and stay on heatmap"
+            >
+              <span>✕</span>
+              <span>Clear Route</span>
+            </button>
+          )}
 
           {/* Google Maps Style Switcher (Map / Satellite / Terrain) */}
           {currentView === "map" && (
@@ -616,8 +633,6 @@ const RouteMap = ({
               >
                 Terrain
               </button>
-
-
             </div>
           )}
         </div>

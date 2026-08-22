@@ -86,11 +86,11 @@ const Routes = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const [origin, setOrigin] = useState("Delhi");
+  const [origin, setOrigin] = useState("");
   const [destination, setDestination] = useState("");
   const [routes, setRoutes] = useState([]);
   const [selectedRoute, setSelectedRoute] = useState(0);
-  const [originCoords, setOriginCoords] = useState({ lat: 28.6139, lon: 77.2090, name: "Delhi" });
+  const [originCoords, setOriginCoords] = useState(null);
   const [destinationCoords, setDestinationCoords] = useState(null);
   const [loading, setLoading] = useState(false);
   const [isNavigating, setIsNavigating] = useState(false);
@@ -149,55 +149,7 @@ const Routes = () => {
       setTriggerSearchOnce(targetOrigin);
       return;
     }
-
-    // 3. Fallback: Restore from sessionStorage if user used browser history back button
-    try {
-      const raw = sessionStorage.getItem("ecosense_active_route_search");
-      if (raw) {
-        const saved = JSON.parse(raw);
-        if (saved && saved.destination && saved.routes?.length > 0) {
-          setOrigin(saved.origin || "Delhi");
-          setDestination(saved.destination);
-          setOriginCoords(saved.originCoords);
-          setDestinationCoords(saved.destinationCoords);
-          setRoutes(saved.routes);
-          setSelectedRoute(saved.selectedRoute || 0);
-          if (saved.travelMode) setTravelMode(saved.travelMode);
-          if (saved.preferences) {
-            if (saved.preferences.isPregnancyMode !== undefined) setIsPregnancyMode(saved.preferences.isPregnancyMode);
-            if (saved.preferences.preferWellLit !== undefined) setPreferWellLit(saved.preferences.preferWellLit);
-            if (saved.preferences.season !== undefined) setSeason(saved.preferences.season);
-          }
-          setShowDetailedInputs(true);
-        }
-      }
-    } catch (e) {
-      console.warn("Session restore error:", e);
-    }
   }, [location.state]);
-
-  // Persist current active search to sessionStorage whenever routes or search changes
-  useEffect(() => {
-    if (routes.length > 0 && destination) {
-      try {
-        sessionStorage.setItem(
-          "ecosense_active_route_search",
-          JSON.stringify({
-            origin,
-            destination,
-            originCoords,
-            destinationCoords,
-            routes,
-            selectedRoute,
-            travelMode,
-            preferences: { isPregnancyMode, preferWellLit, season, travelMode },
-          })
-        );
-      } catch (e) {
-        // ignore storage errors
-      }
-    }
-  }, [routes, selectedRoute, origin, destination, originCoords, destinationCoords, travelMode, isPregnancyMode, preferWellLit, season]);
 
   const [locatingUser, setLocatingUser] = useState(false);
   const [triggerSearchOnce, setTriggerSearchOnce] = useState(null);
@@ -498,7 +450,20 @@ const Routes = () => {
     }
   };
 
-  const handleStartNavigation = (mode = "live") => {
+  const handleResetToHeatmap = () => {
+    setRoutes([]);
+    setOrigin("");
+    setDestination("");
+    setOriginCoords(null);
+    setDestinationCoords(null);
+    setSelectedRoute(0);
+    setIsNavigating(false);
+    setRouteMode("preview");
+    localStorage.removeItem(LOCAL_STORAGE_KEY);
+    toast.info("Returned to National AQI Heatmap", { autoClose: 2000 });
+  };
+
+  const handleStartNavigation = async (mode = "live") => {
     if (launchingMode) return;
 
     if (isNavigating) {
@@ -903,6 +868,21 @@ const Routes = () => {
                 </div>
               ) : routes.length > 0 ? (
                 <div className="space-y-3">
+                  {/* Quick Back to National Heatmap bar */}
+                  <div className="flex items-center justify-between bg-emerald-50/80 border border-emerald-200/80 rounded-2xl p-2 px-3 shadow-xs">
+                    <span className="text-xs font-black text-emerald-900 flex items-center gap-1.5">
+                      <span>🗺️</span> Active Route Mode
+                    </span>
+                    <button
+                      type="button"
+                      onClick={handleResetToHeatmap}
+                      className="flex items-center gap-1 text-[11px] font-black text-emerald-700 hover:text-emerald-950 bg-white hover:bg-emerald-100/80 px-2.5 py-1 rounded-xl border border-emerald-200 shadow-xs transition-all active:scale-95 cursor-pointer"
+                      title="Clear route and view India AQI heatmap"
+                    >
+                      <span>←</span> Back to Heatmap
+                    </button>
+                  </div>
+
                   <div className="flex items-center justify-between">
                     <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
                       Suggested Routes
@@ -1224,6 +1204,7 @@ const Routes = () => {
             origin={originCoords}
             destination={destinationCoords}
             onSelectRoute={setSelectedRoute}
+            onClearRoute={handleResetToHeatmap}
             isNavigating={isNavigating}
             onExitNav={() => setIsNavigating(false)}
             transportMode={travelMode}
