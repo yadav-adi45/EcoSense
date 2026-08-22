@@ -56,7 +56,30 @@ const calcIndiaAQI = (pm25, pm10) => {
  * Fallback: WAQI (US EPA standard) or Open-Meteo US AQI
  */
 export const getAQIByCoords = async (lat, lon) => {
-  // 1. Primary: Direct India NAQI via Open-Meteo Atmospheric Pollutant Sensors
+  const token = process.env.AQICN_API_KEY || "ed2c8ca08743ffd005a53dac0072d3150894748b";
+
+  // 1. Check WAQI Ground Station Feed
+  if (token) {
+    try {
+      const res = await axios.get(
+        `https://api.waqi.info/feed/geo:${lat};${lon}/?token=${token}`,
+        { timeout: 2500 }
+      );
+
+      if (res.data?.status === "ok" && typeof res.data?.data?.aqi === "number") {
+        return {
+          aqi: res.data.data.aqi,
+          source: "WAQI Live Ground Station",
+          station: res.data.data.city?.name || "Official Monitoring Station",
+          iaqi: res.data.data.iaqi || {},
+        };
+      }
+    } catch {
+      // Proceed to atmospheric NAQI
+    }
+  }
+
+  // 2. Direct India NAQI via Open-Meteo Atmospheric Pollutant Sensors
   try {
     const omRes = await axios.get(
       `https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${lat}&longitude=${lon}&current=pm2_5,pm10,us_aqi,carbon_monoxide,nitrogen_dioxide,sulphur_dioxide,ozone`,
@@ -70,7 +93,7 @@ export const getAQIByCoords = async (lat, lon) => {
       if (finalAQI !== null) {
         return {
           aqi: finalAQI,
-          source: indiaAQI !== null ? "india-naqi (open-meteo)" : "open-meteo",
+          source: indiaAQI !== null ? "India NAQI (Atmospheric)" : "Open-Meteo",
           station: "Atmospheric Sensor (NAQI)",
           iaqi: {
             pm25: { v: curr.pm2_5 },
@@ -84,29 +107,7 @@ export const getAQIByCoords = async (lat, lon) => {
       }
     }
   } catch {
-    // Fallback to WAQI below
-  }
-
-  // 2. Fallback: WAQI (US AQI / Ground Stations)
-  const token = process.env.AQICN_API_KEY;
-  if (token) {
-    try {
-      const res = await axios.get(
-        `https://api.waqi.info/feed/geo:${lat};${lon}/?token=${token}`,
-        { timeout: 2500 }
-      );
-
-      if (res.data?.status === "ok" && typeof res.data?.data?.aqi === "number") {
-        return {
-          aqi: res.data.data.aqi,
-          source: "waqi (us-aqi)",
-          station: res.data.data.city?.name || null,
-          iaqi: res.data.data.iaqi || {},
-        };
-      }
-    } catch {
-      // Failed
-    }
+    // Fallback
   }
 
   return { aqi: null };

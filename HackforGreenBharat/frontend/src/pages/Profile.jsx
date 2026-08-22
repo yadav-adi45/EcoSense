@@ -113,7 +113,7 @@ const Profile = () => {
     location:      assessment.userId?.profile?.location || "India",
     joinedDate:    assessment.userId?.createdAt
       ? new Date(assessment.userId.createdAt).toLocaleDateString("en-US", { month: "long", year: "numeric" })
-      : "March 2024",
+      : "March 2026",
     avatar:        assessment.userId?.profile?.profilePhoto,
     pollutionScore: assessment.score || 0,
     rank:          staticData.rank,

@@ -30,7 +30,7 @@ import {
 } from "lucide-react";
 
 const monthlyReport = {
-  month: "November 2024",
+  month: "November 2026",
   totalCO2: 156,
   previousMonth: 189,
   improvement: 17.5,

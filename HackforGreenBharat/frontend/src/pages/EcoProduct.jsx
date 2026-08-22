@@ -61,159 +61,70 @@ const PRODUCTS = [
     rating: 4.2,
     price: 149,
     link: "https://www.amazon.in/s?k=bamboo+toothbrush",
-    image: "https://img.freepik.com/premium-photo/eco-friendly-bamboo-toothbrushes-with-natural-background_648871-8075.jpg",
-    badges: ["Biodegradable", "Plastic-Free"],
+    image: "https://images.unsplash.com/photo-1607613009820-a29f7bb81c04?q=80&w=1200&auto=format&fit=crop",
+    badges: ["Biodegradable", "Zero-Waste"],
     whyBetter:
-      "Compostable handle, reduces plastic waste in landfills.",
+      "Compostable handle replaces plastic waste that lingers in landfills.",
   },
   {
     id: "p4",
-    name: "Metro/Bus Smart Card",
-    brand: "DMRC",
-    category: "Travel",
-    aqiImpact: "Very Low",
-    co2SavedKg: 120,
-    rating: 4.8,
-    price: 150,
-    link: "https://www.dmrcsmartcard.com/",
-    image: "/images/metro_card.png",
-    badges: ["Public Transit", "Low AQI Exposure"],
+    name: "Smart Power Strip",
+    brand: "PowerSaver",
+    category: "Electronics",
+    aqiImpact: "Moderate",
+    co2SavedKg: 35,
+    rating: 4.7,
+    price: 1299,
+    link: "https://www.amazon.in/s?k=smart+power+strip",
+    image: "https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?q=80&w=1200&auto=format&fit=crop",
+    badges: ["Phantom-Load Killer", "App Control"],
     whyBetter:
-      "Shifts trips from private vehicles to transit, slashes per‑km emissions and exposure.",
+      "Cuts standby power to devices automatically, reducing hidden energy usage.",
   },
   {
     id: "p5",
-    name: "Solar Power Bank",
-    brand: "SunVolt",
-    category: "Electronics",
+    name: "Stainless Steel Bottle",
+    brand: "AquaPure",
+    category: "Travel",
     aqiImpact: "Low",
-    co2SavedKg: 9,
-    rating: 4.1,
-    price: 1899,
-    link: "https://www.amazon.in/s?k=solar+power+bank",
-    image: "https://images.unsplash.com/photo-1544427920-c49ccfb85579?q=80&w=1200&auto=format&fit=crop",
-    badges: ["Recharge via Sun", "Reusable"],
+    co2SavedKg: 8,
+    rating: 4.8,
+    price: 599,
+    link: "https://www.amazon.in/s?k=stainless+steel+water+bottle",
+    image: "https://images.unsplash.com/photo-1602143407151-7111542de6e8?q=80&w=1200&auto=format&fit=crop",
+    badges: ["BPA-Free", "Insulated"],
     whyBetter:
-      "Charges on solar, reduces grid draw during peak fossil periods.",
+      "Keeps drinks cold/hot for hours, replacing hundreds of single-use bottles.",
   },
   {
     id: "p6",
-    name: "HEPA Room Air Purifier",
-    brand: "PureAir",
-    category: "Home Energy",
-    aqiImpact: "Exposure Guard",
-    co2SavedKg: 0,
-    rating: 4.5,
-    price: 6999,
-    link: "https://www.amazon.in/s?k=hepa+air+purifier",
-    image: "https://m.media-amazon.com/images/I/71ipnrfS-1L._AC_SX208_CB1169409_QL70_.jpg",
-    badges: ["HEPA 13", "PM2.5 Removal"],
-    whyBetter:
-      "Reduces indoor PM2.5 exposure during high-AQI days; pair with sealed rooms.",
-  },
-  {
-    id: "p7",
-    name: "Reusable Water Bottle",
-    brand: "HydroFlask",
-    category: "Personal Care",
-    aqiImpact: "Low",
-    co2SavedKg: 35,
-    rating: 4.9,
-    price: 899,
-    link: "https://www.amazon.in/s?k=metal+water+bottle",
-    image: "https://images.pexels.com/photos/4000090/pexels-photo-4000090.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1", 
-    badges: ["Plastic-Free", "Durable"],
-    whyBetter: "Replaces hundreds of single-use plastic bottles every year.",
-  },
-  {
-    id: "p8",
-    name: "Solar Garden Lights",
-    brand: "SolarGlow",
-    category: "Home Energy",
-    aqiImpact: "Low",
+    name: "Solar Power Bank 10,000mAh",
+    brand: "SunVolt",
+    category: "Electronics",
+    aqiImpact: "Moderate",
     co2SavedKg: 12,
     rating: 4.3,
-    price: 1299,
-    link: "https://www.amazon.in/s?k=solar+garden+lights",
-    image: "https://images.pexels.com/photos/16632420/pexels-photo-16632420/free-photo-of-solar-lamp-in-garden.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1",
-    badges: ["Zero Energy", "Auto-Sensor"],
-    whyBetter: "Lights up your garden using free solar energy, zero electricity cost.",
+    price: 1899,
+    link: "https://www.amazon.in/s?k=solar+power+bank",
+    image: "https://images.unsplash.com/photo-1509391365360-2e959784a276?q=80&w=1200&auto=format&fit=crop",
+    badges: ["Solar Charging", "Dual Output"],
+    whyBetter:
+      "Harnesses sunlight for mobile charging during outdoor travel or emergencies.",
   },
-  {
-    id: "p9",
-    name: "Beeswax Food Wraps",
-    brand: "Apiary",
-    category: "Groceries",
-    aqiImpact: "Low",
-    co2SavedKg: 2,
-    rating: 4.5,
-    price: 599,
-    link: "https://www.amazon.in/s?k=beeswax+food+wraps",
-    image: "https://images.pexels.com/photos/8250916/pexels-photo-8250916.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1",
-    badges: ["Biodegradable", "Washable"],
-    whyBetter: "Natural alternative to plastic cling wrap, keeps food fresh effectively.",
-  },
-  {
-    id: "p10",
-    name: "Rechargeable Batteries",
-    brand: "PowerLoop",
-    category: "Electronics",
-    aqiImpact: "Medium",
-    co2SavedKg: 5,
-    rating: 4.4,
-    price: 899,
-    link: "https://www.amazon.in/s?k=rechargeable+batteries",
-    image: "https://images.unsplash.com/photo-1596461404969-9ae70f2830c1?q=80&w=1200&auto=format&fit=crop",
-    badges: ["Less E-Waste", "Long Life"],
-    whyBetter: "One rechargeable battery replaces up to 1000 single-use alkaline batteries.",
-  },
-  {
-    id: "p11",
-    name: "Compost Bin",
-    brand: "EarthCycle",
-    category: "Home Energy",
-    aqiImpact: "Medium",
-    co2SavedKg: 45,
-    rating: 4.7,
-    price: 1499,
-    link: "https://www.amazon.in/s?k=compost+bin",
-    image: "https://images.pexels.com/photos/6508357/pexels-photo-6508357.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1",
-    badges: ["Waste Reduction", "Fertilizer"],
-    whyBetter: "Turns kitchen scraps into nutrient-rich soil, reducing landfill methane emissions.",
-  },
-  {
-    id: "p12",
-    name: "Bamboo Cutlery Set",
-    brand: "EcoTravel",
-    category: "Travel",
-    aqiImpact: "Low",
-    co2SavedKg: 1.5,
-    rating: 4.3,
-    price: 349,
-    link: "https://www.amazon.in/s?k=bamboo+cutlery+set",
-    image: "https://images.pexels.com/photos/4202392/pexels-photo-4202392.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1",
-    badges: ["Lightweight", "Reusable"],
-    whyBetter: "Perfect for travel and office lunches, avoiding disposable plastic cutlery.",
-  }
 ];
 
+const Rating = ({ value }) => (
+  <div className="flex items-center gap-1 bg-amber-50 border border-amber-200/60 px-2 py-0.5 rounded-full text-amber-700 font-extrabold text-[11px]">
+    <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
+    <span>{value}</span>
+  </div>
+);
+
 const Tag = ({ children }) => (
-  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-600 border border-gray-1000/20 uppercase tracking-tight">
+  <span className="bg-emerald-50 text-[#059669] border border-emerald-100 text-[10px] font-extrabold px-2.5 py-0.5 rounded-lg uppercase tracking-wider">
     {children}
   </span>
 );
-
-const Rating = ({ value }) => {
-  const full = Math.floor(value);
-  return (
-    <div className="flex items-center gap-0.5 text-yellow-400">
-      {Array.from({ length: 5 }).map((_, i) => (
-        <Star key={i} className={`w-3.5 h-3.5 ${i < full ? "fill-yellow-400" : "text-gray-200"}`} />
-      ))}
-      <span className="ml-1 text-[11px] font-bold text-gray-400">{value.toFixed(1)}</span>
-    </div>
-  );
-};
 
 const ProductCard = ({ p, onAdd, onDelete, userCoins, onRedeemDiscount }) => {
   const [applyCoins, setApplyCoins] = useState(false);
@@ -246,7 +157,7 @@ const ProductCard = ({ p, onAdd, onDelete, userCoins, onRedeemDiscount }) => {
   };
 
   return (
-    <Card className="bg-white border border-gray-100 overflow-hidden hover:shadow-xl hover:shadow-emerald-900/5 transition-all duration-500 relative group rounded-3xl flex flex-col justify-between">
+    <Card className="bg-white border border-emerald-100/80 overflow-hidden hover:shadow-xl hover:shadow-emerald-900/5 transition-all duration-500 relative group rounded-3xl flex flex-col justify-between">
       <div>
         <div className="relative h-44 w-full overflow-hidden">
           <img src={p.image} alt={p.name} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" />
@@ -267,7 +178,7 @@ const ProductCard = ({ p, onAdd, onDelete, userCoins, onRedeemDiscount }) => {
         <div className="p-6 space-y-3">
           <div className="flex items-start justify-between gap-2">
             <div>
-              <h3 className="text-lg font-bold text-gray-900">{p.name}</h3>
+              <h3 className="text-lg font-extrabold text-gray-900">{p.name}</h3>
               <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mt-0.5">{p.brand} • {p.category}</p>
             </div>
             <Rating value={p.rating} />
@@ -279,22 +190,16 @@ const ProductCard = ({ p, onAdd, onDelete, userCoins, onRedeemDiscount }) => {
             <div>
               {applyCoins && discountAmount > 0 ? (
                 <div className="flex items-baseline gap-2">
-                  <span className="text-2xl font-black text-emerald-600 tracking-tight">₹{finalPrice}</span>
-                  <span className="text-sm font-bold text-gray-400 line-through">₹{p.price}</span>
-                  <span className="px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 text-[10px] font-black">
-                    -₹{discountAmount}
-                  </span>
+                  <span className="text-xl font-black text-emerald-600">₹{finalPrice}</span>
+                  <span className="text-xs text-gray-400 line-through font-semibold">₹{p.price}</span>
                 </div>
               ) : (
-                <span className="text-2xl font-black text-emerald-600 tracking-tight">₹{p.price}</span>
+                <span className="text-xl font-black text-gray-900">₹{p.price}</span>
               )}
             </div>
-            <div className="text-right">
-               <span className="text-[9px] font-bold text-gray-400 uppercase block">Impact</span>
-               <span className="text-xs font-bold text-emerald-600 flex items-center gap-1 justify-end">
-                 <Leaf className="w-3 h-3"/> {p.co2SavedKg}kg CO₂/yr
-               </span>
-            </div>
+            <span className="text-xs font-bold text-emerald-600 bg-emerald-50 border border-emerald-100/80 px-2.5 py-1 rounded-xl flex items-center gap-1">
+              <Leaf className="w-3 h-3"/> {p.co2SavedKg}kg CO₂/yr
+            </span>
           </div>
 
           {/* EcoCoins Discount Toggle */}
@@ -303,12 +208,12 @@ const ProductCard = ({ p, onAdd, onDelete, userCoins, onRedeemDiscount }) => {
               onClick={() => setApplyCoins(!applyCoins)}
               className={`p-2.5 rounded-2xl border transition-all cursor-pointer flex items-center justify-between gap-2 ${
                 applyCoins
-                  ? "bg-amber-500/10 border-amber-300 text-amber-900 shadow-xs"
-                  : "bg-gray-50 border-gray-100 text-gray-600 hover:bg-amber-50/50"
+                  ? "bg-emerald-50 border-emerald-200 text-emerald-900 shadow-xs"
+                  : "bg-gray-50/70 border-gray-100 text-gray-600 hover:bg-emerald-50/50"
               }`}
             >
               <div className="flex items-center gap-2 min-w-0">
-                <div className={`w-5 h-5 rounded-lg flex items-center justify-center shrink-0 ${applyCoins ? "bg-emerald-600 text-white" : "bg-gray-100 text-gray-500"}`}>
+                <div className={`w-5 h-5 rounded-lg flex items-center justify-center shrink-0 ${applyCoins ? "bg-[#10b981] text-white" : "bg-gray-200 text-gray-500"}`}>
                   {applyCoins ? <Check size={12} strokeWidth={3} /> : <EcoCoinIcon size={14} />}
                 </div>
                 <div className="truncate">
@@ -317,7 +222,7 @@ const ProductCard = ({ p, onAdd, onDelete, userCoins, onRedeemDiscount }) => {
                   </p>
                 </div>
               </div>
-              <span className="text-[10px] font-extrabold text-emerald-700 shrink-0">
+              <span className="text-[10px] font-extrabold text-[#10b981] shrink-0">
                 {applyCoins ? "Active" : "Use"}
               </span>
             </div>
@@ -333,10 +238,10 @@ const ProductCard = ({ p, onAdd, onDelete, userCoins, onRedeemDiscount }) => {
           <button
             onClick={handleBuyWithDiscount}
             disabled={purchasing}
-            className={`h-11 inline-flex items-center justify-center gap-1.5 rounded-2xl font-bold text-xs shadow-sm transition-all active:scale-95 ${
+            className={`h-11 inline-flex items-center justify-center gap-1.5 rounded-2xl font-black text-xs shadow-sm transition-all active:scale-95 ${
               applyCoins
-                ? "bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 hover:from-emerald-700 hover:to-teal-800 text-white"
-                : "bg-emerald-600 hover:bg-emerald-700 text-white"
+                ? "bg-gradient-to-r from-emerald-500 via-teal-500 to-emerald-600 hover:from-emerald-600 hover:to-teal-600 text-white"
+                : "bg-[#10b981] hover:bg-emerald-600 text-white"
             }`}
           >
             {purchasing ? (
@@ -354,7 +259,7 @@ const ProductCard = ({ p, onAdd, onDelete, userCoins, onRedeemDiscount }) => {
         </div>
 
         <div className="flex justify-center">
-          <span className="text-[9px] font-extrabold text-emerald-500 uppercase tracking-widest flex items-center gap-1 bg-emerald-50/60 px-3 py-0.5 rounded-full">
+          <span className="text-[9px] font-extrabold text-[#10b981] uppercase tracking-widest flex items-center gap-1 bg-emerald-50/70 border border-emerald-100 px-3 py-0.5 rounded-full">
             <Recycle className="w-3 h-3"/> AQI Guard: {p.aqiImpact}
           </span>
         </div>
@@ -391,16 +296,12 @@ const EcoProducts = () => {
     localStorage.setItem("eco_products_v12", JSON.stringify(products));
   }, [products]);
 
-  const handleDeleteProduct = (id) => {
-    if (confirm("Remove this eco-alternative from the catalog?")) {
-      setProducts(products.filter(p => p.id !== id));
-    }
-  };
-
-  const [query, setQuery] = useState("");
   const [cat, setCat] = useState("All");
+  const [query, setQuery] = useState("");
   const [sort, setSort] = useState("impact");
   const [wishlist, setWishlist] = useState([]);
+
+  // Add Product Modal
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [newProduct, setNewProduct] = useState({
     name: "",
@@ -416,17 +317,25 @@ const EcoProducts = () => {
   const handleRedeemDiscount = async (amount, product) => {
     if (!user) {
       toast.info("Please sign in to redeem your EcoCoins discount!");
-      throw new Error("Authentication required");
+      return { success: false };
     }
     const res = await ecoCoinService.spendCoins(amount, product.id, product.name, product.price);
-    if (res.success) {
+    if (res?.success) {
       setUserCoins(res.balance);
     }
     return res;
   };
 
+  const handleDeleteProduct = (id) => {
+    setProducts(products.filter(p => p.id !== id));
+    toast.success("Product removed from catalog");
+  };
+
   const handleAddProduct = () => {
-    if (!newProduct.name || !newProduct.price) return;
+    if (!newProduct.name || !newProduct.price) {
+      toast.error("Please fill in at least name and price");
+      return;
+    }
     const p = {
       ...newProduct,
       id: "p" + (products.length + 1) + Date.now(),
@@ -470,43 +379,42 @@ const EcoProducts = () => {
   };
 
   return (
-    <div className="min-h-screen bg-[#f4f9f6] pb-24 font-sans">
+    <div className="min-h-screen bg-[#f0faf5] pb-24 font-sans text-gray-800">
       <Navbar />
 
       <section className="pt-32 pb-8 text-center relative overflow-hidden">
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-[300px] bg-gradient-to-b from-emerald-50/50 to-transparent pointer-events-none"></div>
         <div className="max-w-[1200px] mx-auto px-6 relative z-10">
           
           <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 mb-4">
-            <Sparkles className="w-4 h-4 text-emerald-600" />
-            <span className="text-xs font-bold text-emerald-700 uppercase tracking-wider">Premium Eco Marketplace</span>
+            <Sparkles className="w-4 h-4 text-[#10b981]" />
+            <span className="text-xs font-black text-[#059669] uppercase tracking-wider">Premium Eco Marketplace</span>
           </div>
 
           <h1 className="text-[clamp(2.2rem,5vw,3.8rem)] font-black text-gray-900 tracking-tight leading-tight">
-            Sustainable <span className="text-emerald-600">Living</span> & Rewards.
+            Sustainable <span className="text-[#10b981]">Living</span> & Rewards.
           </h1>
-          <p className="mt-4 text-gray-500 text-base md:text-lg font-medium max-w-2xl mx-auto">
-            Discover vetted products that reduce carbon emissions. Redeem your hard-earned <strong className="text-amber-600">EcoCoins</strong> for instant price discounts!
+          <p className="mt-4 text-[#6b7280] text-base md:text-lg font-medium max-w-2xl mx-auto leading-relaxed">
+            Discover vetted products that reduce carbon emissions. Redeem your hard-earned <strong className="text-amber-600 font-bold">EcoCoins</strong> for instant price discounts!
           </p>
 
-          {/* 🪙 User EcoCoins Balance Banner in Store */}
-          <div className="mt-8 max-w-xl mx-auto p-4 rounded-3xl bg-gradient-to-r from-[#0c2e22] via-[#103d2d] to-[#082017] text-white shadow-lg border border-emerald-500/30 flex items-center justify-between gap-4">
+          {/* 🪙 User EcoCoins Balance Banner (Unified Community Theme) */}
+          <div className="mt-8 max-w-xl mx-auto p-4 rounded-3xl bg-white/90 backdrop-blur-md text-gray-900 shadow-xs border border-emerald-500/20 flex items-center justify-between gap-4">
             <div className="flex items-center gap-3.5">
-              <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-emerald-800 to-emerald-950 flex items-center justify-center shrink-0 shadow-md border border-emerald-400/30 p-1">
-                <EcoCoinIcon size={36} animated />
+              <div className="w-12 h-12 rounded-2xl bg-emerald-50 flex items-center justify-center shrink-0 shadow-xs border border-emerald-100 p-1">
+                <EcoCoinIcon size={38} animated />
               </div>
               <div className="text-left">
-                <span className="text-[10px] font-black uppercase tracking-widest text-amber-300 block">
+                <span className="text-[10px] font-black uppercase tracking-widest text-[#10b981] block">
                   Your Redeemable EcoCoins
                 </span>
-                <span className="text-2xl font-black text-white">
-                  {userCoins} <span className="text-xs font-bold text-emerald-200">Coins (≈ ₹{userCoins}.00 Off)</span>
+                <span className="text-2xl font-black text-gray-900">
+                  {userCoins} <span className="text-xs font-bold text-[#059669]">Coins (≈ ₹{userCoins}.00 Off)</span>
                 </span>
               </div>
             </div>
 
             <div className="text-right">
-              <span className="px-3 py-1.5 rounded-xl bg-emerald-500/20 border border-emerald-400/30 text-emerald-200 text-xs font-bold block">
+              <span className="px-3.5 py-1.5 rounded-xl bg-emerald-50 border border-emerald-200 text-[#059669] text-xs font-extrabold block">
                 Up to 30% Off
               </span>
             </div>
@@ -517,7 +425,7 @@ const EcoProducts = () => {
 
       <div className="max-w-[1240px] mx-auto px-6">
         {/* FILTERS & SEARCH */}
-        <div className="bg-white/80 backdrop-blur-xl border border-gray-100 rounded-3xl p-6 shadow-sm mb-12">
+        <div className="bg-white/80 backdrop-blur-xl border border-emerald-500/10 rounded-3xl p-6 shadow-xs mb-12">
           <div className="flex flex-col lg:flex-row gap-4 items-center">
             <div className="flex-1 w-full relative">
               <Search className="absolute left-5 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
@@ -525,7 +433,7 @@ const EcoProducts = () => {
                 value={query} 
                 onChange={(e) => setQuery(e.target.value)} 
                 placeholder="Search eco-friendly products..." 
-                className="pl-14 pr-6 h-14 rounded-2xl bg-gray-50/50 border-gray-100 text-base font-medium focus:bg-white focus:border-emerald-400 transition-all shadow-inner"
+                className="pl-14 pr-6 h-14 rounded-2xl bg-gray-50/50 border-gray-100 text-base font-medium focus:bg-white focus:border-[#10b981] transition-all shadow-inner"
               />
             </div>
 
@@ -553,7 +461,7 @@ const EcoProducts = () => {
 
                 <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
                   <DialogTrigger asChild>
-                    <Button className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold h-14 px-6 rounded-2xl shadow-sm text-xs">
+                    <Button className="bg-[#10b981] hover:bg-emerald-600 text-white font-black h-14 px-6 rounded-2xl shadow-sm text-xs transition-all active:scale-95">
                       <Plus className="w-4 h-4 mr-1.5"/> Suggest Item
                     </Button>
                   </DialogTrigger>
@@ -599,7 +507,7 @@ const EcoProducts = () => {
                         </div>
                     </div>
                     <DialogFooter>
-                      <Button onClick={handleAddProduct} className="h-12 w-full bg-emerald-600 text-white font-bold text-sm rounded-xl shadow-sm">Catalog Product</Button>
+                      <Button onClick={handleAddProduct} className="h-12 w-full bg-[#10b981] hover:bg-emerald-600 text-white font-black text-sm rounded-xl shadow-sm">Catalog Product</Button>
                     </DialogFooter>
                   </DialogContent>
                 </Dialog>
@@ -608,8 +516,8 @@ const EcoProducts = () => {
 
           <div className="mt-6 grid grid-cols-2 md:grid-cols-4 gap-3">
             {[{k:"Avg. CO₂ saved/yr",v:"+32 kg"},{k:"Plastic avoided",v:"~180 bags"},{k:"Exposure drop",v:"-15% AQI"},{k:"Discount Power",v:"1 Coin = ₹1"}].map(x=> (
-              <div key={x.k} className="bg-emerald-50/50 rounded-2xl p-3.5 border border-emerald-100/50">
-                <p className="text-[9px] font-black text-emerald-700 uppercase tracking-widest mb-0.5">{x.k}</p>
+              <div key={x.k} className="bg-emerald-50/60 rounded-2xl p-3.5 border border-emerald-100/80">
+                <p className="text-[9px] font-black text-[#059669] uppercase tracking-widest mb-0.5">{x.k}</p>
                 <p className="text-lg font-black text-gray-900">{x.v}</p>
               </div>
             ))}
@@ -635,35 +543,35 @@ const EcoProducts = () => {
           <div className="mt-20">
             <div className="flex items-center gap-3 mb-6">
                <div className="w-10 h-10 rounded-2xl bg-emerald-50 flex items-center justify-center border border-emerald-100">
-                  <Heart className="w-5 h-5 text-emerald-500 fill-emerald-500" />
+                  <Heart className="w-5 h-5 text-[#10b981] fill-[#10b981]" />
                </div>
                <h2 className="text-2xl font-black text-gray-900 tracking-tight">Saved Favorites</h2>
             </div>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {wishlist.map((w) => (
-                <Card key={w.id} className="bg-white border border-gray-100 p-4 flex items-center gap-4 rounded-2xl shadow-sm">
-                  <div className="w-16 h-16 rounded-xl overflow-hidden bg-gray-50 group shrink-0">
-                    <img src={w.image} alt={w.name} className="w-full h-full object-cover transition-transform group-hover:scale-110"/>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+              {wishlist.map((p) => (
+                <Card key={p.id} className="p-4 bg-white border border-emerald-100 rounded-2xl flex items-center justify-between gap-4">
+                  <div className="flex items-center gap-3">
+                    <img src={p.image} alt={p.name} className="w-12 h-12 rounded-xl object-cover" />
+                    <div>
+                      <h4 className="font-bold text-gray-900 text-sm">{p.name}</h4>
+                      <p className="text-xs text-emerald-600 font-extrabold">₹{p.price}</p>
+                    </div>
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-bold text-gray-900 text-sm truncate">{w.name}</p>
-                    <p className="text-xs font-black text-emerald-600 mt-0.5">₹{w.price} • {w.co2SavedKg}kg Saved</p>
-                  </div>
-                  <a href={w.link} target="_blank" rel="noreferrer" className="p-2.5 rounded-xl bg-gray-50 border border-gray-100 text-gray-500 hover:text-emerald-600 hover:bg-emerald-50 transition-all shrink-0">
-                    <ExternalLink className="w-4 h-4"/>
-                  </a>
+                  <button 
+                    onClick={() => setWishlist(wishlist.filter(w => w.id !== p.id))}
+                    className="text-gray-400 hover:text-red-500 p-2"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
                 </Card>
               ))}
             </div>
           </div>
         )}
+      </div>
 
-      </div>
-      
-      <div className="mt-24">
-        <Footer />
-      </div>
+      <Footer />
     </div>
   );
 };

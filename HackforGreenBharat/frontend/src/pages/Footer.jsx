@@ -13,7 +13,7 @@ const Footer = () => {
             <span className="font-bold text-xl text-emerald-600 font-space-grotesk">EcoSense</span>
           </div>
           <p className="text-sm text-gray-400 text-center">
-            © 2024 EcoSense. Building a sustainable future, one score at a time.
+            © 2026 EcoSense. Building a sustainable future, one score at a time.
           </p>
         </div>
       </div>

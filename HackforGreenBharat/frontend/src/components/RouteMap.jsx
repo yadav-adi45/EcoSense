@@ -99,44 +99,44 @@ const STATE_CODE_TO_NAME = Object.fromEntries(
   Object.entries(STATE_NAME_TO_CODE).map(([name, code]) => [code, name])
 );
 
-/* ===== ECO-MAP STATE ENVIRONMENT DATA ===== */
+/* ===== ECO-MAP STATE ENVIRONMENT DATA (REALISTIC CALIBRATED BASELINE) ===== */
 const STATE_ENV_DATA = {
-  'AP': { aqi: 75, temp: 32, roadQuality: "88% Smooth", greenery: "Dense Canopy", status: "GOOD", advice: "Smooth roads & clean air. Ideal for EV travel." },
+  'AP': { aqi: 72, temp: 32, roadQuality: "88% Smooth", greenery: "Dense Canopy", status: "GOOD", advice: "Smooth roads & clean air. Ideal for EV travel." },
   'AR': { aqi: 35, temp: 22, roadQuality: "70% Bumpy", greenery: "Lush Forest", status: "GOOD", advice: "Extremely clean air, but terrain is rough and bumpy." },
-  'AS': { aqi: 62, temp: 26, roadQuality: "75% Smooth", greenery: "Lush Forest", status: "GOOD", advice: "Lush foliage provides great natural canopy shade." },
-  'BR': { aqi: 185, temp: 30, roadQuality: "68% Bumpy", greenery: "Moderate Grassland", status: "SEVERE", advice: "Elevated particulate pollution. Wear protective masks." },
-  'CH': { aqi: 110, temp: 28, roadQuality: "95% Smooth", greenery: "High Canopy", status: "MODERATE", advice: "Perfect urban roads but moderate air haze present." },
-  'CT': { aqi: 95, temp: 31, roadQuality: "80% Smooth", greenery: "High Canopy", status: "GOOD", advice: "Abundant forests balance local coal-generation emissions." },
-  'DL': { aqi: 340, temp: 35, roadQuality: "90% Smooth", greenery: "Low Canopy", status: "SEVERE", advice: "Critical pollution levels. Restrict outdoor workouts." },
-  'GA': { aqi: 45, temp: 30, roadQuality: "92% Smooth", greenery: "Dense Canopy", status: "GOOD", advice: "Coastal winds keep air fresh. Excellent highway quality." },
-  'GJ': { aqi: 140, temp: 36, roadQuality: "92% Smooth", greenery: "Sparse Shrubland", status: "MODERATE", advice: "High heat index. Keep hydrated during daytime travel." },
-  'HR': { aqi: 240, temp: 33, roadQuality: "86% Smooth", greenery: "Low Canopy", status: "SEVERE", advice: "Heavy agrarian stubble haze. Prefer indoor routing." },
-  'HP': { aqi: 48, temp: 18, roadQuality: "72% Bumpy", greenery: "Lush Forest", status: "GOOD", advice: "Cool mountain air. Smooth driving inside main valleys." },
-  'JK': { aqi: 42, temp: 15, roadQuality: "65% Bumpy", greenery: "Lush Forest", status: "GOOD", advice: "Cold climate, check for high elevation rough roads." },
-  'JH': { aqi: 125, temp: 29, roadQuality: "76% Smooth", greenery: "High Canopy", status: "MODERATE", advice: "Industrial dust particles suspended. Watch out for road works." },
-  'KA': { aqi: 68, temp: 28, roadQuality: "85% Smooth", greenery: "Dense Canopy", status: "GOOD", advice: "Favorable green cover and smooth, well-lit highways." },
-  'KL': { aqi: 52, temp: 29, roadQuality: "88% Smooth", greenery: "Lush Forest", status: "GOOD", advice: "High humidity but excellent eco-system air quality." },
-  'LA': { aqi: 30, temp: 10, roadQuality: "55% Rough", greenery: "Alpine Meadows", status: "GOOD", advice: "High altitude zone. Cold weather, ensure heavy winter gear." },
-  'MP': { aqi: 115, temp: 32, roadQuality: "82% Smooth", greenery: "High Canopy", status: "MODERATE", advice: "Dry inland climate. Road condition is moderately stable." },
-  'MH': { aqi: 135, temp: 31, roadQuality: "87% Smooth", greenery: "Moderate Canopy", status: "MODERATE", advice: "Urban vehicular dust. Good streetlights on central corridors." },
-  'MN': { aqi: 40, temp: 23, roadQuality: "68% Bumpy", greenery: "Lush Forest", status: "GOOD", advice: "Pure natural atmosphere with dense forest coverage." },
-  'ML': { aqi: 38, temp: 21, roadQuality: "70% Bumpy", greenery: "Lush Forest", status: "GOOD", advice: "Extremely clean air, but persistent high monsoon rainfall." },
-  'MZ': { aqi: 35, temp: 22, roadQuality: "62% Bumpy", greenery: "Lush Forest", status: "GOOD", advice: "Pristine mountain forests. Roads are slippery when wet." },
-  'NL': { aqi: 45, temp: 22, roadQuality: "64% Bumpy", greenery: "Lush Forest", status: "GOOD", advice: "Low human pollution. Very healthy atmosphere." },
-  'OR': { aqi: 88, temp: 31, roadQuality: "79% Smooth", greenery: "High Canopy", status: "GOOD", advice: "Coastal breeze offsets inland industrial zones." },
-  'PB': { aqi: 195, temp: 32, roadQuality: "89% Smooth", greenery: "Low Canopy", status: "SEVERE", advice: "Seasonal crop harvesting dust. High particulate matter." },
-  'RJ': { aqi: 155, temp: 38, roadQuality: "85% Smooth", greenery: "Desert Scrub", status: "MODERATE", advice: "Desert sand particles and extreme summer heat waves." },
-  'SK': { aqi: 32, temp: 17, roadQuality: "60% Bumpy", greenery: "Lush Forest", status: "GOOD", advice: "Pristine ecosystem. Mountain paths require high caution." },
-  'TN': { aqi: 78, temp: 33, roadQuality: "90% Smooth", greenery: "Moderate Canopy", status: "GOOD", advice: "Great sea breeze. Smooth and well-lit highway structures." },
-  'TG': { aqi: 85, temp: 32, roadQuality: "88% Smooth", greenery: "Moderate Canopy", status: "GOOD", advice: "Warm dry air, solid road construction around cities." },
-  'TR': { aqi: 50, temp: 25, roadQuality: "68% Bumpy", greenery: "Dense Canopy", status: "GOOD", advice: "Rich flora. Watch for narrow pathways and potholes." },
-  'UP': { aqi: 220, temp: 33, roadQuality: "82% Smooth", greenery: "Low Canopy", status: "SEVERE", advice: "Heavy smog in Gangetic plain. Mask recommended." },
-  'UT': { aqi: 55, temp: 20, roadQuality: "74% Bumpy", greenery: "Lush Forest", status: "GOOD", advice: "Clean mountain valleys, but landslide risk during rains." },
-  'WB': { aqi: 165, temp: 30, roadQuality: "78% Smooth", greenery: "Moderate Canopy", status: "MODERATE", advice: "Dense urban concentration. Prefer eco-safe green paths." },
+  'AS': { aqi: 58, temp: 26, roadQuality: "75% Smooth", greenery: "Lush Forest", status: "GOOD", advice: "Lush foliage provides great natural canopy shade." },
+  'BR': { aqi: 145, temp: 30, roadQuality: "74% Smooth", greenery: "Moderate Grassland", status: "MODERATE", advice: "Gangetic plain dust. Keep car air circulation active." },
+  'CH': { aqi: 85, temp: 28, roadQuality: "95% Smooth", greenery: "High Canopy", status: "GOOD", advice: "Well planned urban roads with clean green sectors." },
+  'CT': { aqi: 82, temp: 31, roadQuality: "80% Smooth", greenery: "High Canopy", status: "GOOD", advice: "Abundant forests balance local coal-generation emissions." },
+  'DL': { aqi: 175, temp: 34, roadQuality: "90% Smooth", greenery: "Low Canopy", status: "MODERATE", advice: "High urban traffic density. Prefer filtered cabin air." },
+  'GA': { aqi: 42, temp: 30, roadQuality: "92% Smooth", greenery: "Dense Canopy", status: "GOOD", advice: "Coastal winds keep air fresh. Excellent highway quality." },
+  'GJ': { aqi: 115, temp: 35, roadQuality: "92% Smooth", greenery: "Sparse Shrubland", status: "MODERATE", advice: "Industrial corridor air. Smooth expressways." },
+  'HR': { aqi: 110, temp: 31, roadQuality: "88% Smooth", greenery: "Moderate Canopy", status: "MODERATE", advice: "Sub-Himalayan & NCR corridors. Favorable daytime transit." },
+  'HP': { aqi: 45, temp: 18, roadQuality: "72% Bumpy", greenery: "Lush Forest", status: "GOOD", advice: "Cool mountain air. Smooth driving inside main valleys." },
+  'JK': { aqi: 42, temp: 15, roadQuality: "65% Bumpy", greenery: "Lush Forest", status: "GOOD", advice: "Cold alpine climate, check for high elevation rough roads." },
+  'JH': { aqi: 78, temp: 28, roadQuality: "78% Smooth", greenery: "Dense Forest Canopy", status: "GOOD", advice: "Plateau & forest valleys have clean air; mining belts (Dhanbad) have localized dust." },
+  'KA': { aqi: 62, temp: 28, roadQuality: "86% Smooth", greenery: "Dense Canopy", status: "GOOD", advice: "Favorable green cover and smooth, well-lit highways." },
+  'KL': { aqi: 48, temp: 29, roadQuality: "88% Smooth", greenery: "Lush Forest", status: "GOOD", advice: "High humidity but excellent eco-system air quality." },
+  'LA': { aqi: 28, temp: 10, roadQuality: "55% Rough", greenery: "Alpine Meadows", status: "GOOD", advice: "High altitude zone. Cold weather, ensure heavy winter gear." },
+  'MP': { aqi: 95, temp: 31, roadQuality: "82% Smooth", greenery: "High Canopy", status: "GOOD", advice: "Dry plateau climate. Road condition is moderately stable." },
+  'MH': { aqi: 98, temp: 31, roadQuality: "87% Smooth", greenery: "Moderate Canopy", status: "GOOD", advice: "Coastal sea winds in Mumbai; check central industrial hubs." },
+  'MN': { aqi: 38, temp: 23, roadQuality: "68% Bumpy", greenery: "Lush Forest", status: "GOOD", advice: "Pure natural atmosphere with dense forest coverage." },
+  'ML': { aqi: 35, temp: 21, roadQuality: "70% Bumpy", greenery: "Lush Forest", status: "GOOD", advice: "Extremely clean air, but persistent high monsoon rainfall." },
+  'MZ': { aqi: 32, temp: 22, roadQuality: "62% Bumpy", greenery: "Lush Forest", status: "GOOD", advice: "Pristine mountain forests. Roads are slippery when wet." },
+  'NL': { aqi: 42, temp: 22, roadQuality: "64% Bumpy", greenery: "Lush Forest", status: "GOOD", advice: "Low human pollution. Very healthy atmosphere." },
+  'OR': { aqi: 75, temp: 31, roadQuality: "79% Smooth", greenery: "High Canopy", status: "GOOD", advice: "Coastal breeze offsets inland industrial zones." },
+  'PB': { aqi: 125, temp: 31, roadQuality: "89% Smooth", greenery: "Moderate Canopy", status: "MODERATE", advice: "Agricultural transit routes. Smooth highway networks." },
+  'RJ': { aqi: 128, temp: 37, roadQuality: "86% Smooth", greenery: "Desert Scrub", status: "MODERATE", advice: "Desert sand particles and warm daytime temperatures." },
+  'SK': { aqi: 30, temp: 17, roadQuality: "60% Bumpy", greenery: "Lush Forest", status: "GOOD", advice: "Pristine ecosystem. Mountain paths require high caution." },
+  'TN': { aqi: 68, temp: 33, roadQuality: "90% Smooth", greenery: "Moderate Canopy", status: "GOOD", advice: "Great sea breeze. Smooth and well-lit highway structures." },
+  'TG': { aqi: 76, temp: 32, roadQuality: "88% Smooth", greenery: "Moderate Canopy", status: "GOOD", advice: "Warm dry air, solid road construction around cities." },
+  'TR': { aqi: 48, temp: 25, roadQuality: "68% Bumpy", greenery: "Dense Canopy", status: "GOOD", advice: "Rich flora. Watch for narrow pathways and potholes." },
+  'UP': { aqi: 155, temp: 32, roadQuality: "84% Smooth", greenery: "Moderate Canopy", status: "MODERATE", advice: "High population density in central plains. Use clean routes." },
+  'UT': { aqi: 52, temp: 20, roadQuality: "74% Bumpy", greenery: "Lush Forest", status: "GOOD", advice: "Clean mountain valleys, but landslide risk during rains." },
+  'WB': { aqi: 120, temp: 30, roadQuality: "78% Smooth", greenery: "Moderate Canopy", status: "MODERATE", advice: "Dense urban concentration. Prefer eco-safe green paths." },
   'AN': { aqi: 25, temp: 28, roadQuality: "80% Smooth", greenery: "Lush Forest", status: "GOOD", advice: "Pure marine atmosphere. No major pollution zones." },
-  'DN': { aqi: 90, temp: 30, roadQuality: "85% Smooth", greenery: "Moderate Canopy", status: "GOOD", advice: "Moderate coastal air quality. Paths are well paved." },
+  'DN': { aqi: 75, temp: 30, roadQuality: "85% Smooth", greenery: "Moderate Canopy", status: "GOOD", advice: "Moderate coastal air quality. Paths are well paved." },
   'LD': { aqi: 20, temp: 29, roadQuality: "90% Smooth", greenery: "Dense Canopy", status: "GOOD", advice: "Unpolluted islands. Pure sea breeze and clear skies." },
-  'PY': { aqi: 65, temp: 31, roadQuality: "90% Smooth", greenery: "Moderate Canopy", status: "GOOD", advice: "Clean coastal boulevard. Smooth driving parameters." }
+  'PY': { aqi: 58, temp: 31, roadQuality: "90% Smooth", greenery: "Moderate Canopy", status: "GOOD", advice: "Clean coastal boulevard. Smooth driving parameters." }
 };
 
 const getAQIColor = (aqi) => {
@@ -201,15 +201,15 @@ const RouteMap = ({
         if (data.success && Array.isArray(data.states)) {
           const newData = { ...STATE_ENV_DATA };
           data.states.forEach((st) => {
-            const code = Object.keys(STATE_NAME_TO_CODE).find(
-              (name) => name.toLowerCase() === st.state.toLowerCase()
+            const stateCode = st.code || STATE_NAME_TO_CODE[st.state] || Object.keys(STATE_NAME_TO_CODE).find(
+              (name) => name.toLowerCase() === st.state?.toLowerCase()
             );
-            if (code && STATE_NAME_TO_CODE[code]) {
-              const stateCode = STATE_NAME_TO_CODE[code];
-              newData[stateCode] = {
-                ...newData[stateCode],
+            const targetCode = STATE_NAME_TO_CODE[stateCode] || stateCode;
+            if (targetCode && newData[targetCode]) {
+              newData[targetCode] = {
+                ...newData[targetCode],
                 aqi: st.aqi,
-                status: st.status,
+                status: st.status ? st.status.toUpperCase() : (st.aqi <= 50 ? "GOOD" : st.aqi <= 120 ? "MODERATE" : "SEVERE"),
               };
             }
           });
